@@ -10,6 +10,7 @@ RUN userdel -r node \
     && chown executor:executor /workspace
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=0644 guard.sh /usr/local/bin/guard.sh
 
 ENV HOME=/home/executor
 WORKDIR /workspace
@@ -59,6 +60,7 @@ RUN useradd --uid 1000 --user-group --create-home --home-dir /home/executor --sh
 COPY --from=mistral-vibe-build /opt/uv-tools /opt/uv-tools
 COPY --from=mistral-vibe-build /usr/local/bin/vibe /usr/local/bin/vibe-app-server /usr/local/bin/
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=0644 guard.sh /usr/local/bin/guard.sh
 ENV HOME=/home/executor
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -288,9 +288,13 @@ fn runner(lines: Vec<TaskLine>, specs: Arc<Mutex<Vec<TaskSpec>>>) -> MockTaskRun
     runner
 }
 
-/// No expectation: any call to GitHub (branch check, pull request) panics.
+/// Only the repository config is readable: any other call to GitHub (branch
+/// check, pull request) panics.
 fn untouched_host() -> MockCodeHost {
-    MockCodeHost::new()
+    let mut host = MockCodeHost::new();
+    host.expect_file_at()
+        .returning(|_, _, _, _, _| Box::pin(std::future::ready(Ok(None))));
+    host
 }
 
 async fn run_row(pool: &PgPool, run_id: RunId) -> (String, Option<String>) {

@@ -276,6 +276,21 @@ impl CodeHost for GithubApps {
             .await?)
     }
 
+    async fn file_at(
+        &self,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        repository: &RepositoryRef,
+        git_ref: &str,
+        path: &str,
+    ) -> Result<Option<String>, CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .file_text(installation_id, repository, git_ref, path)
+            .await?)
+    }
+
     async fn open_draft_pr(
         &self,
         organization_id: OrganizationId,

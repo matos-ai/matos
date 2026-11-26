@@ -237,6 +237,17 @@ impl CodeHost for FakeHost {
         Err(CoreError::Internal("unused".into()))
     }
 
+    async fn file_at(
+        &self,
+        _: OrganizationId,
+        _: i64,
+        _: &RepositoryRef,
+        _: &str,
+        _: &str,
+    ) -> Result<Option<String>, CoreError> {
+        Err(CoreError::Internal("unused".into()))
+    }
+
     async fn open_draft_pr(
         &self,
         _: OrganizationId,

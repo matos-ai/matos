@@ -534,6 +534,42 @@ impl GithubClient {
         }
     }
 
+    /// The text of a file at a ref, `None` if there is no such file.
+    pub async fn file_text(
+        &self,
+        installation_id: i64,
+        repository: &RepositoryRef,
+        git_ref: &str,
+        path: &str,
+    ) -> Result<Option<String>, GithubError> {
+        let token = self.token_for(installation_id, Some(repository)).await?;
+        let url = self.url(&format!(
+            "/repos/{}/{}/contents/{}?ref={}",
+            repository.owner(),
+            repository.name(),
+            encode_path(path),
+            encode_segment(git_ref)
+        ));
+        let response = Self::send(
+            self.http
+                .get(url)
+                .header(ACCEPT, "application/vnd.github.raw+json")
+                .header("X-GitHub-Api-Version", API_VERSION)
+                .header(USER_AGENT, AGENT)
+                .header(AUTHORIZATION, format!("Bearer {}", token.token.expose())),
+        )
+        .await;
+        match response {
+            Ok(response) => response
+                .text()
+                .await
+                .map(Some)
+                .map_err(|error| GithubError::Decode(error.without_url().to_string())),
+            Err(GithubError::Status { status: 404, .. }) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     /// Exchanges the `code` GitHub appends to the setup redirect when the App
     /// asks for user authorization during installation.
     pub async fn exchange_user_code(&self, code: &str) -> Result<UserToken, GithubError> {
@@ -870,6 +906,25 @@ pub(crate) fn next_link(header: &str) -> Option<&str> {
     })
 }
 
+fn encode_segment(text: &str) -> String {
+    let mut encoded = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
+}
+
+fn encode_path(path: &str) -> String {
+    path.split('/')
+        .map(encode_segment)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex as StdMutex};
@@ -902,6 +957,8 @@ mod tests {
         membership_forbidden: bool,
         user_login: Option<String>,
         branch_sha: Option<String>,
+        file_text: Option<String>,
+        file_requests: Vec<(String, String, String)>,
         list_queries: Vec<HashMap<String, String>>,
         base: String,
         oauth_bodies: Vec<Value>,
@@ -1050,6 +1107,23 @@ mod tests {
         }
     }
 
+    async fn contents(
+        State(shared): State<Shared>,
+        headers: HeaderMap,
+        axum::extract::Path((_owner, _repo, path)): axum::extract::Path<(String, String, String)>,
+        Query(query): Query<HashMap<String, String>>,
+    ) -> impl IntoResponse {
+        let mut recorded = shared.lock().unwrap();
+        let accept = headers["accept"].to_str().unwrap().to_owned();
+        recorded
+            .file_requests
+            .push((path, query["ref"].clone(), accept));
+        match recorded.file_text.clone() {
+            Some(text) => text.into_response(),
+            None => (AxumStatus::NOT_FOUND, Json(json!({"message": "Not Found"}))).into_response(),
+        }
+    }
+
     async fn oauth_token(
         State(shared): State<Shared>,
         headers: HeaderMap,
@@ -1102,6 +1176,7 @@ mod tests {
                 "/repos/{owner}/{repo}/git/ref/heads/{*branch}",
                 get(git_ref),
             )
+            .route("/repos/{owner}/{repo}/contents/{*path}", get(contents))
             .route("/app/installations/{id}/access_tokens", post(issue_token))
             .route("/installation/repositories", get(repositories))
             .route("/repos/{owner}/{repo}", get(repo))
@@ -1476,6 +1551,44 @@ mod tests {
             client.branch_sha(5, &api, "matos/run-1").await.unwrap(),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn a_file_is_read_raw_at_a_ref_and_a_missing_file_is_none() {
+        let shared = Shared::default();
+        shared.lock().unwrap().file_text = Some("[guard]\nmax_files = 80\n".into());
+        let client = serve(Arc::clone(&shared)).await;
+        let api = repo_ref("acme/api");
+
+        assert_eq!(
+            client
+                .file_text(5, &api, "release/1 x", ".matos.toml")
+                .await
+                .unwrap(),
+            Some("[guard]\nmax_files = 80\n".to_owned())
+        );
+        assert_eq!(
+            shared.lock().unwrap().file_requests,
+            vec![(
+                ".matos.toml".to_owned(),
+                "release/1 x".to_owned(),
+                "application/vnd.github.raw+json".to_owned()
+            )]
+        );
+        shared.lock().unwrap().file_text = None;
+        assert_eq!(
+            client
+                .file_text(5, &api, "main", ".matos.toml")
+                .await
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_path_is_encoded_segment_by_segment() {
+        assert_eq!(encode_path("a b/c#d/é.toml"), "a%20b/c%23d/%C3%A9.toml");
+        assert_eq!(encode_segment("feat/x"), "feat%2Fx");
     }
 
     #[test]

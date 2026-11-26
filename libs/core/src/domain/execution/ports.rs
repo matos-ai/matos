@@ -63,6 +63,16 @@ pub trait CodeHost: Send + Sync {
         branch: &str,
     ) -> impl Future<Output = Result<Option<String>, CoreError>> + Send;
 
+    /// The text of `path` at `git_ref`, `None` if the file does not exist.
+    fn file_at(
+        &self,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        repository: &RepositoryRef,
+        git_ref: &str,
+        path: &str,
+    ) -> impl Future<Output = Result<Option<String>, CoreError>> + Send;
+
     fn open_draft_pr(
         &self,
         organization_id: OrganizationId,

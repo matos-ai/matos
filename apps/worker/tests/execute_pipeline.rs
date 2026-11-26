@@ -261,7 +261,31 @@ fn deleting(mut runner: MockTaskRunner) -> MockTaskRunner {
 }
 
 fn host(seen: &Seen, organization_id: OrganizationId, installation_id: i64) -> MockCodeHost {
-    let mut host = MockCodeHost::new();
+    host_with_config(seen, organization_id, installation_id, None)
+}
+
+fn without_config() -> MockCodeHost {
+    config_file(MockCodeHost::new(), None)
+}
+
+fn config_file(mut host: MockCodeHost, text: Option<&'static str>) -> MockCodeHost {
+    host.expect_file_at()
+        .returning(move |_, _, repository, git_ref, path| {
+            assert_eq!(repository.to_string(), "acme/web");
+            assert_eq!(git_ref, "main");
+            assert_eq!(path, ".matos.toml");
+            Box::pin(std::future::ready(Ok(text.map(str::to_owned))))
+        });
+    host
+}
+
+fn host_with_config(
+    seen: &Seen,
+    organization_id: OrganizationId,
+    installation_id: i64,
+    config: Option<&'static str>,
+) -> MockCodeHost {
+    let mut host = config_file(MockCodeHost::new(), config);
     let pull_requests = seen.pull_requests.clone();
     host.expect_open_draft_pr()
         .returning(move |organization, installation, pull_request| {
@@ -716,7 +740,7 @@ async fn the_run_writes_the_pull_request_and_the_member_who_started_it_authors_t
     assert_eq!(pull_request.title, "docs: add a changelog");
     assert_eq!(
         pull_request.body,
-        "Starts CHANGELOG.md with an Unreleased section."
+        "Starts CHANGELOG.md with an Unreleased section.\n\n## Checks\n\nLint: not run, the toolchain is not available"
     );
     let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
     assert_eq!(output["contribution"], "run");
@@ -769,7 +793,7 @@ async fn without_changes_no_pull_request_is_opened_and_the_card_says_so() {
     lines.pop();
     lines.push(TaskLine::Matos(TaskMarker::NoChanges));
     let runner = runner_ending(&seen, lines, TaskOutcome::Succeeded);
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -793,7 +817,7 @@ async fn a_task_past_its_deadline_fails_the_run_and_revokes_the_token() {
         Vec::new(),
         TaskOutcome::DeadlineExceeded,
     ));
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -820,7 +844,7 @@ async fn a_failed_task_fails_the_run_with_its_reason() {
             reason: "OOMKilled".into(),
         },
     ));
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -842,7 +866,7 @@ async fn a_runner_that_keeps_failing_is_retried_then_fails_the_run_and_revokes()
             "the cluster is unreachable".into(),
         ))))
     });
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -880,7 +904,7 @@ async fn a_transient_runner_error_is_retried_and_the_run_succeeds() {
             Ok(TaskOutcome::Succeeded)
         })
     });
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -981,7 +1005,7 @@ async fn a_resumed_run_attaches_to_its_job_with_the_same_token() {
         .times(1)
         .returning(|_| Box::pin(std::future::ready(Ok(true))));
     following(no_changes_lines(), &mut runner);
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1001,7 +1025,7 @@ async fn a_resume_without_a_job_fails_and_starts_nothing() {
         .expect_attach()
         .times(1)
         .returning(|_| Box::pin(std::future::ready(Ok(false))));
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1026,7 +1050,7 @@ async fn a_run_that_crashed_before_its_job_started_may_start_it() {
         .expect_attach()
         .times(1)
         .returning(|_| Box::pin(std::future::ready(Ok(false))));
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1059,7 +1083,7 @@ async fn a_pull_request_opened_before_a_crash_is_not_opened_again_after_two_resu
     hanging
         .expect_follow()
         .returning(|_, _| Box::pin(std::future::pending()));
-    let interrupted = pipeline(&world, hanging, MockCodeHost::new());
+    let interrupted = pipeline(&world, hanging, without_config());
     let crash = tokio::time::timeout(
         Duration::from_millis(600),
         interrupted.execute(world.run_id, None),
@@ -1082,7 +1106,7 @@ async fn a_pull_request_opened_before_a_crash_is_not_opened_again_after_two_resu
         .times(1)
         .returning(|_| Box::pin(std::future::ready(Ok(true))));
     following(lines_of(SAMPLE), &mut runner);
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
     pipeline.execute(world.run_id, None).await.unwrap();
 
     assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
@@ -1113,7 +1137,7 @@ async fn a_comment_posted_before_a_crash_is_not_posted_again() {
         .expect_attach()
         .returning(|_| Box::pin(std::future::ready(Ok(true))));
     following(no_changes_lines(), &mut runner);
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1133,7 +1157,7 @@ async fn a_run_alive_on_another_worker_is_left_alone() {
         .await
         .unwrap()
         .unwrap();
-    let pipeline = pipeline(&world, MockTaskRunner::new(), MockCodeHost::new());
+    let pipeline = pipeline(&world, MockTaskRunner::new(), without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1181,7 +1205,7 @@ async fn a_branch_that_is_not_where_the_task_says_fails_the_run_before_any_pull_
         lines_of(SAMPLE),
         TaskOutcome::Succeeded,
     ));
-    let mut host = MockCodeHost::new();
+    let mut host = config_file(MockCodeHost::new(), None);
     host.expect_branch_head().returning(|_, _, _, _| {
         Box::pin(std::future::ready(Ok(Some(
             "0000000000000000000000000000000000000000".to_owned(),
@@ -1207,7 +1231,7 @@ async fn a_missing_branch_fails_the_run_too() {
         lines_of(SAMPLE),
         TaskOutcome::Succeeded,
     ));
-    let mut host = MockCodeHost::new();
+    let mut host = config_file(MockCodeHost::new(), None);
     host.expect_branch_head()
         .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(None))));
     let pipeline = pipeline(&world, runner, host);
@@ -1231,7 +1255,7 @@ async fn an_agent_that_ran_out_of_turns_without_pushing_fails_the_run() {
         }
     }
     let runner = deleting(runner_ending(&seen, lines, TaskOutcome::Succeeded));
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1261,7 +1285,7 @@ async fn a_model_without_a_known_price_costs_what_claude_code_reported() {
         world.usecase.clone(),
         Executor::Ready {
             runner,
-            host: MockCodeHost::new(),
+            host: without_config(),
         },
         unpriced,
     );
@@ -1305,7 +1329,7 @@ async fn a_disconnected_github_fails_the_run_before_any_job_starts() {
         })
         .await
         .unwrap();
-    let pipeline = pipeline(&world, MockTaskRunner::new(), MockCodeHost::new());
+    let pipeline = pipeline(&world, MockTaskRunner::new(), without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1323,7 +1347,7 @@ async fn an_organization_without_a_github_app_fails_the_run_before_any_job_start
         .delete_github_app(admin(world.organization_id))
         .await
         .unwrap();
-    let pipeline = pipeline(&world, MockTaskRunner::new(), MockCodeHost::new());
+    let pipeline = pipeline(&world, MockTaskRunner::new(), without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1367,7 +1391,7 @@ async fn the_timeline_is_saved_while_the_task_runs() {
             Ok(TaskOutcome::Succeeded)
         })
     });
-    let pipeline = pipeline(&world, runner, MockCodeHost::new());
+    let pipeline = pipeline(&world, runner, without_config());
 
     pipeline.execute(world.run_id, None).await.unwrap();
 
@@ -1396,4 +1420,197 @@ async fn the_meeting_pipeline_leaves_card_runs_to_the_executor() {
             .await
             .unwrap()
     );
+}
+
+fn with_markers(markers: Vec<TaskMarker>) -> Vec<TaskLine> {
+    let mut lines = lines_of(SAMPLE);
+    let pushed = lines.pop().unwrap();
+    lines.extend(markers.into_iter().map(TaskLine::Matos));
+    lines.push(pushed);
+    lines
+}
+
+#[tokio::test]
+async fn the_rules_of_the_base_branch_config_reach_the_task() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let runner = recording_runner(lines_of(SAMPLE), specs.clone());
+    let host = host_with_config(
+        &seen,
+        world.organization_id,
+        world.installation_id,
+        Some("[guard]\nallow_paths = [\".github/workflows/\"]\nmax_files = 80\n"),
+    );
+    let pipeline = pipeline(&world, runner, host);
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let guard = specs.lock().unwrap()[0].push_guard.clone();
+    assert_eq!(guard.allow_paths, vec![".github/workflows/"]);
+    assert_eq!((guard.max_files, guard.max_lines), (80, 2000));
+    assert!(guard.deny_paths.contains(&".matos.toml".to_owned()));
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(!posted[0].2.contains("invalide"));
+}
+
+#[tokio::test]
+async fn a_missing_config_means_the_defaults_without_a_word() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let runner = recording_runner(lines_of(SAMPLE), specs.clone());
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(
+        specs.lock().unwrap()[0].push_guard,
+        matos_core::domain::execution::PushGuard::default()
+    );
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(!posted[0].2.contains("invalide"));
+}
+
+#[tokio::test]
+async fn an_invalid_config_means_the_defaults_and_the_card_says_so() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let runner = recording_runner(lines_of(SAMPLE), specs.clone());
+    let host = host_with_config(
+        &seen,
+        world.organization_id,
+        world.installation_id,
+        Some("[guard]\nallow_path = [\"deploy/\"]\n"),
+    );
+    let pipeline = pipeline(&world, runner, host);
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(
+        specs.lock().unwrap()[0].push_guard,
+        matos_core::domain::execution::PushGuard::default()
+    );
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains(".matos.toml"));
+    assert!(posted[0].2.contains("invalide"));
+}
+
+#[tokio::test]
+async fn a_blocked_run_fails_with_the_reasons_and_opens_no_pull_request() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let mut lines = lines_of(SAMPLE);
+    lines.pop();
+    lines.push(TaskLine::Matos(TaskMarker::GuardBlocked {
+        reasons: vec![
+            "chemin sensible : .github/workflows/ci.yml".into(),
+            "secret possible (cle privee) dans src/key.txt".into(),
+        ],
+    }));
+    let runner = deleting(runner_ending(
+        &seen,
+        lines,
+        TaskOutcome::Failed {
+            reason: "container exited with 3".into(),
+        },
+    ));
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let (status, failure) = run_row(&world.pool, world.run_id).await;
+    assert_eq!(status, "failed");
+    let failure = failure.unwrap();
+    assert!(failure.contains("chemin sensible : .github/workflows/ci.yml"));
+    assert!(failure.contains("secret possible (cle privee) dans src/key.txt"));
+    assert!(!failure.contains("container exited"));
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(
+        posted[0]
+            .2
+            .contains("chemin sensible : .github/workflows/ci.yml")
+    );
+    assert_closed(&world).await;
+}
+
+#[tokio::test]
+async fn the_pull_request_states_the_lint_result() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = recording_runner(
+        with_markers(vec![TaskMarker::Quality {
+            lint: matos_core::domain::execution::QualityStatus::Failed,
+            excerpt: Some("error: unused variable `x`".into()),
+        }]),
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let body = seen.pull_requests.lock().unwrap()[0].body.clone();
+    assert!(
+        body.ends_with("## Checks\n\nLint: failed\n\n```\nerror: unused variable `x`\n```"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn without_a_quality_marker_the_pull_request_says_the_lint_did_not_run() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = recording_runner(lines_of(SAMPLE), Arc::new(Mutex::new(Vec::new())));
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let body = seen.pull_requests.lock().unwrap()[0].body.clone();
+    assert!(
+        body.ends_with("Lint: not run, the toolchain is not available"),
+        "{body}"
+    );
+    assert!(!body.contains("claude-sonnet"));
+}
+
+#[tokio::test]
+async fn a_lint_excerpt_naming_the_model_is_dropped() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = recording_runner(
+        with_markers(vec![TaskMarker::Quality {
+            lint: matos_core::domain::execution::QualityStatus::Failed,
+            excerpt: Some("warning from claude-sonnet-5-5".into()),
+        }]),
+        Arc::new(Mutex::new(Vec::new())),
+    );
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let body = seen.pull_requests.lock().unwrap()[0].body.clone();
+    assert!(body.ends_with("Lint: failed"), "{body}");
+    assert!(!body.contains("claude-sonnet"));
 }

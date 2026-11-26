@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "$(dirname "${BASH_SOURCE[0]}")/guard.sh"
+
 marker() {
   printf '{"type":"matos","event":"%s"%s}\n' "$1" "${2:-}"
 }
@@ -237,6 +239,7 @@ contribution_message() {
 }
 
 : "${COMMIT_FALLBACK_MESSAGE:?}" "${CONTRIBUTION_PATH:?}"
+: "${GUARD_MAX_FILES:?}" "${GUARD_MAX_LINES:?}"
 mkdir -p "$(dirname "$CONTRIBUTION_PATH")"
 rm -f "$CONTRIBUTION_PATH"
 base_sha="$(git rev-parse HEAD)"
@@ -249,6 +252,18 @@ git add -A
 if git diff --cached --quiet; then
   marker no_changes
 else
+  guard_format
+  if git diff --cached --quiet; then
+    marker no_changes
+    exit "$agent_status"
+  fi
+  if ! guard_check; then
+    guard_blocked_marker
+    echo "the diff is not pushed: ${guard_reasons[*]}" >&2
+    exit 3
+  fi
+  guard_lint
+  guard_quality_marker
   message="$(mktemp /tmp/message.XXXXXX)"
   contribution_message "$message" || printf '%s\n' "$COMMIT_FALLBACK_MESSAGE" >"$message"
   git commit -q --cleanup=whitespace -F "$message" >&2
