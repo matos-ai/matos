@@ -60,6 +60,7 @@ fn fresh_id() -> i64 {
 }
 
 struct World {
+    organization_id: OrganizationId,
     pool: PgPool,
     usecase: MatosUseCase,
     run_id: RunId,
@@ -207,6 +208,7 @@ async fn world(allow_writes: bool) -> Option<World> {
         .await
         .unwrap();
     Some(World {
+        organization_id,
         pool,
         usecase,
         run_id: started.run_id,
@@ -763,5 +765,185 @@ async fn a_newer_plan_replaces_the_one_still_waiting() {
             (first.0, "expired".to_owned()),
             (approval.id.0, "pending".to_owned())
         ]
+    );
+}
+
+const COMPANION_CONFIG: &str = "[[companions]]\nrepository = \"acme/sdk\"\npath = \"../sdk\"\nref_file = \"sdk.ref\"\n\n[[companions]]\nrepository = \"acme/secret\"\npath = \"../secret\"\n\n[[companions]]\nrepository = \"acme/proto\"\npath = \"../proto\"\nref_file = \"proto.ref\"\n";
+
+fn companion_host() -> MockCodeHost {
+    let mut host = MockCodeHost::new();
+    host.expect_file_at()
+        .returning(|_, _, repository, git_ref, path| {
+            assert_eq!(repository.to_string(), "acme/web");
+            assert_eq!(git_ref, "main");
+            let text = match path {
+                ".matos.toml" => Some(COMPANION_CONFIG.to_owned()),
+                "sdk.ref" => Some("0a1b2c3d4e5f\n".to_owned()),
+                _ => None,
+            };
+            Box::pin(std::future::ready(Ok(text)))
+        });
+    host
+}
+
+#[tokio::test]
+async fn a_granted_companion_is_cloned_at_its_ref_file_commit_and_the_others_are_listed_as_skipped()
+{
+    let Some(world) = world(false).await else {
+        return;
+    };
+    world
+        .usecase
+        .update_crew_agent(
+            human(world.organization_id, false),
+            AgentId(world.agent_id),
+            matos_core::domain::crew::service::UpdateAgent {
+                repository_grants: Some(vec![
+                    "acme/web".into(),
+                    "acme/sdk".into(),
+                    "acme/proto".into(),
+                ]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let mut lines = audit_lines(true, Some(REPORT));
+    let done = lines.pop().unwrap();
+    lines.push(TaskLine::Matos(TaskMarker::Companions {
+        cloned: vec!["acme/sdk".into()],
+        failed: vec![],
+    }));
+    lines.push(done);
+    let pipeline = ExecutePipeline::new(
+        world.usecase.clone(),
+        Executor::Ready {
+            runner: runner(lines, Arc::clone(&specs)),
+            host: companion_host(),
+        },
+        config(),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let spec = specs.lock().unwrap()[0].clone();
+    assert_eq!(
+        spec.companions
+            .iter()
+            .map(matos_core::domain::execution::Companion::line)
+            .collect::<Vec<_>>(),
+        vec!["acme/sdk\t/workspace/sdk\t0a1b2c3d4e5f".to_owned()]
+    );
+    let granted: Vec<String> =
+        sqlx::query_scalar("SELECT companions FROM task_grants WHERE run_id = $1")
+            .bind(world.run_id.0)
+            .fetch_one(&world.pool)
+            .await
+            .unwrap();
+    assert_eq!(granted, vec!["acme/sdk"]);
+    let posted = comments(&world.pool, world.card.id).await;
+    let body = &posted[0].1;
+    assert!(
+        body.contains("Dépôts compagnons clonés : acme/sdk."),
+        "{body}"
+    );
+    assert!(
+        body.contains("acme/secret (dépôt non autorisé pour l'agent)"),
+        "{body}"
+    );
+    assert!(
+        body.contains("acme/proto (fichier de référence introuvable)"),
+        "{body}"
+    );
+    let (_, _, output) = step_output(&world.pool, world.run_id).await;
+    assert!(
+        output["companions"]
+            .as_str()
+            .is_some_and(|note| note.contains("acme/sdk"))
+    );
+}
+
+#[tokio::test]
+async fn a_change_run_of_an_agent_gets_its_granted_companions_too() {
+    let Some(world) = world(true).await else {
+        return;
+    };
+    world
+        .usecase
+        .update_crew_agent(
+            human(world.organization_id, false),
+            AgentId(world.agent_id),
+            matos_core::domain::crew::service::UpdateAgent {
+                repository_grants: Some(vec!["acme/web".into(), "acme/sdk".into()]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let mut host = companion_host();
+    host.expect_branch_head()
+        .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(Some("abc".to_owned())))));
+    let lines = {
+        let mut lines = audit_lines(true, None);
+        lines.pop();
+        lines.push(TaskLine::Matos(TaskMarker::Companions {
+            cloned: vec![],
+            failed: vec!["acme/sdk".into()],
+        }));
+        lines.push(TaskLine::Matos(TaskMarker::NoChanges));
+        lines
+    };
+    let pipeline = ExecutePipeline::new(
+        world.usecase.clone(),
+        Executor::Ready {
+            runner: runner(lines, Arc::clone(&specs)),
+            host,
+        },
+        config(),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let spec = specs.lock().unwrap()[0].clone();
+    assert_eq!(spec.mode, ExecutionMode::Change);
+    assert_eq!(spec.companions.len(), 1);
+    let body = &comments(&world.pool, world.card.id).await[0].1;
+    assert!(
+        body.contains("Dépôts compagnons dont le clonage a échoué : acme/sdk."),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn an_audit_reads_the_repository_config_and_a_missing_file_means_no_companion() {
+    let Some(world) = world(false).await else {
+        return;
+    };
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let pipeline = ExecutePipeline::new(
+        world.usecase.clone(),
+        Executor::Ready {
+            runner: runner(audit_lines(true, Some(REPORT)), Arc::clone(&specs)),
+            host: untouched_host(),
+        },
+        config(),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert!(specs.lock().unwrap()[0].companions.is_empty());
+    let granted: Vec<String> =
+        sqlx::query_scalar("SELECT companions FROM task_grants WHERE run_id = $1")
+            .bind(world.run_id.0)
+            .fetch_one(&world.pool)
+            .await
+            .unwrap();
+    assert!(granted.is_empty());
+    assert!(
+        !comments(&world.pool, world.card.id).await[0]
+            .1
+            .contains("compagnons")
     );
 }

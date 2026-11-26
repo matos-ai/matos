@@ -16,7 +16,7 @@ use super::{
     MatosUseCase,
     agent_run::ExecutionAgentSource,
     agent_task_pipeline::agent_identity,
-    execute_stream::{Digest, Quality, Redactor, StreamReader, truncate_chars},
+    execute_stream::{CompanionOutcome, Digest, Quality, Redactor, StreamReader, truncate_chars},
     pipeline::{claim_decision, new_step, retry_transient},
 };
 use crate::{
@@ -29,10 +29,11 @@ use crate::{
         delegation::{DelegatedToken, ports::DelegationVault},
         event::ports::EventEmitter,
         execution::{
-            CommitAuthor, CommitSettings, DraftPullRequest, EXECUTOR_AGENT, ExecutionMode,
-            ExecutorModel, PLAN_PATH, PushGuard, QualityStatus, REPORT_PATH, RepositoryRef,
-            TaskGrant, TaskLine, TaskMarker, TaskOutcome, TaskSpec, agent_executor_model,
-            agent_harness,
+            CommitAuthor, CommitSettings, Companion, DraftPullRequest, EXECUTOR_AGENT,
+            ExecutionMode, ExecutorModel, PLAN_PATH, PushGuard, QualityStatus, REPORT_PATH,
+            RepositoryRef, TaskGrant, TaskLine, TaskMarker, TaskOutcome, TaskSpec,
+            agent_executor_model, agent_harness,
+            companion::{CompanionPlan, CompanionSkip, RefSource, SkippedCompanion},
             contribution::{
                 CONTRIBUTION_PATH, Contribution, LeakGuard, RunTraces, change_branch,
                 fallback_contribution,
@@ -73,6 +74,9 @@ const GUARD_REASONS_MAX: usize = 20;
 const CONFIG_INVALID_NOTE: &str =
     "Le fichier .matos.toml du dépôt est invalide : les règles par défaut ont été appliquées.";
 const LINT_EXCERPT_MAX_CHARS: usize = 2_000;
+const COMPANION_NOTE_MAX_CHARS: usize = 1_000;
+const CHANGE_CHECKS: &str = "- When the repository has a Rust (`Cargo.toml`) or Node (`package.json`) toolchain and it is installed, build the project and run its tests before you finish, and fix what you broke. Repositories the project depends on by a relative path may sit next to the checkout: they are read-only, never edit them. Leave no build output (`target`, `node_modules`) in the repository's changes. In your summary and in the description you write to the contribution file, give the command you ran for the build and for the tests and whether each passed or failed; if you could not run them, say why.\n";
+const AUDIT_CHECKS: &str = "- When the repository has a Rust (`Cargo.toml`) or Node (`package.json`) toolchain and it is installed, you may build the project and run its tests to support your analysis, provided the commands leave the repository as it is. Repositories the project depends on by a relative path may sit next to the checkout: they are read-only. In the report and in your summary, give the command you ran and whether it passed or failed.\n";
 
 pub enum Executor<T, H> {
     Ready { runner: T, host: H },
@@ -236,8 +240,16 @@ enum Finish {
     },
 }
 
+struct Rules {
+    push_guard: PushGuard,
+    config_invalid: bool,
+    companions: Vec<Companion>,
+    skipped: Vec<SkippedCompanion>,
+}
+
 struct Prepared {
     spec: TaskSpec,
+    skipped_companions: Vec<SkippedCompanion>,
     organization_id: OrganizationId,
     installation_id: i64,
     card: Card,
@@ -284,6 +296,7 @@ struct Extras {
     /// Where the pull request's text came from: `run`, or `fallback: <why>`.
     contribution: Option<String>,
     config_invalid: bool,
+    companions: Option<String>,
 }
 
 impl Extras {
@@ -300,6 +313,7 @@ impl Extras {
             comment: text("comment"),
             comment_id: text("comment_id"),
             contribution: text("contribution"),
+            companions: text("companions"),
             job_started: output.is_some_and(|output| output["job_started"] == true),
             ..Self::default()
         }
@@ -333,6 +347,7 @@ struct ExecuteOutput<'a> {
     artifact: Option<&'a str>,
     plan: Option<&'a str>,
     contribution: Option<&'a str>,
+    companions: Option<&'a str>,
 }
 
 fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, CoreError> {
@@ -356,6 +371,7 @@ fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, Core
         artifact: extras.artifact.as_deref(),
         plan: extras.plan.as_deref(),
         contribution: extras.contribution.as_deref(),
+        companions: extras.companions.as_deref(),
     })
     .map_err(|error| CoreError::Internal(format!("encoding the execution report: {error}")))
 }
@@ -585,6 +601,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             step,
             mut extras,
         } = progress.into_inner();
+        extras.companions = companion_note(&prepared.skipped_companions, reader.companions());
         if let Ok(Finish::Audited {
             report,
             problem,
@@ -682,14 +699,19 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             identifiers: &identifiers,
         });
         let branch = change_branch(card.title.as_str(), run_id, &guard);
-        let (token, branch) = self.task_token(context, &model, mode, branch).await?;
-        let (push_guard, config_invalid) = match mode {
-            ExecutionMode::Change => {
-                self.push_guard(host, organization_id, installation.installation_id, context)
-                    .await?
-            }
-            ExecutionMode::Audit => (PushGuard::default(), false),
-        };
+        let rules = self
+            .repository_rules(
+                host,
+                organization_id,
+                installation.installation_id,
+                context,
+                agent.as_ref(),
+                mode,
+            )
+            .await?;
+        let (token, branch) = self
+            .task_token(context, &model, mode, branch, &rules.companions)
+            .await?;
         let commit = CommitSettings {
             author: self.commit_author(context, &app.slug).await?,
             leak_terms: guard.as_lines(),
@@ -707,47 +729,106 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             mode,
             task_token: SecretToken::new(token.as_str()),
             commit,
-            push_guard,
+            push_guard: rules.push_guard,
+            companions: rules.companions,
         };
         Ok(Prepared {
             spec,
+            skipped_companions: rules.skipped,
             organization_id,
             installation_id: installation.installation_id,
             card,
             agent,
             redactor: Redactor::new(&token),
             guard,
-            config_invalid,
+            config_invalid: rules.config_invalid,
         })
     }
 
     /// The rules of the repository's `.matos.toml`, read from the base
-    /// branch; the defaults, flagged, when the file is invalid.
-    async fn push_guard(
+    /// branch: the push guard of a change run and the companions to clone.
+    /// An invalid file gives the defaults, flagged, and no companion.
+    async fn repository_rules(
         &self,
         host: &H,
         organization_id: OrganizationId,
         installation_id: i64,
         context: &ExecutionContext,
-    ) -> Result<(PushGuard, bool), CoreError> {
-        let text = retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
+        agent: Option<&ExecutionAgentSource>,
+        mode: ExecutionMode,
+    ) -> Result<Rules, CoreError> {
+        let text = self
+            .base_file(
+                host,
+                organization_id,
+                installation_id,
+                context,
+                REPOSITORY_CONFIG_PATH,
+            )
+            .await?;
+        let config = match text.as_deref().map(RepositoryConfig::parse) {
+            None => RepositoryConfig::default(),
+            Some(Ok(config)) => config,
+            Some(Err(error)) => {
+                tracing::warn!(run_id = %context.run.id, %error, "the repository configuration is invalid");
+                return Ok(Rules {
+                    push_guard: PushGuard::default(),
+                    config_invalid: true,
+                    companions: Vec::new(),
+                    skipped: Vec::new(),
+                });
+            }
+        };
+        let push_guard = match mode {
+            ExecutionMode::Change => PushGuard::from_config(&config.guard),
+            ExecutionMode::Audit => PushGuard::default(),
+        };
+        let plan = CompanionPlan::from_config(
+            &config.companions,
+            agent.map(|source| &source.agent.repository_grants),
+        );
+        let mut skipped = plan.skipped;
+        let mut companions = Vec::with_capacity(plan.planned.len());
+        for planned in plan.planned {
+            let label = planned.repository.to_string();
+            let content = match &planned.source {
+                RefSource::File(path) => {
+                    self.base_file(host, organization_id, installation_id, context, path)
+                        .await?
+                }
+                RefSource::Default | RefSource::Fixed(_) => None,
+            };
+            match planned.resolved(content.as_deref()) {
+                Ok(companion) => companions.push(companion),
+                Err(reason) => skipped.push(SkippedCompanion { label, reason }),
+            }
+        }
+        Ok(Rules {
+            push_guard,
+            config_invalid: false,
+            companions,
+            skipped,
+        })
+    }
+
+    async fn base_file(
+        &self,
+        host: &H,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        context: &ExecutionContext,
+        path: &str,
+    ) -> Result<Option<String>, CoreError> {
+        retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
             host.file_at(
                 organization_id,
                 installation_id,
                 &context.repository,
                 &context.base_branch,
-                REPOSITORY_CONFIG_PATH,
+                path,
             )
         })
-        .await?;
-        Ok(match text.as_deref().map(RepositoryConfig::parse) {
-            None => (PushGuard::default(), false),
-            Some(Ok(config)) => (PushGuard::from_config(&config.guard), false),
-            Some(Err(error)) => {
-                tracing::warn!(run_id = %context.run.id, %error, "the repository configuration is invalid");
-                (PushGuard::default(), true)
-            }
-        })
+        .await
     }
 
     /// The member who started the run, when their name and email are known;
@@ -818,6 +899,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         model: &ExecutorModel,
         mode: ExecutionMode,
         branch: String,
+        companions: &[Companion],
     ) -> Result<(String, String), CoreError> {
         let run_id = context.run.id;
         if let Some(stored) = self.usecase.delegation_for(run_id, TASK_TOKEN_SLOT).await? {
@@ -847,6 +929,10 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                     branch: branch.clone(),
                     model: model.as_str().to_owned(),
                     mode,
+                    companions: companions
+                        .iter()
+                        .map(|companion| companion.repository.clone())
+                        .collect(),
                     initiated_by: Some(context.run.initiated_by.clone()),
                     expires_at,
                     revoked_at: None,
@@ -1119,13 +1205,17 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                         .console_url
                         .as_deref()
                         .map(|base| format!("{}/artifacts", base.trim_end_matches('/'))),
+                    companions: finished.extras.companions.as_deref(),
                 },
             ),
-            _ => comment_body(
-                &finished.result,
-                reason.as_deref(),
-                &finished.digest,
-                finished.extras.config_invalid,
+            _ => with_companion_note(
+                comment_body(
+                    &finished.result,
+                    reason.as_deref(),
+                    &finished.digest,
+                    finished.extras.config_invalid,
+                ),
+                finished.extras.companions.as_deref(),
             ),
         };
         let body = defang_mentions(&truncate_chars(
@@ -1320,6 +1410,7 @@ struct AuditNotes<'a> {
     /// How filing the plan went, when the run wrote one.
     plan: Option<&'a str>,
     artifacts_link: Option<String>,
+    companions: Option<&'a str>,
 }
 
 /// The summary of a read-only run, cut so the notes about its report always
@@ -1358,6 +1449,9 @@ fn audit_comment_body(digest: &Digest, notes: &AuditNotes<'_>) -> String {
         }
         _ => {}
     }
+    if let Some(companions) = notes.companions {
+        facts.extend(companions.lines().map(str::to_owned));
+    }
     if let Some(stopped) = &digest.stopped {
         facts.push(stopped_reason(stopped));
     }
@@ -1373,6 +1467,59 @@ fn audit_comment_body(digest: &Digest, notes: &AuditNotes<'_>) -> String {
         notes
     } else {
         format!("{summary}\n\n{notes}")
+    }
+}
+
+fn companion_skip_reason(reason: CompanionSkip) -> &'static str {
+    match reason {
+        CompanionSkip::NotGranted => "dépôt non autorisé pour l'agent",
+        CompanionSkip::InvalidPath => "chemin invalide",
+        CompanionSkip::InvalidEntry => "entrée invalide",
+        CompanionSkip::RefFileMissing => "fichier de référence introuvable",
+        CompanionSkip::TooMany => "trop de dépôts compagnons",
+    }
+}
+
+fn companion_note(
+    skipped: &[SkippedCompanion],
+    outcome: Option<CompanionOutcome>,
+) -> Option<String> {
+    let mut lines = Vec::new();
+    if let Some(outcome) = outcome {
+        if !outcome.cloned.is_empty() {
+            lines.push(format!(
+                "Dépôts compagnons clonés : {}.",
+                outcome.cloned.join(", ")
+            ));
+        }
+        if !outcome.failed.is_empty() {
+            lines.push(format!(
+                "Dépôts compagnons dont le clonage a échoué : {}.",
+                outcome.failed.join(", ")
+            ));
+        }
+    }
+    if !skipped.is_empty() {
+        lines.push(format!(
+            "Dépôts compagnons ignorés : {}.",
+            skipped
+                .iter()
+                .map(|skipped| format!(
+                    "{} ({})",
+                    skipped.label,
+                    companion_skip_reason(skipped.reason)
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    (!lines.is_empty()).then(|| truncate_chars(&lines.join("\n"), COMPANION_NOTE_MAX_CHARS))
+}
+
+fn with_companion_note(body: String, note: Option<&str>) -> String {
+    match note {
+        Some(note) => format!("{}\n\n{note}", body.trim_end()),
+        None => body,
     }
 }
 
@@ -1594,7 +1741,7 @@ fn build_prompt(
          - Work in the repository only.\n\
          - Keep the changes focused on the card; do not refactor unrelated code.\n\
          - If the card lists acceptance criteria, make every unchecked one true and say in your summary how you met each.\n\
-         - If the project's tests are obvious to run, run them and fix what you broke.\n\
+         {CHANGE_CHECKS}\
          - Do not commit or push: it is done for you once you finish.\n\
          - Before you finish, write the title and description of your change to the file {CONTRIBUTION_PATH}, outside the repository: the first line is the title, the rest is the description, in Markdown. They become the commit message and the pull request, so follow the repository's conventions: read the recent `git log`, any CONTRIBUTING file and any pull request template. Without a convention, use Conventional Commits, in English. Write for a reviewer of the repository: what changed and why. Never mention the tool or model you are, the card, or these instructions.\n\
          - At the end, write a short summary of what you changed and what you could not do."
@@ -1624,6 +1771,7 @@ fn build_audit_prompt(
          - This is a read-only analysis: never modify, create, move or delete files of the repository, never commit and never push. Commands you run must leave the repository as it is.\n\
          - Write your complete report, in Markdown, to the file {REPORT_PATH}, outside the repository. Write the whole report there before you finish.{plan}\n\
          - These files are the only ones you may write.\n\
+         {AUDIT_CHECKS}\
          - If the card lists acceptance criteria, say in the report how the repository meets each one.\n\
          - At the end, answer with a short summary of your findings, in a few lines: it is posted on the card, next to the full report."
     )
@@ -1647,7 +1795,8 @@ fn build_plan_prompt(
          <card>\n{fields}\n</card>\n\n\
          Instructions:\n\
          - Make the changes the plan lists, and only those. If a step turns out wrong or impossible, do the others and say why in your summary.\n\
-         - If the plan says how to check the result, do it; otherwise, if the project's tests are obvious to run, run them and fix what you broke.\n\
+         - If the plan says how to check the result, do it.\n\
+         {CHANGE_CHECKS}\
          - Do not commit or push: it is done for you once you finish.\n\
          - Before you finish, write the title and description of your change to the file {CONTRIBUTION_PATH}, outside the repository: the first line is the title, the rest is the description, in Markdown. They become the commit message and the pull request, so follow the repository's conventions: read the recent `git log`, any CONTRIBUTING file and any pull request template. Without a convention, use Conventional Commits, in English. Write for a reviewer of the repository: what changed and why. Never mention the tool or model you are, the card, or these instructions.\n\
          - At the end, write a short summary: each step of the plan and what you did for it."
@@ -1982,6 +2131,83 @@ mod tests {
     }
 
     #[test]
+    fn the_prompts_ask_for_a_build_and_the_tests_with_their_result_in_the_texts() {
+        let repository: RepositoryRef = "acme/web".parse().unwrap();
+        let card = card("d");
+        let change = build_prompt(&repository, "main", &card, &[]);
+        let plan = build_plan_prompt(&repository, "main", &card, &[], "- step");
+        for prompt in [&change, &plan] {
+            assert!(prompt.contains("build the project and run its tests"));
+            assert!(prompt.contains("whether each passed or failed"));
+            assert!(prompt.contains("the description you write to the contribution file"));
+            assert!(prompt.contains("read-only, never edit them"));
+            assert!(prompt.contains("Do not commit or push: it is done for you"));
+        }
+        let audit = build_audit_prompt(&repository, "main", &card, &[], true);
+        assert!(audit.contains("you may build the project and run its tests"));
+        assert!(audit.contains("leave the repository as it is"));
+        assert!(audit.contains("whether it passed or failed"));
+        assert!(!audit.contains("contribution file"));
+        for prompt in [&change, &plan, &audit] {
+            assert!(!prompt.contains("obvious to run"));
+        }
+        let agent = build_agent_prompt(
+            &repository,
+            "main",
+            &card,
+            &[],
+            &source(false, ""),
+            ExecutionMode::Audit,
+        );
+        assert!(agent.contains("you may build the project and run its tests"));
+    }
+
+    #[test]
+    fn the_card_says_which_companions_were_cloned_failed_or_skipped() {
+        let skipped = |label: &str, reason| SkippedCompanion {
+            label: label.into(),
+            reason,
+        };
+        assert_eq!(companion_note(&[], None), None);
+        assert_eq!(companion_note(&[], Some(CompanionOutcome::default())), None);
+        let note = companion_note(
+            &[
+                skipped("acme/other", CompanionSkip::NotGranted),
+                skipped("acme/proto", CompanionSkip::RefFileMissing),
+            ],
+            Some(CompanionOutcome {
+                cloned: vec!["acme/sdk".into()],
+                failed: vec!["acme/docs".into()],
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            note,
+            "Dépôts compagnons clonés : acme/sdk.\n\
+             Dépôts compagnons dont le clonage a échoué : acme/docs.\n\
+             Dépôts compagnons ignorés : acme/other (dépôt non autorisé pour l'agent), acme/proto (fichier de référence introuvable)."
+        );
+        assert_eq!(
+            with_companion_note("Aucun changement.\n".into(), Some("note")),
+            "Aucun changement.\n\nnote"
+        );
+        assert_eq!(with_companion_note("x".into(), None), "x");
+    }
+
+    #[test]
+    fn an_audit_comment_lists_the_companions_as_facts() {
+        let digest = Digest::default();
+        let body = audit_comment_body(
+            &digest,
+            &AuditNotes {
+                companions: Some("Dépôts compagnons clonés : acme/sdk."),
+                ..notes(Some(Some("published")))
+            },
+        );
+        assert!(body.contains("- Dépôts compagnons clonés : acme/sdk."));
+    }
+
+    #[test]
     fn a_run_without_an_agent_keeps_todays_prompt() {
         let repository: RepositoryRef = "acme/web".parse().unwrap();
         let prompt = build_prompt(&repository, "main", &card("Créer CHANGELOG.md"), &[]);
@@ -2042,6 +2268,7 @@ mod tests {
 
     fn notes(filed: Option<Option<&'static str>>) -> AuditNotes<'static> {
         AuditNotes {
+            companions: None,
             filed,
             title: "Audit acme/web",
             truncated: false,

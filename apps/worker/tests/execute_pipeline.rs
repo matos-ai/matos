@@ -955,6 +955,7 @@ async fn crashed_attempt(world: &World, token: &str, output: Option<serde_json::
                 branch: branch_of(world.run_id),
                 model: "claude-sonnet-5-5".into(),
                 mode: ExecutionMode::Change,
+                companions: Vec::new(),
                 initiated_by: None,
                 expires_at,
                 revoked_at: None,
@@ -1452,6 +1453,42 @@ async fn the_rules_of_the_base_branch_config_reach_the_task() {
     assert!(guard.deny_paths.contains(&".matos.toml".to_owned()));
     let posted = comments(&world.pool, world.card.id).await;
     assert!(!posted[0].2.contains("invalide"));
+}
+
+#[tokio::test]
+async fn a_card_run_without_an_agent_gets_no_companion_and_the_card_lists_them_as_skipped() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let runner = recording_runner(lines_of(SAMPLE), specs.clone());
+    let host = host_with_config(
+        &seen,
+        world.organization_id,
+        world.installation_id,
+        Some(
+            "[[companions]]\nrepository = \"acme/sdk\"\npath = \"../sdk\"\n\n[[companions]]\nrepository = \"acme/docs\"\npath = \"/etc\"\nref = \"main\"\nref_file = \"x\"\n",
+        ),
+    );
+    let pipeline = pipeline(&world, runner, host);
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert!(specs.lock().unwrap()[0].companions.is_empty());
+    let granted: Vec<String> =
+        sqlx::query_scalar("SELECT companions FROM task_grants WHERE run_id = $1")
+            .bind(world.run_id.0)
+            .fetch_one(&world.pool)
+            .await
+            .unwrap();
+    assert!(granted.is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(
+        posted[0]
+            .2
+            .contains("acme/sdk (dépôt non autorisé pour l'agent)")
+    );
+    assert!(posted[0].2.contains("acme/docs (entrée invalide)"));
+    assert!(!posted[0].2.contains("invalide :"));
 }
 
 #[tokio::test]

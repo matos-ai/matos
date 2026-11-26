@@ -1,8 +1,24 @@
+ARG RUST_VERSION=1.97.1
+
+FROM debian:bookworm-slim AS rust-toolchain
+ARG RUST_VERSION
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+    | sh -s -- -y --no-modify-path --profile minimal --default-toolchain "$RUST_VERSION" -c clippy -c rustfmt \
+    && chmod -R a+rX /usr/local/rustup /usr/local/cargo
+
 FROM node:22-slim AS base
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates build-essential pkg-config libssl-dev curl \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
+COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/home/executor/.cargo PATH=/usr/local/cargo/bin:$PATH
 
 RUN userdel -r node \
     && useradd --uid 1000 --user-group --create-home --home-dir /home/executor --shell /bin/bash executor \
@@ -11,6 +27,7 @@ RUN userdel -r node \
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=0644 guard.sh /usr/local/bin/guard.sh
+COPY --chmod=0644 companions.sh /usr/local/bin/companions.sh
 
 ENV HOME=/home/executor
 WORKDIR /workspace
@@ -32,16 +49,12 @@ RUN set -eu; \
       arm64) asset=agy_cli_linux_arm64.tar.gz; sha="$AGY_SHA256_ARM64" ;; \
       *) echo "unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends curl; \
     curl -fsSL -o "/tmp/$asset" "https://github.com/google-antigravity/antigravity-cli/releases/download/${AGY_VERSION}/${asset}"; \
     echo "$sha  /tmp/$asset" | sha256sum -c -; \
     tar -xzf "/tmp/$asset" -C /usr/local/bin antigravity; \
     mv /usr/local/bin/antigravity /usr/local/bin/agy; \
     chmod 755 /usr/local/bin/agy; \
-    rm -f "/tmp/$asset"; \
-    apt-get purge -y --auto-remove curl; \
-    rm -rf /var/lib/apt/lists/*
+    rm -f "/tmp/$asset"
 USER 1000:1000
 
 FROM python:3.12-slim-bookworm AS mistral-vibe-build
@@ -52,8 +65,15 @@ RUN pip install --no-cache-dir uv==0.9.5 \
 
 FROM python:3.12-slim-bookworm AS mistral-vibe
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates build-essential pkg-config libssl-dev curl \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=node:22-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:22-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
+COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/home/executor/.cargo PATH=/usr/local/cargo/bin:$PATH
 RUN useradd --uid 1000 --user-group --create-home --home-dir /home/executor --shell /bin/bash executor \
     && mkdir /workspace \
     && chown executor:executor /workspace
@@ -61,6 +81,7 @@ COPY --from=mistral-vibe-build /opt/uv-tools /opt/uv-tools
 COPY --from=mistral-vibe-build /usr/local/bin/vibe /usr/local/bin/vibe-app-server /usr/local/bin/
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=0644 guard.sh /usr/local/bin/guard.sh
+COPY --chmod=0644 companions.sh /usr/local/bin/companions.sh
 ENV HOME=/home/executor
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

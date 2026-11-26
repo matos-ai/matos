@@ -6,6 +6,20 @@ pub const REPOSITORY_CONFIG_PATH: &str = ".matos.toml";
 pub struct RepositoryConfig {
     #[serde(default)]
     pub guard: GuardConfig,
+    #[serde(default)]
+    pub companions: Vec<CompanionConfig>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct CompanionConfig {
+    #[serde(default)]
+    pub repository: String,
+    #[serde(default)]
+    pub path: String,
+    #[serde(default, rename = "ref")]
+    pub reference: Option<String>,
+    #[serde(default)]
+    pub ref_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -52,8 +66,41 @@ mod tests {
 
     #[test]
     fn unknown_top_level_sections_are_tolerated() {
-        let config = RepositoryConfig::parse("[[companions]]\nname = \"docs\"\n").unwrap();
+        let config = RepositoryConfig::parse("[docs]\nname = \"docs\"\n").unwrap();
         assert_eq!(config, RepositoryConfig::default());
+    }
+
+    #[test]
+    fn a_companion_is_read_with_a_ref_a_ref_file_or_neither() {
+        let config = RepositoryConfig::parse(
+            "[[companions]]\nrepository = \"acme/sdk\"\npath = \"../sdk\"\nref = \"abc123\"\n\n\
+             [[companions]]\nrepository = \"acme/proto\"\npath = \"../proto\"\nref_file = \"proto.ref\"\n\n\
+             [[companions]]\nrepository = \"acme/docs\"\npath = \"../docs\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.companions.len(), 3);
+        assert_eq!(config.companions[0].reference.as_deref(), Some("abc123"));
+        assert_eq!(config.companions[0].ref_file, None);
+        assert_eq!(config.companions[1].ref_file.as_deref(), Some("proto.ref"));
+        assert_eq!(config.companions[1].reference, None);
+        assert_eq!(config.companions[2].reference, None);
+        assert_eq!(config.companions[2].ref_file, None);
+        assert_eq!(config.companions[2].path, "../docs");
+    }
+
+    #[test]
+    fn an_entry_with_both_a_ref_and_a_ref_file_still_parses_so_it_can_be_skipped_alone() {
+        let config = RepositoryConfig::parse(
+            "[[companions]]\nrepository = \"acme/sdk\"\npath = \"../sdk\"\nref = \"a\"\nref_file = \"b\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.companions[0].reference.as_deref(), Some("a"));
+        assert_eq!(config.companions[0].ref_file.as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn a_companion_wrongly_typed_invalidates_the_file() {
+        assert!(RepositoryConfig::parse("[[companions]]\npath = 3\n").is_err());
     }
 
     #[test]
