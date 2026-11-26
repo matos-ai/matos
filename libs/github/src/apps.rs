@@ -339,7 +339,7 @@ mod tests {
         tokio::spawn(async move { axum::serve(listener, app).await });
         let pool = sqlx::PgPool::connect_lazy("postgres://nobody@127.0.0.1:1/none").unwrap();
         GithubApps::new(
-            MatosUseCase::with_local_policies(pool),
+            MatosUseCase::with_test_policies(pool),
             GithubBases {
                 api_base: base.clone(),
                 web_base: base,

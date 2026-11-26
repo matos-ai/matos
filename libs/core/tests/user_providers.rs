@@ -61,7 +61,7 @@ fn subject(organization_id: OrganizationId, id: &str, actor: Option<&str>) -> Su
 }
 
 fn usecase(pool: &PgPool, key: u8) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[key; 32]).unwrap())
 }
 

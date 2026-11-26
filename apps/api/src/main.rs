@@ -75,8 +75,8 @@ async fn main() -> anyhow::Result<()> {
     let pool = postgres::connect(&args.database.url, args.database.max_connections)
         .await
         .context("connecting to postgres")?;
-    let mut usecase =
-        MatosUseCase::with_policies(pool, args.authz.pdp_client().map_err(anyhow::Error::msg)?);
+    let (client_id, client_secret) = args.authz.pdp_client().map_err(anyhow::Error::msg)?;
+    let mut usecase = MatosUseCase::with_policies(pool, client_id, client_secret);
     match &args.secrets.key {
         Some(key) => {
             usecase = usecase.with_secrets_cipher(

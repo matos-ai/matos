@@ -39,7 +39,7 @@ async fn usecase() -> Option<MatosUseCase> {
     };
     let pool = postgres::connect(&url, 2).await.unwrap();
     Some(
-        MatosUseCase::with_local_policies(pool)
+        MatosUseCase::with_test_policies(pool)
             .with_secrets_cipher(SecretCipher::new(&[8u8; 32]).unwrap()),
     )
 }

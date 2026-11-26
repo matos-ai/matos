@@ -75,7 +75,7 @@ struct Client {
 }
 
 async fn serve(pool: &PgPool, organization: &Organization, setup: Setup<'_>) -> Client {
-    let mut usecase = MatosUseCase::with_local_policies(pool.clone());
+    let mut usecase = MatosUseCase::with_test_policies(pool.clone());
     if setup.keyed {
         usecase = usecase.with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap());
     }

@@ -294,7 +294,7 @@ async fn world(grants: &[(Slot, Access)]) -> Option<World> {
     .await
     .unwrap();
     let organization_id = OrganizationId(id);
-    let usecase = MatosUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_test_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
     let acme = usecase

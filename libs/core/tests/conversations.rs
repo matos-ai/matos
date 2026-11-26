@@ -60,7 +60,7 @@ fn member(organization_id: OrganizationId, id: &str) -> Subject {
 }
 
 fn usecase(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
 }
 
 fn outcome(text: &str, status: MessageStatus) -> TurnOutcome {

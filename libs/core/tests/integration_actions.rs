@@ -232,7 +232,7 @@ async fn world() -> Option<World> {
     })?;
     let pool = postgres::connect(&url, 4).await.unwrap();
     let organization_id = organization(&pool).await;
-    let usecase = MatosUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher());
+    let usecase = MatosUseCase::with_test_policies(pool.clone()).with_secrets_cipher(cipher());
     let acme = client(&usecase, organization_id, "Acme").await;
     let run_id = run(&usecase, organization_id).await;
     Some(World {
@@ -1257,7 +1257,7 @@ async fn without_a_secrets_key_a_call_fails_before_any_request_or_row() {
     let Some(world) = world().await else { return };
     let prod = world.odoo("Odoo prod").await;
     let context = world.context(&[(&prod, Access::Write)]);
-    let keyless = MatosUseCase::with_local_policies(world.pool.clone());
+    let keyless = MatosUseCase::with_test_policies(world.pool.clone());
     let connector = Scripted::new(&world.pool);
 
     let outcome = keyless

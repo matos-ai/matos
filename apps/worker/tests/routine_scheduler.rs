@@ -108,7 +108,7 @@ async fn fixture() -> Option<Fixture> {
     .execute(&pool)
     .await
     .unwrap();
-    let usecase = MatosUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_test_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     Some(Fixture {
@@ -558,7 +558,7 @@ async fn two_concurrent_ticks_run_a_passage_once() {
         .await;
     let now = now();
     fixture.due_at(routine, now).await;
-    let other = MatosUseCase::with_local_policies(fixture.pool.clone())
+    let other = MatosUseCase::with_test_policies(fixture.pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
 

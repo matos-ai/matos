@@ -102,7 +102,7 @@ fn caller(organization: &Organization, subject: &str, actor: Option<&str>) -> Ca
 }
 
 async fn serve(pool: &PgPool, caller: Caller) -> String {
-    let usecase = MatosUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
     let app: Router =
         matos_handlers_providers::router::<(), _>(usecase, FakeCatalog).layer(Extension(caller));

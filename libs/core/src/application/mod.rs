@@ -36,10 +36,11 @@ use matos_common::CoreError;
 use sqlx::PgPool;
 
 use crate::domain::agent::SecretToken;
+#[cfg(feature = "test-policies")]
+use crate::infrastructure::authorization::CedarPolicyEngine;
 use crate::infrastructure::{
     authorization::{
-        AuditedAuthorizer, AuthzenAuthorizer, LocalPolicyEngine, PdpCredentials, PgIssuers,
-        PolicyEngine,
+        AuditedAuthorizer, AuthzenAuthorizer, PdpCredentials, PgIssuers, PolicyEngine,
     },
     crypto::SecretCipher,
     postgres,
@@ -105,29 +106,28 @@ impl MatosUseCase {
             .ok_or_else(|| CoreError::Internal("DELEGATION_KEY is not configured".into()))
     }
 
-    /// The default assembly: the local policy engine, every decision audited.
-    pub fn with_local_policies(pool: PgPool) -> Self {
-        Self::with_engine(pool, PolicyEngine::Local(LocalPolicyEngine))
-    }
-
     pub fn with_authzen_policies(pool: PgPool, credentials: PdpCredentials) -> Self {
         let engine = AuthzenAuthorizer::new(PgIssuers::new(pool.clone()), credentials);
         Self::with_engine(pool, PolicyEngine::Authzen(engine))
     }
 
-    /// The authzen engine when a decision point client is given, the local
-    /// engine otherwise.
-    pub fn with_policies(pool: PgPool, pdp_client: Option<(&str, &str)>) -> Self {
-        match pdp_client {
-            Some((client_id, client_secret)) => Self::with_authzen_policies(
-                pool,
-                PdpCredentials {
-                    client_id: client_id.to_owned(),
-                    client_secret: SecretToken::new(client_secret),
-                },
-            ),
-            None => Self::with_local_policies(pool),
-        }
+    pub fn with_policies(pool: PgPool, client_id: &str, client_secret: &str) -> Self {
+        Self::with_authzen_policies(
+            pool,
+            PdpCredentials {
+                client_id: client_id.to_owned(),
+                client_secret: SecretToken::new(client_secret),
+            },
+        )
+    }
+
+    pub fn without_policies(pool: PgPool) -> Self {
+        Self::with_engine(pool, PolicyEngine::DenyAll)
+    }
+
+    #[cfg(feature = "test-policies")]
+    pub fn with_test_policies(pool: PgPool) -> Self {
+        Self::with_engine(pool, PolicyEngine::Cedar(CedarPolicyEngine::new()))
     }
 
     fn with_engine(pool: PgPool, engine: PolicyEngine) -> Self {

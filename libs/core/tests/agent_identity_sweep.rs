@@ -118,7 +118,7 @@ fn cipher() -> SecretCipher {
 }
 
 fn usecase(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher())
+    MatosUseCase::with_test_policies(pool.clone()).with_secrets_cipher(cipher())
 }
 
 async fn organization(pool: &PgPool) -> OrganizationId {

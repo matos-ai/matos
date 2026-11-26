@@ -63,7 +63,7 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         return;
     };
     let pool = as_proxy(&url).await;
-    let usecase = MatosUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_test_policies(pool.clone());
     let organization = OrganizationId(Uuid::now_v7());
 
     assert_eq!(usecase.find_task_grant(random_hash()).await.unwrap(), None);
