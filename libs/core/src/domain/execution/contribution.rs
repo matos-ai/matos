@@ -1,4 +1,4 @@
-use capitainerie_common::RunId;
+use matos_common::RunId;
 
 use super::{
     RepositoryRef,
@@ -7,7 +7,7 @@ use super::{
 
 /// Where a change run writes the title and body of its contribution, outside
 /// the checkout: the first line is the title, the rest the body.
-pub const CONTRIBUTION_PATH: &str = "/workspace/.capitainerie/contribution.md";
+pub const CONTRIBUTION_PATH: &str = "/workspace/.matos/contribution.md";
 
 /// GitHub refuses longer pull request titles.
 pub const TITLE_MAX_CHARS: usize = 256;
@@ -16,7 +16,7 @@ pub const BODY_MAX_CHARS: usize = 20_000;
 const BRANCH_SLUG_MAX_CHARS: usize = 40;
 const BRANCH_SUFFIX_HEX: usize = 6;
 
-const PLATFORM: &str = "capitainerie";
+const PLATFORM: &str = "matos";
 
 /// Words that tell a reader the text came from an AI tool or from the
 /// platform's prompt, whatever the repository.
@@ -36,7 +36,7 @@ const ALWAYS_LEAKS: [&str; 18] = [
     "<card>",
     "</card>",
     "<plan>",
-    "/workspace/.capitainerie",
+    "/workspace/.matos",
     "replies on the card",
     "a member approved the plan",
 ];
@@ -276,7 +276,7 @@ mod tests {
             "see https://console.example.test/kanban",
             "Card 0a1b2c3d-0000-7000-8000-0123456789ab",
             "run 0a1b2c3d0000700080000123456789ab",
-            "Opened by Capitainerie",
+            "Opened by Matos",
             "Co-Authored-By: someone",
             "\u{1f916} Generated with a tool",
             "1200 input tokens",
@@ -298,21 +298,21 @@ mod tests {
 
     #[test]
     fn the_platform_name_is_allowed_in_its_own_repositories() {
-        let repository: RepositoryRef = "ferrislabs/capitainerie".parse().unwrap();
+        let repository: RepositoryRef = "ferrislabs/matos".parse().unwrap();
         let guard = LeakGuard::for_run(&RunTraces {
             repository: &repository,
             model: "claude-opus-5-5",
             console_url: None,
             identifiers: &[],
         });
-        assert!(guard.passes("fix(capitainerie-api): reject empty titles"));
+        assert!(guard.passes("fix(matos-api): reject empty titles"));
         assert!(!guard.passes("fix: use claude-opus-5-5"));
     }
 
     #[test]
     fn the_terms_reach_the_script_one_per_line_in_lower_case() {
         let lines = guard().as_lines();
-        assert!(lines.lines().any(|line| line == "capitainerie"));
+        assert!(lines.lines().any(|line| line == "matos"));
         assert!(lines.lines().any(|line| line == "console.example.test"));
         assert!(lines.lines().any(|line| line == "mistral vibe"));
         assert!(lines.lines().all(|line| line == line.to_lowercase()));
@@ -326,7 +326,7 @@ mod tests {
             "Retirer les mini-jeux"
         );
         assert_eq!(
-            fallback_contribution(&guard, "Brancher Capitainerie").title,
+            fallback_contribution(&guard, "Brancher Matos").title,
             "Apply the requested change"
         );
     }
@@ -353,7 +353,7 @@ mod tests {
             "change/update-6789ab"
         );
         assert_eq!(
-            change_branch("Brancher Capitainerie", run_id, &guard()),
+            change_branch("Brancher Matos", run_id, &guard()),
             "change/update-6789ab"
         );
     }

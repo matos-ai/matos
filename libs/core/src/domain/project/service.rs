@@ -1,6 +1,6 @@
-use capitainerie_common::{ClientId, CoreError, ProjectId};
-use capitainerie_events::card::{CardAuthor, CardUpdated};
 use chrono::Utc;
+use matos_common::{ClientId, CoreError, ProjectId};
+use matos_events::card::{CardAuthor, CardUpdated};
 
 use super::{Project, ProjectDetail, ProjectFilter, ProjectListing, ports::ProjectRepository};
 use crate::domain::{
@@ -210,8 +210,8 @@ where
 mod tests {
     use std::sync::Mutex;
 
-    use capitainerie_common::{CardId, OrganizationId};
-    use capitainerie_events::DomainEvent;
+    use matos_common::{CardId, OrganizationId};
+    use matos_events::DomainEvent;
 
     use super::*;
     use crate::domain::{

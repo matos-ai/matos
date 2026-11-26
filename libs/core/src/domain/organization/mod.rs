@@ -1,8 +1,8 @@
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::OrganizationId;
 use chrono::{DateTime, Utc};
+use matos_common::OrganizationId;
 use thiserror::Error;
 
 /// An organization maps one-to-one to a FerrisKey realm: its humans log in

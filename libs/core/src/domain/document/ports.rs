@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 use super::{DocumentText, PdfDocument};
 use crate::domain::provider::{ModelRef, ProviderAccess};

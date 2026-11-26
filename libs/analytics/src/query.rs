@@ -224,11 +224,11 @@ impl Analytics for DataFusionAnalytics {
 mod tests {
     use std::path::PathBuf;
 
-    use capitainerie_events::{
+    use chrono::TimeZone;
+    use matos_events::{
         EventEnvelope,
         run::{RunFinished, RunQueued, RunStarted, StepFinished},
     };
-    use chrono::TimeZone;
     use uuid::Uuid;
 
     use super::*;
@@ -238,8 +238,7 @@ mod tests {
 
     impl Scratch {
         fn new() -> Self {
-            let path =
-                std::env::temp_dir().join(format!("capitainerie-analytics-{}", Uuid::now_v7()));
+            let path = std::env::temp_dir().join(format!("matos-analytics-{}", Uuid::now_v7()));
             Self(path)
         }
 
@@ -258,7 +257,7 @@ mod tests {
         Utc.with_ymd_and_hms(2026, 10, day, hour, 0, 0).unwrap()
     }
 
-    fn envelope<E: capitainerie_events::DomainEvent>(
+    fn envelope<E: matos_events::DomainEvent>(
         event: &E,
         occurred_at: DateTime<Utc>,
     ) -> EventEnvelope {

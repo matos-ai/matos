@@ -4,7 +4,7 @@ use k8s_openapi::{
     api::core::v1::ResourceRequirements, apimachinery::pkg::api::resource::Quantity,
 };
 
-pub const DEFAULT_NAMESPACE: &str = "capitainerie-tasks";
+pub const DEFAULT_NAMESPACE: &str = "matos-tasks";
 pub const DEFAULT_TTL_SECONDS: i32 = 1800;
 pub const EPHEMERAL_STORAGE: &str = "6Gi";
 
@@ -96,8 +96,8 @@ mod tests {
 
     #[test]
     fn defaults_match_the_spec() {
-        let config = KubeRunnerConfig::new("capitainerie-executor:dev", "http://proxy:4130/");
-        assert_eq!(config.namespace, "capitainerie-tasks");
+        let config = KubeRunnerConfig::new("matos-executor:dev", "http://proxy:4130/");
+        assert_eq!(config.namespace, "matos-tasks");
         assert_eq!(config.ttl_seconds_after_finished, 1800);
         assert_eq!(config.proxy_base_url, "http://proxy:4130");
         let limits = config.resources.limits.unwrap();
@@ -108,11 +108,8 @@ mod tests {
     fn the_proxy_endpoint_is_read_from_its_url() {
         let endpoint = |url: &str| KubeRunnerConfig::new("i", url).proxy_endpoint();
         assert_eq!(
-            endpoint("http://capitainerie-egress-proxy.capitainerie.svc:4130"),
-            Some((
-                "capitainerie-egress-proxy.capitainerie.svc".to_owned(),
-                4130
-            ))
+            endpoint("http://matos-egress-proxy.matos.svc:4130"),
+            Some(("matos-egress-proxy.matos.svc".to_owned(), 4130))
         );
         assert_eq!(
             endpoint("http://proxy/path"),

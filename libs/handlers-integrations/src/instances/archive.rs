@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_common::{CoreError, IntegrationInstanceId};
-use capitainerie_core::domain::integration::service::INSTANCE_IN_USE;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_common::{CoreError, IntegrationInstanceId};
+use matos_core::domain::integration::service::INSTANCE_IN_USE;
+use matos_handlers::{ApiError, Caller};
 
 use super::{dto::IntegrationInstanceResponse, update::IntegrationInstancePath};
 use crate::{IntegrationError, state::IntegrationsState};
@@ -26,10 +26,10 @@ fn failure(error: CoreError) -> IntegrationError {
     params(("id" = IntegrationInstanceId, Path, description = "Integration instance identifier")),
     responses(
         (status = 200, description = "The archived instance; archiving an archived instance changes nothing", body = IntegrationInstanceResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such instance in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "instance_in_use: a queued or running intervention holds a grant on this instance", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such instance in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "instance_in_use: a queued or running intervention holds a grant on this instance", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

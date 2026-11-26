@@ -1,4 +1,4 @@
-export const ADMIN_ROLE = 'capitainerie-admin'
+export const ADMIN_ROLE = 'matos-admin'
 
 function decodeBase64Url(segment: string): string {
 	const base64 = segment.replace(/-/g, '+').replace(/_/g, '/')

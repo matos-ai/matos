@@ -3,9 +3,9 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_analytics::{Analytics, CostDimension, CostQuery, CostRow};
-use capitainerie_handlers::{ApiError, Caller};
 use chrono::{DateTime, Duration, Utc};
+use matos_analytics::{Analytics, CostDimension, CostQuery, CostRow};
+use matos_handlers::{ApiError, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -116,9 +116,9 @@ fn totals(rows: &[CostRow]) -> CostTotals {
     params(CostsQuery),
     responses(
         (status = 200, description = "Costs of the organization grouped by the requested dimension", body = CostsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent, not a human", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Invalid window", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent, not a human", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Invalid window", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

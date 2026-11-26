@@ -1,6 +1,4 @@
-use capitainerie_common::{
-    CardId, ClientId, CoreError, IntegrationInstanceId, OrganizationId, RunId,
-};
+use matos_common::{CardId, ClientId, CoreError, IntegrationInstanceId, OrganizationId, RunId};
 
 use crate::{
     domain::integration::{

@@ -1,9 +1,9 @@
-use capitainerie_common::{AgentId, CardId, ClientId, ProjectId, RunId, TranscriptId};
-use capitainerie_core::domain::{
+use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CardId, ClientId, ProjectId, RunId, TranscriptId};
+use matos_core::domain::{
     client::links::Links,
     run::{RunOverview, RunSubject},
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -73,7 +73,7 @@ pub struct RunResponse {
     pub trace_id: Option<String>,
 }
 
-impl From<RunStatusResponse> for capitainerie_core::domain::run::RunStatus {
+impl From<RunStatusResponse> for matos_core::domain::run::RunStatus {
     fn from(status: RunStatusResponse) -> Self {
         match status {
             RunStatusResponse::Queued => Self::Queued,
@@ -95,7 +95,7 @@ impl From<RunOverview> for RunResponse {
             links,
         }: RunOverview,
     ) -> Self {
-        use capitainerie_core::domain::run::RunStatus;
+        use matos_core::domain::run::RunStatus;
         let (transcript_id, card_id, repository) = match &run.subject {
             RunSubject::Transcript(id) => (Some(*id), None, None),
             RunSubject::Card {

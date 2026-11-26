@@ -1,9 +1,9 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_core::domain::mcp::{
+use matos_core::domain::mcp::{
     ports::{McpGateway, McpOAuth},
     service::UpdateConnector,
 };
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -20,14 +20,14 @@ pub struct UpdateMcpConnectorRequest {
     path = "/api/v1/mcp-connectors/{connector_id}",
     operation_id = "updateMcpConnector",
     tag = super::TAG,
-    params(("connector_id" = capitainerie_common::McpConnectorId, Path, description = "Connector identifier")),
+    params(("connector_id" = matos_common::McpConnectorId, Path, description = "Connector identifier")),
     request_body = UpdateMcpConnectorRequest,
     responses(
         (status = 200, description = "The updated connector; absent fields are unchanged", body = McpConnectorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage connectors", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such connector in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to update, or an invalid field", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage connectors", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such connector in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to update, or an invalid field", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

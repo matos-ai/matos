@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, McpConnectorId, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, McpConnectorId, OrganizationId};
 use serde_json::Value;
 
 use super::{

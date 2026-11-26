@@ -3,32 +3,32 @@ mod openapi;
 mod router;
 
 use anyhow::Context;
-use capitainerie_analytics::{AnalyticsArgs, DataFusionAnalytics, Dataset};
-use capitainerie_args::{
+use clap::Parser;
+use matos_analytics::{AnalyticsArgs, DataFusionAnalytics, Dataset};
+use matos_args::{
     AuthArgs, DatabaseArgs, DelegationArgs, GithubArgs, IntegrationsArgs, LogArgs,
     ObservabilityArgs, SecretsArgs, ServerArgs,
 };
-use capitainerie_auth::{AcceptedClients, ExchangeArgs, FerrisKeyTokenExchange, FerrisKeyVerifier};
-use capitainerie_bus_iggy::IggyArgs;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_auth::{AcceptedClients, ExchangeArgs, FerrisKeyTokenExchange, FerrisKeyVerifier};
+use matos_bus_iggy::IggyArgs;
+use matos_core::{
+    MatosUseCase,
     domain::conversation::CAPTAIN_AGENT,
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use capitainerie_handlers::{AppState, Delegation};
-use capitainerie_handlers_integrations::{GithubIntegration, signer::StateSigner};
-use capitainerie_handlers_realtime::{Gateway, Hub, consumer};
-use capitainerie_integrations::{HttpConnector, McpHttp, NetworkPolicy};
-use capitainerie_runtime_rig::{LlmArgs, RigCaptain};
-use clap::Parser;
+use matos_github::{GithubApps, GithubBases};
+use matos_handlers::{AppState, Delegation};
+use matos_handlers_integrations::{GithubIntegration, signer::StateSigner};
+use matos_handlers_realtime::{Gateway, Hub, consumer};
+use matos_integrations::{HttpConnector, McpHttp, NetworkPolicy};
+use matos_runtime_rig::{LlmArgs, RigCaptain};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
 const REALTIME_BACKLOG: usize = 256;
 
 #[derive(Debug, Parser)]
-#[command(name = "capitainerie-api", version)]
+#[command(name = "matos-api", version)]
 struct Args {
     #[command(flatten)]
     server: ServerArgs,
@@ -68,13 +68,12 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let args = Args::parse();
-    let _telemetry =
-        capitainerie_telemetry::init("capitainerie-api", &args.log, &args.observability)?;
+    let _telemetry = matos_telemetry::init("matos-api", &args.log, &args.observability)?;
 
     let pool = postgres::connect(&args.database.url, args.database.max_connections)
         .await
         .context("connecting to postgres")?;
-    let mut usecase = CapitainerieUseCase::with_local_policies(pool);
+    let mut usecase = MatosUseCase::with_local_policies(pool);
     match &args.secrets.key {
         Some(key) => {
             usecase = usecase.with_secrets_cipher(
@@ -127,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let (stop, stopped) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
-        capitainerie_telemetry::shutdown_signal().await;
+        matos_telemetry::shutdown_signal().await;
         let _ = stop.send(true);
     });
     let hub = Hub::new(REALTIME_BACKLOG);
@@ -186,7 +185,7 @@ fn github_integration(
     args: &GithubArgs,
     console_url: Option<String>,
     secrets_key: Option<&str>,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
 ) -> anyhow::Result<GithubIntegration> {
     let apps = GithubApps::new(
         usecase,
@@ -255,9 +254,9 @@ fn verifier(auth: AuthArgs) -> FerrisKeyVerifier {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_auth::{ClientCredentials, FerrisKeyTokenExchange};
-    use capitainerie_core::domain::{agent::SecretToken, conversation::CAPTAIN_AGENT};
     use clap::CommandFactory;
+    use matos_auth::{ClientCredentials, FerrisKeyTokenExchange};
+    use matos_core::domain::{agent::SecretToken, conversation::CAPTAIN_AGENT};
 
     use super::Args;
 
@@ -272,15 +271,12 @@ mod tests {
             client_id: id.to_owned(),
             client_secret: SecretToken::new("s"),
         };
-        let writer_only = FerrisKeyTokenExchange::new(
-            None,
-            vec![credentials("capitainerie-agent-writer")],
-            "mcp",
-        );
+        let writer_only =
+            FerrisKeyTokenExchange::new(None, vec![credentials("matos-agent-writer")], "mcp");
         let both = FerrisKeyTokenExchange::new(
             None,
             vec![
-                credentials("capitainerie-agent-writer"),
+                credentials("matos-agent-writer"),
                 credentials(CAPTAIN_AGENT),
             ],
             "mcp",
@@ -288,7 +284,7 @@ mod tests {
 
         let refused = super::ensure_captain_credentials(&writer_only).unwrap_err();
 
-        assert!(refused.to_string().contains("capitainerie-agent-captain"));
+        assert!(refused.to_string().contains("matos-agent-captain"));
         assert!(refused.to_string().contains("AGENT_CREDENTIALS"));
         assert!(super::ensure_captain_credentials(&both).is_ok());
     }

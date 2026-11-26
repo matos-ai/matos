@@ -1,12 +1,12 @@
 use aws_lc_rs::rand;
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::execution::valid_segment;
+use matos_common::CoreError;
+use matos_core::domain::execution::valid_segment;
 use serde_json::json;
 
 use crate::dto::ManifestOwner;
 
 const NAME_MAX_CHARS: usize = 34;
-const NAME_PREFIX: &str = "Capitainerie";
+const NAME_PREFIX: &str = "Matos";
 const SUFFIX_BYTES: usize = 3;
 
 pub(crate) fn app_name(organization_name: &str, suffix: &str) -> String {
@@ -87,11 +87,11 @@ mod tests {
         ] {
             let name = app_name(organization, "1a2b3c");
             assert!(name.chars().count() <= 34, "{name}");
-            assert!(name.starts_with("Capitainerie "), "{name}");
+            assert!(name.starts_with("Matos "), "{name}");
             assert!(name.ends_with(" 1a2b3c"), "{name}");
         }
-        assert_eq!(app_name("Acme", "1a2b3c"), "Capitainerie Acme 1a2b3c");
-        assert_eq!(app_name("", "1a2b3c"), "Capitainerie 1a2b3c");
+        assert_eq!(app_name("Acme", "1a2b3c"), "Matos Acme 1a2b3c");
+        assert_eq!(app_name("", "1a2b3c"), "Matos 1a2b3c");
     }
 
     #[test]
@@ -103,12 +103,9 @@ mod tests {
 
     #[test]
     fn the_manifest_points_back_to_the_console_and_asks_for_least_privilege() {
-        let manifest: Value = serde_json::from_str(&manifest(
-            "http://localhost:4080",
-            "Capitainerie Acme 1a2b3c",
-        ))
-        .unwrap();
-        assert_eq!(manifest["name"], "Capitainerie Acme 1a2b3c");
+        let manifest: Value =
+            serde_json::from_str(&manifest("http://localhost:4080", "Matos Acme 1a2b3c")).unwrap();
+        assert_eq!(manifest["name"], "Matos Acme 1a2b3c");
         assert_eq!(manifest["url"], "http://localhost:4080");
         assert_eq!(
             manifest["redirect_url"],

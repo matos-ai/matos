@@ -1,16 +1,16 @@
 use std::time::{Duration, Instant};
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId};
-use capitainerie_events::run::RunStarted;
-use capitainerie_macros::transactional;
 use chrono::{DateTime, Utc};
+use matos_common::{CardId, CoreError, OrganizationId, RunId};
+use matos_events::run::RunStarted;
+use matos_macros::transactional;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 use tracing::Instrument;
 
 use super::{
-    CapitainerieUseCase,
+    MatosUseCase,
     execute_pipeline::defang_mentions,
     execute_stream::truncate_chars,
     execution::COMMENT_ID_FIELD,
@@ -94,7 +94,7 @@ struct JournalCounts {
     refused: i64,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(run, step, emitter)]
     pub(super) async fn claim_intervention(
         &self,
@@ -175,7 +175,7 @@ impl CapitainerieUseCase {
 }
 
 pub struct InterventionPipeline<R, C> {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     runtime: R,
     connector: C,
     config: InterventionConfig,
@@ -280,7 +280,7 @@ pub(super) fn carried_calls(step: Option<&Step>) -> Vec<ToolRecord> {
 
 impl<R: IntegratorRuntime, C: IntegrationConnector> InterventionPipeline<R, C> {
     pub fn new(
-        usecase: CapitainerieUseCase,
+        usecase: MatosUseCase,
         runtime: R,
         connector: C,
         config: InterventionConfig,
@@ -293,7 +293,7 @@ impl<R: IntegratorRuntime, C: IntegrationConnector> InterventionPipeline<R, C> {
         }
     }
 
-    pub fn usecase(&self) -> &CapitainerieUseCase {
+    pub fn usecase(&self) -> &MatosUseCase {
         &self.usecase
     }
 
@@ -311,13 +311,13 @@ impl<R: IntegratorRuntime, C: IntegrationConnector> InterventionPipeline<R, C> {
             gen_ai.operation.name = "invoke_workflow",
         );
         if let Some(traceparent) = traceparent {
-            capitainerie_telemetry::adopt_traceparent(&span, traceparent);
+            matos_telemetry::adopt_traceparent(&span, traceparent);
         }
         self.execute_in_span(run_id).instrument(span).await
     }
 
     async fn execute_in_span(&self, run_id: RunId) -> Result<(), CoreError> {
-        let trace_id = capitainerie_telemetry::current_trace_id();
+        let trace_id = matos_telemetry::current_trace_id();
         let Some(context) = self
             .usecase
             .claim_intervention(run_id, self.stale_before(), trace_id)
@@ -407,7 +407,7 @@ impl<R: IntegratorRuntime, C: IntegrationConnector> InterventionPipeline<R, C> {
             target,
             limits: intervention_limits(),
             deadline: self.config.deadline,
-            traceparent: capitainerie_telemetry::current_traceparent(),
+            traceparent: matos_telemetry::current_traceparent(),
         };
         let tools = InterventionTools {
             usecase: &self.usecase,
@@ -777,7 +777,7 @@ struct Progress {
 }
 
 struct InterventionTools<'a, C> {
-    usecase: &'a CapitainerieUseCase,
+    usecase: &'a MatosUseCase,
     connector: &'a C,
     run: &'a Run,
     action: ActionContext,
@@ -871,7 +871,7 @@ impl<C: IntegrationConnector> IntegratorTools for InterventionTools<'_, C> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use capitainerie_common::{ClientId, IntegrationInstanceId};
+    use matos_common::{ClientId, IntegrationInstanceId};
 
     use super::*;
     use crate::domain::{
@@ -891,7 +891,7 @@ mod tests {
             description: description.into(),
             column: Column::InProgress,
             provenance: Some(Provenance {
-                transcript_id: capitainerie_common::TranscriptId::new(),
+                transcript_id: matos_common::TranscriptId::new(),
                 start: 0,
                 end: 10,
                 quote: "il faut vérifier".into(),

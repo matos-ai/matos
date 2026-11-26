@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_events::EventEnvelope;
-use capitainerie_macros::repository;
+use matos_common::{CoreError, OrganizationId};
+use matos_events::EventEnvelope;
+use matos_macros::repository;
 use uuid::Uuid;
 
 use crate::{

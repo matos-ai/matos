@@ -1,14 +1,14 @@
-use capitainerie_common::{CoreError, InboxItemId};
-use capitainerie_macros::transactional;
 use chrono::Utc;
+use matos_common::{CoreError, InboxItemId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::domain::{
     authorization::Subject,
     inbox::{InboxPage, ReadSelection, projection::InboxProjection, service::InboxService},
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(inbox, authz)]
     pub async fn list_inbox(
         &self,

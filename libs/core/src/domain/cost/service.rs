@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, ProjectId};
+use matos_common::{CardId, CoreError, OrganizationId, ProjectId};
 
 use super::{
     AgentRef, AgentRow, AgentSpend, CostFilter, CostReport, DaySpend, ModelSpend, Period,
@@ -261,8 +261,8 @@ fn report<T>(period: &Period, rows: Vec<T>, spent: impl Fn(&T) -> Spent) -> Cost
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{AgentId, CardId, CoreError, OrganizationId, ProjectId};
     use chrono::Utc;
+    use matos_common::{AgentId, CardId, CoreError, OrganizationId, ProjectId};
 
     use super::*;
     use crate::domain::{

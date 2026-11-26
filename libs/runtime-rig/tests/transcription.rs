@@ -9,8 +9,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::SecretToken,
     provider::{ModelRef, ProviderAccess, ProviderKind},
     transcription::{
@@ -18,7 +18,7 @@ use capitainerie_core::domain::{
         ports::{Transcriber, TranscriberFactory},
     },
 };
-use capitainerie_runtime_rig::RigTranscribers;
+use matos_runtime_rig::RigTranscribers;
 use serde_json::json;
 use tokio::net::TcpListener;
 

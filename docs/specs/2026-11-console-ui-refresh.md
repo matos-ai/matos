@@ -1,6 +1,6 @@
 # Spec : refonte de l'interface de la console
 
-Statut : décisions prises le 2026-11-17 à partir de la maquette « Capitainerie » (artifact Claude, version 9). Taille L, livrée en pile de PR (chaque PR repose sur la précédente).
+Statut : décisions prises le 2026-11-17 à partir de la maquette « Matos » (artifact Claude, version 9). Taille L, livrée en pile de PR (chaque PR repose sur la précédente).
 
 ## Objectif
 

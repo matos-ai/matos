@@ -1,5 +1,5 @@
-use capitainerie_core::domain::execution::TaskOutcome;
 use k8s_openapi::api::{batch::v1::Job, core::v1::Pod};
+use matos_core::domain::execution::TaskOutcome;
 
 const DEADLINE_REASON: &str = "DeadlineExceeded";
 

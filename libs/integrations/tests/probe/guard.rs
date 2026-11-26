@@ -1,5 +1,5 @@
-use capitainerie_core::domain::integration::{ConnectorFailure, IntegrationKind};
-use capitainerie_integrations::{HttpConnector, NetworkPolicy};
+use matos_core::domain::integration::{ConnectorFailure, IntegrationKind};
+use matos_integrations::{HttpConnector, NetworkPolicy};
 use serde_json::json;
 
 use crate::support::{OPEN, Reply, connection, probe, probe_with, serve};

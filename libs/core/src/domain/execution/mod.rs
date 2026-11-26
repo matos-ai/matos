@@ -5,8 +5,8 @@ pub mod report;
 
 use std::{fmt, time::Duration};
 
-use capitainerie_common::{CoreError, OrganizationId, RunId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, OrganizationId, RunId};
 use serde::{Deserialize, Serialize};
 
 use self::harness::{ANTIGRAVITY_MODELS, CODEX_MODELS, Harness};
@@ -16,15 +16,15 @@ use crate::domain::{
 };
 
 /// FerrisKey client of the executor agent.
-pub const EXECUTOR_AGENT: &str = "capitainerie-agent-executor";
+pub const EXECUTOR_AGENT: &str = "matos-agent-executor";
 
 /// Where an audit writes its report in the task's container: outside the
 /// checkout, so the report is never part of the repository.
-pub const REPORT_PATH: &str = "/workspace/.capitainerie/report.md";
+pub const REPORT_PATH: &str = "/workspace/.matos/report.md";
 
 /// Where an audit writes the change it proposes, when the card asks for one:
 /// outside the checkout too.
-pub const PLAN_PATH: &str = "/workspace/.capitainerie/plan.md";
+pub const PLAN_PATH: &str = "/workspace/.matos/plan.md";
 
 /// What an execution may do to its repository.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -308,7 +308,7 @@ impl TryFrom<Card> for ExecutableCard {
     }
 }
 
-/// The organization's installation of the Capitainerie GitHub App.
+/// The organization's installation of the Matos GitHub App.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GithubInstallation {
     pub organization_id: OrganizationId,
@@ -411,7 +411,7 @@ pub enum TaskLine {
     /// A raw output line of the harness, read by its parser.
     Agent(serde_json::Value),
     /// A marker written by the entrypoint script.
-    Capitainerie(TaskMarker),
+    Matos(TaskMarker),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -562,7 +562,7 @@ mod tests {
             run_id: RunId::new(),
             organization_id: OrganizationId(uuid::Uuid::nil()),
             repository: "acme/web".parse().unwrap(),
-            branch: "capitainerie/0a1b2c3d4e5f".into(),
+            branch: "matos/0a1b2c3d4e5f".into(),
             model: "claude-sonnet-5-5".into(),
             mode: ExecutionMode::Change,
             initiated_by: None,
@@ -688,7 +688,7 @@ mod tests {
     #[test]
     fn report_markers_parse_from_the_entrypoint_lines() {
         let chunk: TaskMarker =
-            serde_json::from_str(r#"{"type":"capitainerie","event":"report_chunk","data":"aGk="}"#)
+            serde_json::from_str(r#"{"type":"matos","event":"report_chunk","data":"aGk="}"#)
                 .unwrap();
         assert_eq!(
             chunk,
@@ -697,7 +697,7 @@ mod tests {
             }
         );
         let end: TaskMarker = serde_json::from_str(
-            r#"{"type":"capitainerie","event":"report_end","sha256":"ab","bytes":2,"truncated":true}"#,
+            r#"{"type":"matos","event":"report_end","sha256":"ab","bytes":2,"truncated":true}"#,
         )
         .unwrap();
         assert_eq!(
@@ -709,7 +709,7 @@ mod tests {
             }
         );
         let done: TaskMarker =
-            serde_json::from_str(r#"{"type":"capitainerie","event":"audit_done"}"#).unwrap();
+            serde_json::from_str(r#"{"type":"matos","event":"audit_done"}"#).unwrap();
         assert_eq!(done, TaskMarker::AuditDone);
     }
 

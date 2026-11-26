@@ -1,14 +1,14 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug, domain::agent::SecretToken,
+use chrono::Utc;
+use matos_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug, domain::agent::SecretToken,
     infrastructure::postgres,
 };
-use capitainerie_handlers::{AppState, Caller};
-use chrono::Utc;
+use matos_handlers::{AppState, Caller};
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::PgPool;
@@ -59,15 +59,15 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
         created_at: Utc::now(),
     };
     let state = AppState {
-        usecase: CapitainerieUseCase::with_local_policies(pool.clone()),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        usecase: MatosUseCase::with_local_policies(pool.clone()),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     let caller = Caller {
         identity: Identity {
             subject: USER.into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -81,7 +81,7 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
         organization: organization.clone(),
         token: SecretToken::new("user-token"),
     };
-    let app: Router = capitainerie_handlers_artifacts::router()
+    let app: Router = matos_handlers_artifacts::router()
         .layer(Extension(caller))
         .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

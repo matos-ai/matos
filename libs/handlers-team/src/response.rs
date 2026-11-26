@@ -1,6 +1,6 @@
-use capitainerie_common::AgentId;
-use capitainerie_core::domain::crew::{AgentRevision, CrewAgent};
 use chrono::{DateTime, Utc};
+use matos_common::AgentId;
+use matos_core::domain::crew::{AgentRevision, CrewAgent};
 use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -57,10 +57,8 @@ impl From<CrewAgent> for TeamAgentResponse {
             description: agent.description,
             model: agent.model,
             status: match agent.status {
-                capitainerie_core::domain::crew::AgentStatus::Idle => TeamAgentStatusDto::Idle,
-                capitainerie_core::domain::crew::AgentStatus::Running => {
-                    TeamAgentStatusDto::Running
-                }
+                matos_core::domain::crew::AgentStatus::Idle => TeamAgentStatusDto::Idle,
+                matos_core::domain::crew::AgentStatus::Running => TeamAgentStatusDto::Running,
             },
             hue: agent.hue.get(),
             reports_to: agent.reports_to,

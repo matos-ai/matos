@@ -1,12 +1,12 @@
 pub mod ports;
 
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CoreError, OrganizationId};
 
 use crate::domain::agent::SecretToken;
 
 /// Followed by the agent's id, hyphenated and lowercase.
-pub const CLIENT_PREFIX: &str = "capitainerie-agent-";
+pub const CLIENT_PREFIX: &str = "matos-agent-";
 const FAILURE_MAX_CHARS: usize = 1000;
 
 /// The FerrisKey client id of an agent. Built from the agent's id, never from
@@ -20,7 +20,7 @@ impl AgentClientId {
     }
 
     /// The agent a client id names, `None` for any other client, such as
-    /// the shared `capitainerie-agent-writer`.
+    /// the shared `matos-agent-writer`.
     pub fn parse(client_id: &str) -> Option<AgentId> {
         let id = client_id.strip_prefix(CLIENT_PREFIX)?;
         let parsed = uuid::Uuid::try_parse(id).ok()?;
@@ -270,7 +270,7 @@ pub async fn provision<P: ports::AgentIdentityProvisioner>(
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{AgentId, OrganizationId};
+    use matos_common::{AgentId, OrganizationId};
     use uuid::Uuid;
 
     use super::{ports::MockAgentIdentityProvisioner, *};
@@ -282,13 +282,13 @@ mod tests {
             AgentClientId::parse(AgentClientId::of(agent).as_str()),
             Some(agent)
         );
-        assert_eq!(AgentClientId::parse("capitainerie-agent-writer"), None);
+        assert_eq!(AgentClientId::parse("matos-agent-writer"), None);
         assert_eq!(
             AgentClientId::parse(&AgentClientId::of(agent).as_str().to_uppercase()),
             None
         );
         assert_eq!(
-            AgentClientId::parse(&format!("capitainerie-agent-{}", agent.0.simple())),
+            AgentClientId::parse(&format!("matos-agent-{}", agent.0.simple())),
             None
         );
         assert_eq!(AgentClientId::parse(&agent.0.to_string()), None);
@@ -313,7 +313,7 @@ mod tests {
     fn the_client_id_comes_from_the_agent_id() {
         assert_eq!(
             AgentClientId::of(AgentId(Uuid::from_u128(7))).as_str(),
-            "capitainerie-agent-00000000-0000-0000-0000-000000000007"
+            "matos-agent-00000000-0000-0000-0000-000000000007"
         );
     }
 
@@ -375,7 +375,7 @@ mod tests {
             .expect_provision()
             .withf(|issuer, client_id, name| {
                 issuer == "http://idp/realms/acme"
-                    && client_id.as_str().starts_with("capitainerie-agent-")
+                    && client_id.as_str().starts_with("matos-agent-")
                     && name == "Bernard"
             })
             .returning(|_, _, _| Box::pin(async { Ok(client()) }));

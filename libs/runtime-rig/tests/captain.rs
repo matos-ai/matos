@@ -11,7 +11,8 @@ use axum::{
     response::IntoResponse,
     routing::post,
 };
-use capitainerie_core::domain::{
+use common::{access, args, local, target};
+use matos_core::domain::{
     agent::SecretToken,
     conversation::{
         ProposedCard,
@@ -22,8 +23,7 @@ use capitainerie_core::domain::{
     },
     provider::ProviderKind,
 };
-use capitainerie_runtime_rig::RigCaptain;
-use common::{access, args, local, target};
+use matos_runtime_rig::RigCaptain;
 use rmcp::{
     ErrorData, ServerHandler,
     handler::server::{router::tool::ToolRouter, tool::Extension, wrapper::Parameters},
@@ -219,7 +219,7 @@ impl LocalTools for Repositories {
     }
 }
 
-fn request(target: capitainerie_core::domain::provider::ModelTarget) -> TurnRequest {
+fn request(target: matos_core::domain::provider::ModelTarget) -> TurnRequest {
     TurnRequest {
         target,
         history: vec![ChatMessage {

@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CardId;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::CardId;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -40,10 +40,10 @@ pub struct PostedCommentResponse {
     request_body = CommentCardRequest,
     responses(
         (status = 201, description = "The comment, signed by the caller; on a card with an agent, the agent starts again and reads the whole thread, and `agent_run` says whether it did", body = PostedCommentResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "An agent caller: agents comment through the MCP server", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such card in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "The comment is empty or longer than 10 000 characters", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "An agent caller: agents comment through the MCP server", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "The comment is empty or longer than 10 000 characters", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

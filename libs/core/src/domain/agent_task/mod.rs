@@ -3,8 +3,8 @@ pub mod tools;
 
 use std::time::Duration;
 
-use capitainerie_common::{AgentId, CardId, CoreError, OrganizationId, RunId};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CardId, CoreError, OrganizationId, RunId};
 
 use crate::domain::{
     conversation::turn::TurnLimits,
@@ -137,7 +137,7 @@ mod tests {
     fn an_agent_actor_is_the_slug_behind_a_prefix() {
         assert_eq!(actor_of("darnold"), "agent:darnold");
         assert!(is_agent_actor("agent:darnold"));
-        assert!(!is_agent_actor("capitainerie-agent-writer"));
+        assert!(!is_agent_actor("matos-agent-writer"));
     }
 
     #[test]

@@ -2,8 +2,9 @@
 
 mod fake;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use fake::{GOOD_CODE, Options, start};
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::SecretToken,
     mcp::{
         CodeExchange, RefreshExchange,
@@ -11,8 +12,7 @@ use capitainerie_core::domain::{
         ports::{McpGateway, McpOAuth},
     },
 };
-use capitainerie_integrations::{McpHttp, NetworkPolicy};
-use fake::{GOOD_CODE, Options, start};
+use matos_integrations::{McpHttp, NetworkPolicy};
 use serde_json::json;
 
 const OPEN: NetworkPolicy = NetworkPolicy {
@@ -148,7 +148,7 @@ async fn a_dynamic_registration_asks_for_a_public_pkce_client() {
 
     assert_eq!(client_id, "client-xyz");
     let body = fake.requests("POST", "/realms/mestier/clients/register")[0].json();
-    assert_eq!(body["client_name"], "Capitainerie");
+    assert_eq!(body["client_name"], "Matos");
     assert_eq!(body["redirect_uris"], json!([REDIRECT]));
     assert_eq!(body["token_endpoint_auth_method"], "none");
     assert_eq!(

@@ -6,12 +6,13 @@ use std::{
 };
 
 use axum::Extension;
-use capitainerie_auth::{
+use chrono::Utc;
+use matos_auth::{
     AcceptedClients, Actor, ClientCredentials, FerrisKeyTokenExchange, FerrisKeyVerifier, Identity,
 };
-use capitainerie_common::{CardId, CoreError, McpConnectorId, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use matos_common::{CardId, CoreError, McpConnectorId, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         agent_identity::AgentClientId,
@@ -36,13 +37,12 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_core::{
+use matos_core::{
     domain::agent_identity::{AgentIdentity, ProvisionedClient, ports::AgentIdentityRepository},
     infrastructure::agent_identity::postgres::PgAgentIdentityRepository,
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use capitainerie_handlers::{AppState, Caller, Delegation};
-use chrono::Utc;
+use matos_github::{GithubApps, GithubBases};
+use matos_handlers::{AppState, Caller, Delegation};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -94,7 +94,7 @@ impl McpOAuth for FakeOAuth {
 
 struct Fixture {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization: Organization,
     base: String,
     exchanges: Exchanges,
@@ -169,20 +169,20 @@ async fn fixture_as(actor: Option<&str>) -> Option<Fixture> {
     let pool = postgres::connect(&url, 3).await.unwrap();
     let (issuer, exchanges) = identity_provider().await;
     let organization = organization(&pool, issuer).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     let state = AppState {
         usecase: usecase.clone(),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: Some(Delegation {
             exchanger: FerrisKeyTokenExchange::new(
                 Some(ClientCredentials {
-                    client_id: "capitainerie-api".into(),
+                    client_id: "matos-api".into(),
                     client_secret: SecretToken::new("secret"),
                 }),
                 vec![],
-                "capitainerie-mcp",
+                "matos-mcp",
             ),
             agents: vec![],
         }),
@@ -201,7 +201,7 @@ async fn fixture_as(actor: Option<&str>) -> Option<Fixture> {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -215,7 +215,7 @@ async fn fixture_as(actor: Option<&str>) -> Option<Fixture> {
         organization: organization.clone(),
         token: SecretToken::new("user-token"),
     };
-    let app = capitainerie_handlers_cards::router(github)
+    let app = matos_handlers_cards::router(github)
         .layer(Extension(caller))
         .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -623,7 +623,7 @@ async fn a_second_active_run_on_the_card_is_a_409() {
 
 #[tokio::test]
 async fn an_agent_caller_is_refused() {
-    let Some(fixture) = fixture_as(Some("capitainerie-agent-writer")).await else {
+    let Some(fixture) = fixture_as(Some("matos-agent-writer")).await else {
         return;
     };
     fixture.connector("mestier", true).await;

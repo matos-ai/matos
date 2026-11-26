@@ -1,8 +1,9 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::{NaiveDate, Utc};
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         authorization::Subject,
         card::{
@@ -18,7 +19,6 @@ use capitainerie_core::{
     },
     infrastructure::postgres,
 };
-use chrono::{NaiveDate, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -32,9 +32,9 @@ fn database_url() -> Option<String> {
     }
 }
 
-async fn setup() -> Option<(PgPool, CapitainerieUseCase)> {
+async fn setup() -> Option<(PgPool, MatosUseCase)> {
     let pool = postgres::connect(&database_url()?, 3).await.unwrap();
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     Some((pool, usecase))
 }
 
@@ -63,7 +63,7 @@ fn human(organization_id: OrganizationId) -> Subject {
 
 fn agent(organization_id: OrganizationId) -> Subject {
     Subject {
-        actor: Some("capitainerie-agent-writer".into()),
+        actor: Some("matos-agent-writer".into()),
         ..human(organization_id)
     }
 }
@@ -76,7 +76,7 @@ fn criterion(text: &str, done: bool) -> Criterion {
 }
 
 async fn card(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     title: &str,
     attributes: Attributes,
@@ -94,7 +94,7 @@ async fn card(
         .unwrap()
 }
 
-async fn record(usecase: &CapitainerieUseCase, organization_id: OrganizationId, subject: &str) {
+async fn record(usecase: &MatosUseCase, organization_id: OrganizationId, subject: &str) {
     usecase
         .record_member(Member {
             organization_id,

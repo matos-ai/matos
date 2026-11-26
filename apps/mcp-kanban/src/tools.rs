@@ -1,7 +1,7 @@
 use axum::http::request::Parts;
-use capitainerie_common::{CardId, ClientId, CoreError, ProjectId, RunId, TranscriptId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CardId, ClientId, CoreError, ProjectId, RunId, TranscriptId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         authorization::Subject,
         card::{
@@ -539,12 +539,12 @@ impl From<&CardComment> for CommentView {
 
 #[derive(Clone)]
 pub struct KanbanTools {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     tool_router: ToolRouter<Self>,
 }
 
 impl KanbanTools {
-    pub fn new(usecase: CapitainerieUseCase) -> Self {
+    pub fn new(usecase: MatosUseCase) -> Self {
         Self {
             usecase,
             tool_router: Self::tool_router(),
@@ -791,7 +791,7 @@ impl KanbanTools {
 impl ServerHandler for KanbanTools {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
-            "Capitainerie Kanban. Propose cards from meeting transcripts with create_card (they land in \"proposed\" until a human triages them), refine them with update_card and comment, and move them with move_card within the limits of your role.",
+            "Matos Kanban. Propose cards from meeting transcripts with create_card (they land in \"proposed\" until a human triages them), refine them with update_card and comment, and move them with move_card within the limits of your role.",
         )
     }
 }
@@ -953,13 +953,13 @@ mod tests {
         let now = chrono::Utc::now();
         Card {
             id: CardId::new(),
-            organization_id: capitainerie_common::OrganizationId::new(),
-            title: capitainerie_core::domain::card::CardTitle::try_from(title.to_owned()).unwrap(),
+            organization_id: matos_common::OrganizationId::new(),
+            title: matos_core::domain::card::CardTitle::try_from(title.to_owned()).unwrap(),
             description: description.to_owned(),
             column,
             provenance: None,
             created_by_run: None,
-            created_by: capitainerie_core::domain::card::Author {
+            created_by: matos_core::domain::card::Author {
                 subject: "u".into(),
                 actor: None,
             },

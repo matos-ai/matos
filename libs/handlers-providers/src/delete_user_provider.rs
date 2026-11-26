@@ -1,5 +1,5 @@
 use axum::{Extension, extract::State, http::StatusCode};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 
 use crate::{dto::UserProviderPath, state::ProvidersState};
 
@@ -11,9 +11,9 @@ use crate::{dto::UserProviderPath, state::ProvidersState};
     params(("kind" = crate::dto::ProviderKindDto, Path, description = "Provider")),
     responses(
         (status = 204, description = "The connection and its key are gone; another one becomes the default if it was"),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "The caller has no such connection", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "The caller has no such connection", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

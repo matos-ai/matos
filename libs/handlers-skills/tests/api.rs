@@ -1,14 +1,14 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug, domain::agent::SecretToken,
+use chrono::Utc;
+use matos_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug, domain::agent::SecretToken,
     infrastructure::postgres,
 };
-use capitainerie_handlers::{AppState, Caller};
-use chrono::Utc;
+use matos_handlers::{AppState, Caller};
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -60,17 +60,17 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
     };
     let pool = postgres::connect(&url, 3).await.unwrap();
     let organization = organization(&pool).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     let state = AppState {
         usecase: usecase.clone(),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     let caller = Caller {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -84,7 +84,7 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
         organization: organization.clone(),
         token: SecretToken::new("user-token"),
     };
-    let app: Router = capitainerie_handlers_skills::router()
+    let app: Router = matos_handlers_skills::router()
         .layer(Extension(caller))
         .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -296,7 +296,7 @@ async fn a_skill_of_another_organization_is_a_404() {
 
 #[tokio::test]
 async fn an_agent_caller_cannot_read_or_manage_the_catalog() {
-    let Some(fixture) = fixture(Some("capitainerie-agent-writer")).await else {
+    let Some(fixture) = fixture(Some("matos-agent-writer")).await else {
         return;
     };
     let (status, _) = fixture.get("/api/v1/skills").await;

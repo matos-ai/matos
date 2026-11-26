@@ -3,10 +3,11 @@
 use std::sync::Arc;
 
 use axum::{Extension, Router};
-use capitainerie_auth::{Actor, Identity};
-use capitainerie_common::{CardId, ClientId, OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::Utc;
+use matos_auth::{Actor, Identity};
+use matos_common::{CardId, ClientId, OrganizationId, RunId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -26,11 +27,10 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use capitainerie_handlers::Caller;
-use capitainerie_handlers_integrations::GithubIntegration;
-use capitainerie_integrations::{HttpConnector, NetworkPolicy};
-use chrono::Utc;
+use matos_github::{GithubApps, GithubBases};
+use matos_handlers::Caller;
+use matos_handlers_integrations::GithubIntegration;
+use matos_integrations::{HttpConnector, NetworkPolicy};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -75,7 +75,7 @@ fn caller(organization: &Organization, actor: Option<&str>) -> Caller {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -100,8 +100,8 @@ fn subject(organization: &Organization, is_admin: bool) -> Subject {
     }
 }
 
-fn usecase_of(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase_of(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[5u8; 32]).unwrap())
 }
 
@@ -142,7 +142,7 @@ async fn serve(pool: &PgPool, caller: Caller) -> String {
     .unwrap();
     let github = GithubIntegration::new(Arc::new(apps));
     let connector = HttpConnector::new(NetworkPolicy::default()).unwrap();
-    let app: Router = capitainerie_handlers_integrations::router::<()>(usecase, github, connector)
+    let app: Router = matos_handlers_integrations::router::<()>(usecase, github, connector)
         .layer(Extension(caller));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -153,7 +153,7 @@ async fn serve(pool: &PgPool, caller: Caller) -> String {
 struct World {
     pool: PgPool,
     organization: Organization,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     client: Client,
     card: Card,
     run_id: RunId,
@@ -162,7 +162,7 @@ struct World {
 }
 
 async fn instance(
-    world: (&CapitainerieUseCase, &Organization, &Client),
+    world: (&MatosUseCase, &Organization, &Client),
     name: &str,
     environment: &str,
 ) -> IntegrationInstance {
@@ -545,10 +545,10 @@ async fn the_journal_survives_a_change_of_the_clients_of_the_card() {
         .link_card(
             subject(&world.organization, false),
             world.card.id,
-            capitainerie_core::domain::card::link::LinkCard {
+            matos_core::domain::card::link::LinkCard {
                 expected_version: current.version,
-                client: capitainerie_core::domain::client::links::Change::Set(globex),
-                project: capitainerie_core::domain::client::links::Change::Keep,
+                client: matos_core::domain::client::links::Change::Set(globex),
+                project: matos_core::domain::client::links::Change::Keep,
             },
         )
         .await

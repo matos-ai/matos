@@ -1,10 +1,10 @@
-use capitainerie_common::{AgentId, CardCommentId, CardId, CoreError, OrganizationId, RunId};
-use capitainerie_events::card::{CardAuthor, CardMoved};
-use capitainerie_macros::transactional;
 use chrono::{SubsecRound, Utc};
+use matos_common::{AgentId, CardCommentId, CardId, CoreError, OrganizationId, RunId};
+use matos_events::card::{CardAuthor, CardMoved};
+use matos_macros::transactional;
 use serde_json::Value;
 
-use super::{CapitainerieUseCase, execution::COMMENT_ID_FIELD};
+use super::{MatosUseCase, execution::COMMENT_ID_FIELD};
 use crate::{
     domain::{
         agent::SecretToken,
@@ -115,7 +115,7 @@ pub(super) const UNNAMED_MEMBER: &str = "un membre";
 
 type Stored<T> = Result<Result<T, AgentRunRefusal>, CoreError>;
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     pub async fn start_agent_run(
         &self,
         subject: Subject,
@@ -885,7 +885,7 @@ pub enum TaskStage {
     Failed,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     /// Moves the card of an agent task along with its run: in progress when
     /// the run starts (a done card reopens: someone replied), done when it
     /// succeeds, back to todo when it fails. A run
@@ -939,7 +939,7 @@ impl CapitainerieUseCase {
     }
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     /// The person who answered on the card while `run` was going, the latest
     /// one, with the card's version: their reply has not been read by an agent
     /// yet. Agent comments never count, so an agent never relaunches itself.

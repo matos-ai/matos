@@ -7,10 +7,10 @@ use std::{
 };
 
 use axum::{Extension, Router};
-use capitainerie_auth::Identity;
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use matos_auth::Identity;
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         conversation::{
@@ -32,8 +32,8 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_handlers::Caller;
-use capitainerie_handlers_conversations::{ConversationsState, router};
+use matos_handlers::Caller;
+use matos_handlers_conversations::{ConversationsState, router};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::{net::TcpListener, sync::Notify};
@@ -311,16 +311,16 @@ fn caller_as(organization: &Organization, subject: &str, actor: Option<&str>) ->
         identity: Identity {
             subject: subject.into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
-            actor: actor.map(|client_id| capitainerie_auth::Actor {
+            actor: actor.map(|client_id| matos_auth::Actor {
                 sub: "agent".into(),
                 client_id: Some(client_id.to_owned()),
                 act: None,
             }),
-            roles: vec!["capitainerie-admin".into()],
+            roles: vec!["matos-admin".into()],
         },
         organization: organization.clone(),
         token: SecretToken::new(MEMBER_TOKEN),
@@ -331,8 +331,8 @@ fn caller(organization: &Organization) -> Caller {
     caller_as(organization, "user-1", None)
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap())
 }
 
@@ -565,11 +565,11 @@ async fn the_members_token_is_exchanged_and_never_reaches_the_runtime_or_the_dat
         [
             (
                 "for_agent".to_owned(),
-                format!("{MEMBER_TOKEN}|capitainerie-agent-captain")
+                format!("{MEMBER_TOKEN}|matos-agent-captain")
             ),
             (
                 "for_mcp".to_owned(),
-                "hop-one|capitainerie-agent-captain".to_owned()
+                "hop-one|matos-agent-captain".to_owned()
             ),
         ]
     );
@@ -786,7 +786,7 @@ async fn an_agent_is_refused_and_the_denial_is_audited() {
     configure_captain(&pool, &organization).await;
     let server = serve(
         &pool,
-        caller_as(&organization, "user-1", Some("capitainerie-agent-captain")),
+        caller_as(&organization, "user-1", Some("matos-agent-captain")),
         FakeRuntime::default(),
         Some(FakeExchanger::default()),
     )
@@ -808,7 +808,7 @@ async fn an_agent_is_refused_and_the_denial_is_audited() {
     assert_eq!(listed.status(), 403);
     assert!(server.runtime.requests().is_empty());
     let denials: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM authorization_decisions WHERE organization_id = $1 AND actor = 'capitainerie-agent-captain' AND NOT allowed AND action LIKE 'conversation.%'",
+        "SELECT count(*) FROM authorization_decisions WHERE organization_id = $1 AND actor = 'matos-agent-captain' AND NOT allowed AND action LIKE 'conversation.%'",
     )
     .bind(organization.id.0)
     .fetch_one(&pool)
@@ -960,7 +960,7 @@ async fn the_repository_tool_reads_the_installation_as_the_captain_and_is_audite
     assert!(matches!(&locals[1], Err(message) if message.contains("unknown tool")));
     assert_eq!(locals[2], Ok("acme/site\nacme/api".to_owned()));
     let decisions: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM authorization_decisions WHERE organization_id = $1 AND actor = 'capitainerie-agent-captain' AND action = 'github.read' AND allowed",
+        "SELECT count(*) FROM authorization_decisions WHERE organization_id = $1 AND actor = 'matos-agent-captain' AND action = 'github.read' AND allowed",
     )
     .bind(organization.id.0)
     .fetch_one(&pool)

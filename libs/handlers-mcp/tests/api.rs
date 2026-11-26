@@ -4,17 +4,17 @@
 mod fake;
 
 use axum::{Extension, Router};
-use capitainerie_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::Utc;
+use fake::{Fake, Options};
+use matos_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::agent::SecretToken,
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_handlers::{AppState, Caller};
-use capitainerie_integrations::{McpHttp, NetworkPolicy};
-use chrono::Utc;
-use fake::{Fake, Options};
+use matos_handlers::{AppState, Caller};
+use matos_integrations::{McpHttp, NetworkPolicy};
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -75,20 +75,20 @@ struct Client {
 }
 
 async fn serve(pool: &PgPool, organization: &Organization, setup: Setup<'_>) -> Client {
-    let mut usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let mut usecase = MatosUseCase::with_local_policies(pool.clone());
     if setup.keyed {
         usecase = usecase.with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap());
     }
     let state = AppState {
         usecase: usecase.clone(),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     let caller = Caller {
         identity: Identity {
             subject: setup.subject.into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -107,13 +107,10 @@ async fn serve(pool: &PgPool, organization: &Organization, setup: Setup<'_>) -> 
         allow_private_networks: true,
     })
     .unwrap();
-    let app: Router = capitainerie_handlers_mcp::router(
-        usecase,
-        adapter,
-        setup.console.then(|| CONSOLE.to_owned()),
-    )
-    .layer(Extension(caller))
-    .with_state(state);
+    let app: Router =
+        matos_handlers_mcp::router(usecase, adapter, setup.console.then(|| CONSOLE.to_owned()))
+            .layer(Extension(caller))
+            .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await });
@@ -468,7 +465,7 @@ async fn an_agent_caller_is_refused_everywhere() {
         &fixture.pool,
         &fixture.organization,
         Setup {
-            actor: Some("capitainerie-agent-writer"),
+            actor: Some("matos-agent-writer"),
             ..USER
         },
     )

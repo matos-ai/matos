@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_core::{
+    MatosUseCase,
     domain::{
         authorization::Subject,
         conversation::turn::{LocalTools, ToolSpec},
@@ -16,7 +16,7 @@ const MAX_REPOSITORIES: usize = 100;
 /// The Captain's tools the API serves itself. Each call is decided by the
 /// policy decision point as the Captain acting for the member.
 pub struct ApiTools<H> {
-    pub usecase: CapitainerieUseCase,
+    pub usecase: MatosUseCase,
     pub code_host: Arc<H>,
     pub subject: Subject,
 }

@@ -1,4 +1,4 @@
-use capitainerie_common::{AgentId, CardId, CoreError, OrganizationId};
+use matos_common::{AgentId, CardId, CoreError, OrganizationId};
 
 use super::ports::CardRepository;
 use crate::domain::crew::ports::CrewRepository;

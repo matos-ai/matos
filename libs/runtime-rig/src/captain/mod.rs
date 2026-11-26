@@ -6,8 +6,8 @@ mod tools;
 
 use std::sync::Arc;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::conversation::{
+use matos_common::CoreError;
+use matos_core::domain::conversation::{
     CAPTAIN_AGENT,
     turn::{CaptainRuntime, LocalTools, TurnEnd, TurnRequest, TurnSink, TurnState},
 };
@@ -27,7 +27,7 @@ use crate::{
 };
 
 const SYSTEM_PROMPT: &str = "\
-Tu es le Capitaine de Capitainerie, l'assistant d'une équipe qui pilote son travail sur un tableau Kanban. Tu réponds toujours en français, de façon brève et concrète.
+Tu es le Capitaine de Matos, l'assistant d'une équipe qui pilote son travail sur un tableau Kanban. Tu réponds toujours en français, de façon brève et concrète.
 Un membre te confie une mission. Si elle est floue, pose une seule question précise avant d'agir. Sinon, agis.
 Tes outils :
 - search_cards : cherche les cartes du tableau. Appelle-le avant de proposer une carte, pour ne pas créer de doublon ; si une carte proche existe, dis-le et propose plutôt un commentaire.

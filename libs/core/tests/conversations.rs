@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::agent::Usage,
     domain::{
         authorization::Subject,
@@ -59,8 +59,8 @@ fn member(organization_id: OrganizationId, id: &str) -> Subject {
     }
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
 }
 
 fn outcome(text: &str, status: MessageStatus) -> TurnOutcome {
@@ -340,7 +340,7 @@ async fn the_captain_is_denied_conversations_and_the_denial_is_audited() {
     let Some(pool) = pool().await else { return };
     let organization_id = organization(&pool).await;
     let mut captain = member(organization_id, "user-1");
-    captain.actor = Some("capitainerie-agent-captain".into());
+    captain.actor = Some("matos-agent-captain".into());
 
     let refused = usecase(&pool)
         .create_conversation(captain, "Bonjour".into())

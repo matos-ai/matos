@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use capitainerie_github::GithubApps;
-use capitainerie_integrations::HttpConnector;
+use matos_github::GithubApps;
+use matos_integrations::HttpConnector;
 
 use crate::{error::IntegrationError, signer::StateSigner};
 
@@ -41,7 +41,7 @@ impl GithubIntegration {
 
 #[derive(Clone)]
 pub struct IntegrationsState {
-    pub usecase: capitainerie_core::CapitainerieUseCase,
+    pub usecase: matos_core::MatosUseCase,
     pub github: GithubIntegration,
     pub connector: HttpConnector,
 }

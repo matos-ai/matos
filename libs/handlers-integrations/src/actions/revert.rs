@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::IntegrationActionId;
-use capitainerie_core::domain::integration::revert::RevertError;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_common::IntegrationActionId;
+use matos_core::domain::integration::revert::RevertError;
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -50,11 +50,11 @@ fn failure(error: RevertError) -> IntegrationError {
     request_body = RevertIntegrationActionRequest,
     responses(
         (status = 200, description = "The restoration rows the journal gained, in the order they were written, each linked to the original through reverts_action_id; the original now carries reverted_by_action_id. When a write of the restoration fails, its row says so, the restoration stops there and the original stays unrestored", body = IntegrationActionListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the restoration; agents cannot restore", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such action in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "already_reverted, intervention_running, or changed_since: the state is no longer the one the action left, nothing was written", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "not_revertible, instance_archived, production_write_not_confirmed, or the instance could not be read: connection_failed, network_blocked, version_mismatch or not_supported", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the restoration; agents cannot restore", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such action in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "already_reverted, intervention_running, or changed_since: the state is no longer the one the action left, nothing was written", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "not_revertible, instance_archived, production_write_not_confirmed, or the instance could not be read: connection_failed, network_blocked, version_mismatch or not_supported", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

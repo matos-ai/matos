@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{ClientId, CoreError, OrganizationId, ProjectId};
-use capitainerie_core::{
-    CapitainerieUseCase, RunCardLinks, SubmittedTranscript,
+use matos_common::{ClientId, CoreError, OrganizationId, ProjectId};
+use matos_core::{
+    MatosUseCase, RunCardLinks, SubmittedTranscript,
     domain::{
         authorization::Subject,
         card::{
@@ -27,7 +27,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 const BODY: &str = "Claire : il faut migrer la CI vers les runners ARM.";
-const WRITER: &str = "capitainerie-agent-writer";
+const WRITER: &str = "matos-agent-writer";
 
 fn database_url() -> Option<String> {
     match std::env::var("DATABASE_URL") {
@@ -39,9 +39,9 @@ fn database_url() -> Option<String> {
     }
 }
 
-async fn setup() -> Option<(PgPool, CapitainerieUseCase)> {
+async fn setup() -> Option<(PgPool, MatosUseCase)> {
     let pool = postgres::connect(&database_url()?, 3).await.unwrap();
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     Some((pool, usecase))
 }
 
@@ -75,7 +75,7 @@ fn agent(organization_id: OrganizationId) -> Subject {
     }
 }
 
-async fn client(usecase: &CapitainerieUseCase, org: OrganizationId, name: &str) -> Client {
+async fn client(usecase: &MatosUseCase, org: OrganizationId, name: &str) -> Client {
     usecase
         .create_client(
             member(org),
@@ -90,7 +90,7 @@ async fn client(usecase: &CapitainerieUseCase, org: OrganizationId, name: &str) 
 }
 
 async fn project(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     org: OrganizationId,
     name: &str,
     client: Option<&Client>,
@@ -111,7 +111,7 @@ async fn project(
         .unwrap()
 }
 
-async fn card(usecase: &CapitainerieUseCase, org: OrganizationId) -> Card {
+async fn card(usecase: &MatosUseCase, org: OrganizationId) -> Card {
     usecase
         .create_card(
             member(org),
@@ -128,7 +128,7 @@ async fn card(usecase: &CapitainerieUseCase, org: OrganizationId) -> Card {
 }
 
 async fn submit(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     org: OrganizationId,
     choice: LinkChoice,
     repository: Option<&str>,
@@ -138,7 +138,7 @@ async fn submit(
             subject: member(org),
             title: "Point".into(),
             body: BODY.into(),
-            metadata: capitainerie_core::domain::transcript::MeetingMetadata::new(
+            metadata: matos_core::domain::transcript::MeetingMetadata::new(
                 None,
                 None,
                 repository.map(str::to_owned),
@@ -154,9 +154,9 @@ fn is_foreign_key_violation(error: &sqlx::Error) -> bool {
 }
 
 async fn linked_card(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     org: OrganizationId,
-    id: capitainerie_common::CardId,
+    id: matos_common::CardId,
 ) -> Links {
     usecase
         .card_detail(member(org), id)
@@ -166,7 +166,7 @@ async fn linked_card(
         .links
 }
 
-async fn card_version(pool: &PgPool, id: capitainerie_common::CardId) -> i32 {
+async fn card_version(pool: &PgPool, id: matos_common::CardId) -> i32 {
     sqlx::query_scalar("SELECT version FROM cards WHERE id = $1")
         .bind(id.0)
         .fetch_one(pool)

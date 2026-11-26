@@ -15,13 +15,13 @@ pub mod test_user_provider;
 
 use axum::Router;
 use axum_extra::routing::RouterExt;
-use capitainerie_core::{CapitainerieUseCase, domain::provider::ports::ModelCatalog};
+use matos_core::{MatosUseCase, domain::provider::ports::ModelCatalog};
 
 use crate::state::ProvidersState;
 
 pub const TAG: &str = "providers";
 
-pub fn router<S, C>(usecase: CapitainerieUseCase, catalog: C) -> Router<S>
+pub fn router<S, C>(usecase: MatosUseCase, catalog: C) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
     C: ModelCatalog + 'static,

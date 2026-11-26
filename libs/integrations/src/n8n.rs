@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use capitainerie_core::domain::integration::action::{ActionRequest, N8nId};
-use capitainerie_core::domain::integration::{ConnectorFailure, InstanceConnection, ProbeReport};
+use matos_core::domain::integration::action::{ActionRequest, N8nId};
+use matos_core::domain::integration::{ConnectorFailure, InstanceConnection, ProbeReport};
 use reqwest::header::{ACCEPT, HeaderValue};
 use reqwest::{Client, Method, RequestBuilder};
 use serde::Serialize;

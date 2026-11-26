@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_core::domain::provider::ProviderKind;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::provider::ProviderKind;
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 
 use crate::{
@@ -20,8 +20,8 @@ pub struct ProvidersPath;
     tag = super::TAG,
     responses(
         (status = 200, description = "The providers configured for the organization, without their keys", body = ProviderListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

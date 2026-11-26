@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_core::domain::member::Member;
-use capitainerie_handlers::{ApiError, AppState, Caller};
 use chrono::{DateTime, Utc};
+use matos_core::domain::member::Member;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -42,8 +42,8 @@ impl From<Member> for MemberResponse {
     tag = super::TAG,
     responses(
         (status = 200, description = "The humans of the organization who have signed in to the console, by name", body = MemberListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no member access", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no member access", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

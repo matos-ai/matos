@@ -2,8 +2,8 @@ use std::{sync::LazyLock, time::Duration};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use capitainerie_core::domain::integration::ConnectorFailure;
-use capitainerie_core::domain::integration::action::{ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_CHARS};
+use matos_core::domain::integration::ConnectorFailure;
+use matos_core::domain::integration::action::{ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_CHARS};
 use serde_json::{Map, Value, json};
 use tokio::sync::Semaphore;
 

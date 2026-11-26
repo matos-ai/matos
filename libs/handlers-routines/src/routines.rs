@@ -4,15 +4,15 @@ use axum::{
     http::StatusCode,
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{AgentId, ProjectId, RoutineId};
-use capitainerie_core::domain::{
+use matos_common::{AgentId, ProjectId, RoutineId};
+use matos_core::domain::{
     card::attributes::Priority,
     routine::{
         IfMissed, IfOpen,
         service::{CreateRoutine, UpdateRoutine},
     },
 };
-use capitainerie_handlers::{ApiError, AppState, Caller, Patch};
+use matos_handlers::{ApiError, AppState, Caller, Patch};
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
 
@@ -100,8 +100,8 @@ pub struct UpdateRoutineRequest {
     params(ListRoutinesQuery),
     responses(
         (status = 200, description = "The organization's routines by name, each with its triggers, next passage and last passage", body = RoutineListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to routines", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to routines", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -128,10 +128,10 @@ pub async fn list_routines(
     request_body = CreateRoutineRequest,
     responses(
         (status = 201, description = "The new routine, with its planning trigger when a schedule was given", body = RoutineResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A routine of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An invalid field or schedule, or an agent or project not usable in the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A routine of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An invalid field or schedule, or an agent or project not usable in the organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -177,9 +177,9 @@ pub async fn create_routine(
     params(("routine_id" = RoutineId, Path, description = "Routine identifier")),
     responses(
         (status = 200, description = "The routine with its triggers and activity", body = RoutineResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -204,11 +204,11 @@ pub async fn get_routine(
     request_body = UpdateRoutineRequest,
     responses(
         (status = 200, description = "The updated routine; absent fields are unchanged", body = RoutineResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A routine of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to update, an invalid field, or an agent or project not usable in the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A routine of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to update, an invalid field, or an agent or project not usable in the organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -251,9 +251,9 @@ pub async fn update_routine(
     params(("routine_id" = RoutineId, Path, description = "Routine identifier")),
     responses(
         (status = 200, description = "The archived routine; nothing starts it any more. Archiving twice changes nothing", body = RoutineResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

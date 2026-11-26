@@ -1,10 +1,10 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
-use capitainerie_common::{AgentId, CardId, ClientId, ProjectId};
-use capitainerie_core::domain::{
+use matos_common::{AgentId, CardId, ClientId, ProjectId};
+use matos_core::domain::{
     card::{attributes::Priority, service::CreateTask},
     execution::RepositoryRef,
 };
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -49,9 +49,9 @@ pub struct CreatedCardResponse {
     request_body = CreateCardRequest,
     responses(
         (status = 201, description = "The new card, in the todo column; with an agent, the agent starts on it, writes off (each write asks for an approval), and `agent_run` says whether it did", body = CreatedCardResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Only a human may create a card by hand", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An invalid title or description, an unknown or archived client, project or agent, a parent that is not in the organization, or a nesting over three levels", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Only a human may create a card by hand", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An invalid title or description, an unknown or archived client, project or agent, a parent that is not in the organization, or a nesting over three levels", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

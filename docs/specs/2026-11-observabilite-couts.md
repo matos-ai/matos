@@ -81,8 +81,8 @@ Chaque réponse : `{rows, total, from, to}`. Tri par coût décroissant. `runs` 
 ```
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test -p capitainerie-core cost
-cargo test -p capitainerie-handlers-audit
+cargo test -p matos-core cost
+cargo test -p matos-handlers-audit
 ```
 
 ## Questions ouvertes

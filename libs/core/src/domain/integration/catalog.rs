@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, IntegrationInstanceId};
+use matos_common::{CoreError, IntegrationInstanceId};
 use serde_json::{Map, Value, json};
 use uuid::Uuid;
 
@@ -1258,7 +1258,7 @@ pub(super) fn tool_specs() -> Vec<ToolSpec> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{CoreError, IntegrationInstanceId};
+    use matos_common::{CoreError, IntegrationInstanceId};
     use serde_json::{Value, json};
     use uuid::Uuid;
 

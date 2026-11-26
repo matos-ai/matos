@@ -190,10 +190,10 @@ impl StreamReader {
 
     pub(super) fn accept(&mut self, line: &TaskLine) {
         match line {
-            TaskLine::Capitainerie(TaskMarker::ContributionChunk { data }) => {
+            TaskLine::Matos(TaskMarker::ContributionChunk { data }) => {
                 self.contribution.chunk(data)
             }
-            TaskLine::Capitainerie(TaskMarker::ContributionEnd {
+            TaskLine::Matos(TaskMarker::ContributionEnd {
                 sha256,
                 bytes,
                 truncated,
@@ -201,8 +201,8 @@ impl StreamReader {
                 self.contribution.end(sha256, *bytes, *truncated);
                 self.dirty = true;
             }
-            TaskLine::Capitainerie(TaskMarker::PlanChunk { data }) => self.plan.chunk(data),
-            TaskLine::Capitainerie(TaskMarker::PlanEnd {
+            TaskLine::Matos(TaskMarker::PlanChunk { data }) => self.plan.chunk(data),
+            TaskLine::Matos(TaskMarker::PlanEnd {
                 sha256,
                 bytes,
                 truncated,
@@ -210,8 +210,8 @@ impl StreamReader {
                 self.plan.end(sha256, *bytes, *truncated);
                 self.dirty = true;
             }
-            TaskLine::Capitainerie(TaskMarker::ReportChunk { data }) => self.report.chunk(data),
-            TaskLine::Capitainerie(TaskMarker::ReportEnd {
+            TaskLine::Matos(TaskMarker::ReportChunk { data }) => self.report.chunk(data),
+            TaskLine::Matos(TaskMarker::ReportEnd {
                 sha256,
                 bytes,
                 truncated,
@@ -219,7 +219,7 @@ impl StreamReader {
                 self.report.end(sha256, *bytes, *truncated);
                 self.dirty = true;
             }
-            TaskLine::Capitainerie(marker) => {
+            TaskLine::Matos(marker) => {
                 self.digest.marker = Some(marker.clone());
                 self.dirty = true;
             }
@@ -345,8 +345,8 @@ mod tests {
             .lines()
             .map(|line| {
                 let value: Value = serde_json::from_str(line).unwrap();
-                if value["type"] == "capitainerie" {
-                    TaskLine::Capitainerie(serde_json::from_value(value).unwrap())
+                if value["type"] == "matos" {
+                    TaskLine::Matos(serde_json::from_value(value).unwrap())
                 } else {
                     TaskLine::Agent(value)
                 }
@@ -558,7 +558,7 @@ mod tests {
         let secret = "dG9rZW4tZGUtdGFjaGUtMDEyMzQ1Njc4OWFiY2RlZg";
         let sample = format!(
             "{}\n{}\n{}\n{}",
-            json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":format!("echo ${{CAPITAINERIE_TASK_TOKEN}} {secret}")}}]}}),
+            json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":format!("echo ${{MATOS_TASK_TOKEN}} {secret}")}}]}}),
             json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":format!("token={secret}"),"is_error":false}]}}),
             json!({"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":secret}}]}}),
             json!({"type":"result","subtype":"success","result":format!("I saw {secret} in the env"),"usage":{"input_tokens":1,"output_tokens":1}}),
@@ -652,19 +652,19 @@ mod tests {
             .as_bytes()
             .chunks(chunk)
             .map(|piece| {
-                TaskLine::Capitainerie(TaskMarker::ReportChunk {
+                TaskLine::Matos(TaskMarker::ReportChunk {
                     data: String::from_utf8(piece.to_vec()).unwrap(),
                 })
             })
             .collect();
         let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, text.as_bytes());
         let hex: String = digest.as_ref().iter().map(|b| format!("{b:02x}")).collect();
-        lines.push(TaskLine::Capitainerie(TaskMarker::ReportEnd {
+        lines.push(TaskLine::Matos(TaskMarker::ReportEnd {
             sha256: sha.unwrap_or(hex),
             bytes: text.len() as u64,
             truncated: false,
         }));
-        lines.push(TaskLine::Capitainerie(TaskMarker::AuditDone));
+        lines.push(TaskLine::Matos(TaskMarker::AuditDone));
         lines
     }
 
@@ -693,14 +693,14 @@ mod tests {
         report_lines(text, 6, None)
             .into_iter()
             .filter_map(|line| match line {
-                TaskLine::Capitainerie(TaskMarker::ReportChunk { data }) => {
-                    Some(TaskLine::Capitainerie(TaskMarker::PlanChunk { data }))
+                TaskLine::Matos(TaskMarker::ReportChunk { data }) => {
+                    Some(TaskLine::Matos(TaskMarker::PlanChunk { data }))
                 }
-                TaskLine::Capitainerie(TaskMarker::ReportEnd {
+                TaskLine::Matos(TaskMarker::ReportEnd {
                     sha256,
                     bytes,
                     truncated,
-                }) => Some(TaskLine::Capitainerie(TaskMarker::PlanEnd {
+                }) => Some(TaskLine::Matos(TaskMarker::PlanEnd {
                     sha256,
                     bytes,
                     truncated,
@@ -736,7 +736,7 @@ mod tests {
         }
         assert_eq!(reader.plan(), None);
         let mut reader = StreamReader::new(Harness::MistralVibe, Redactor::new(""));
-        reader.accept(&TaskLine::Capitainerie(TaskMarker::PlanChunk {
+        reader.accept(&TaskLine::Matos(TaskMarker::PlanChunk {
             data: "aGk=".into(),
         }));
         assert_eq!(reader.plan(), None);
@@ -748,16 +748,14 @@ mod tests {
         for line in report_lines("feat: x (tok-secret)", 4, None)
             .into_iter()
             .filter_map(|line| match line {
-                TaskLine::Capitainerie(TaskMarker::ReportChunk { data }) => {
-                    Some(TaskLine::Capitainerie(TaskMarker::ContributionChunk {
-                        data,
-                    }))
+                TaskLine::Matos(TaskMarker::ReportChunk { data }) => {
+                    Some(TaskLine::Matos(TaskMarker::ContributionChunk { data }))
                 }
-                TaskLine::Capitainerie(TaskMarker::ReportEnd {
+                TaskLine::Matos(TaskMarker::ReportEnd {
                     sha256,
                     bytes,
                     truncated,
-                }) => Some(TaskLine::Capitainerie(TaskMarker::ContributionEnd {
+                }) => Some(TaskLine::Matos(TaskMarker::ContributionEnd {
                     sha256,
                     bytes,
                     truncated,
@@ -767,9 +765,7 @@ mod tests {
         {
             reader.accept(&line);
         }
-        reader.accept(&TaskLine::Capitainerie(TaskMarker::Pushed {
-            sha: "abc".into(),
-        }));
+        reader.accept(&TaskLine::Matos(TaskMarker::Pushed { sha: "abc".into() }));
         assert_eq!(reader.contribution().as_deref(), Some("feat: x (***)"));
         assert_eq!(reader.plan(), None);
         assert_eq!(

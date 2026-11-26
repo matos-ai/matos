@@ -1,4 +1,4 @@
-use capitainerie_core::domain::agent::Usage;
+use matos_core::domain::agent::Usage;
 use rig_core::completion::Usage as RigUsage;
 
 pub(crate) fn usage_of(model: &str, usage: &RigUsage) -> Usage {

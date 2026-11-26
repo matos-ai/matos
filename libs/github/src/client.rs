@@ -1,13 +1,13 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
-use capitainerie_core::domain::{
+use chrono::{DateTime, Duration, Utc};
+use matos_core::domain::{
     agent::SecretToken,
     execution::{
         DraftPullRequest, GithubAppCredentials, PullRequestUrl, RepositoryIssue, RepositoryListing,
         RepositoryRef,
     },
 };
-use chrono::{DateTime, Duration, Utc};
 use reqwest::{
     RequestBuilder, Response,
     header::{ACCEPT, AUTHORIZATION, LINK, USER_AGENT},
@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 use crate::{GithubError, jwt};
 
 pub(crate) const API_VERSION: &str = "2022-11-28";
-pub(crate) const AGENT: &str = concat!("capitainerie/", env!("CARGO_PKG_VERSION"));
+pub(crate) const AGENT: &str = concat!("matos/", env!("CARGO_PKG_VERSION"));
 const REFRESH_MARGIN_MINUTES: i64 = 5;
 const ISSUE_PAGES: usize = 5;
 
@@ -884,7 +884,7 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
-    use capitainerie_common::CoreError;
+    use matos_common::CoreError;
 
     const PRIVATE: &str = include_str!("../tests/fixtures/test-only-app-key.pem");
 
@@ -964,7 +964,7 @@ mod tests {
                 AxumStatus::UNPROCESSABLE_ENTITY,
                 Json(json!({
                     "message": "Validation Failed",
-                    "errors": [{"resource": "PullRequest", "code": "custom", "message": "A pull request already exists for acme:capitainerie/run-1."}],
+                    "errors": [{"resource": "PullRequest", "code": "custom", "message": "A pull request already exists for acme:matos/run-1."}],
                 })),
             )
                 .into_response();
@@ -1040,7 +1040,7 @@ mod tests {
         State(shared): State<Shared>,
         axum::extract::Path((_owner, _repo, branch)): axum::extract::Path<(String, String, String)>,
     ) -> impl IntoResponse {
-        assert_eq!(branch, "capitainerie/run-1");
+        assert_eq!(branch, "matos/run-1");
         match shared.lock().unwrap().branch_sha.clone() {
             Some(sha) => {
                 Json(json!({"ref": format!("refs/heads/{branch}"), "object": {"sha": sha}}))
@@ -1116,14 +1116,14 @@ mod tests {
 
     fn credentials() -> GithubAppCredentials {
         GithubAppCredentials {
-            organization_id: capitainerie_common::OrganizationId::new(),
+            organization_id: matos_common::OrganizationId::new(),
             app_id: 1,
-            slug: "capitainerie-acme".into(),
+            slug: "matos-acme".into(),
             client_id: "Iv1.abc".into(),
             client_secret: SecretToken::new("oauth-secret"),
             private_key_pem: SecretToken::new(PRIVATE),
             webhook_secret: SecretToken::new("hook"),
-            html_url: "https://github.com/apps/capitainerie-acme".into(),
+            html_url: "https://github.com/apps/matos-acme".into(),
             owner_login: "acme".into(),
             owner_type: "Organization".into(),
             created_by: "admin".into(),
@@ -1468,18 +1468,12 @@ mod tests {
         let api = repo_ref("acme/api");
 
         assert_eq!(
-            client
-                .branch_sha(5, &api, "capitainerie/run-1")
-                .await
-                .unwrap(),
+            client.branch_sha(5, &api, "matos/run-1").await.unwrap(),
             Some("abc123".to_owned())
         );
         shared.lock().unwrap().branch_sha = None;
         assert_eq!(
-            client
-                .branch_sha(5, &api, "capitainerie/run-1")
-                .await
-                .unwrap(),
+            client.branch_sha(5, &api, "matos/run-1").await.unwrap(),
             None
         );
     }
@@ -1519,7 +1513,7 @@ mod tests {
         DraftPullRequest {
             repository: repo_ref("acme/api"),
             base: "main".into(),
-            head: "capitainerie/run-1".into(),
+            head: "matos/run-1".into(),
             title: "Fix it".into(),
             body: "details".into(),
         }
@@ -1538,7 +1532,7 @@ mod tests {
             shared.lock().unwrap().pull_bodies[0],
             json!({
                 "title": "Fix it",
-                "head": "capitainerie/run-1",
+                "head": "matos/run-1",
                 "base": "main",
                 "body": "details",
                 "draft": true,
@@ -1564,7 +1558,7 @@ mod tests {
         );
         let recorded = shared.lock().unwrap();
         assert_eq!(recorded.list_queries.len(), 1);
-        assert_eq!(recorded.list_queries[0]["head"], "acme:capitainerie/run-1");
+        assert_eq!(recorded.list_queries[0]["head"], "acme:matos/run-1");
         assert_eq!(recorded.list_queries[0]["state"], "open");
     }
 

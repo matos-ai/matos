@@ -49,10 +49,10 @@ describe('GitHub app creation return', () => {
 				'POST /api/v1/integrations/github/app': {
 					status: 201,
 					body: {
-						slug: 'capitainerie-acme',
+						slug: 'matos-acme',
 						owner_login: 'acme',
 						owner_type: 'Organization',
-						html_url: 'https://github.com/apps/capitainerie-acme',
+						html_url: 'https://github.com/apps/matos-acme',
 						created_by: 'u',
 						created_at: '2026-11-01T00:00:00Z',
 					},

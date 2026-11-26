@@ -1,10 +1,10 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::{Actor, Identity};
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use matos_auth::{Actor, Identity};
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         provider::{
@@ -14,7 +14,7 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_handlers::Caller;
+use matos_handlers::Caller;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -85,7 +85,7 @@ fn caller(organization: &Organization, subject: &str, actor: Option<&str>) -> Ca
         identity: Identity {
             subject: subject.into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -102,10 +102,10 @@ fn caller(organization: &Organization, subject: &str, actor: Option<&str>) -> Ca
 }
 
 async fn serve(pool: &PgPool, caller: Caller) -> String {
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
-    let app: Router = capitainerie_handlers_providers::router::<(), _>(usecase, FakeCatalog)
-        .layer(Extension(caller));
+    let app: Router =
+        matos_handlers_providers::router::<(), _>(usecase, FakeCatalog).layer(Extension(caller));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await });

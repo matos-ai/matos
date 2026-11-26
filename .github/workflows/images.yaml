@@ -35,7 +35,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/ferrislabs/capitainerie
+  IMAGE_PREFIX: ghcr.io/matos-ai/matos
 
 jobs:
   should-push:
@@ -175,7 +175,7 @@ jobs:
       - uses: azure/setup-helm@v4
 
       - name: lint
-        run: helm lint deploy/helm/capitainerie -f deploy/helm/capitainerie/values-example.yaml
+        run: helm lint deploy/helm/matos -f deploy/helm/matos/values-example.yaml
 
       - name: log-in to ghcr
         env:
@@ -186,7 +186,7 @@ jobs:
       - name: read chart version
         id: chart
         run: |
-          version=$(yq -r .version deploy/helm/capitainerie/Chart.yaml)
+          version=$(yq -r .version deploy/helm/matos/Chart.yaml)
           if [ -z "$version" ] || [ "$version" = "null" ]; then
             echo "could not read .version from Chart.yaml" >&2
             exit 1
@@ -198,8 +198,8 @@ jobs:
         env:
           VERSION: ${{ steps.chart.outputs.version }}
         run: |
-          if helm show chart "oci://ghcr.io/ferrislabs/charts/capitainerie" --version "$VERSION" >/dev/null 2>&1; then
-            echo "capitainerie ${VERSION} is already published, skipping"
+          if helm show chart "oci://ghcr.io/matos-ai/charts/matos" --version "$VERSION" >/dev/null 2>&1; then
+            echo "matos ${VERSION} is already published, skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -209,10 +209,10 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         run: |
           app_version="${GITHUB_REF_NAME#v}"
-          helm package deploy/helm/capitainerie --app-version "$app_version" -d /tmp/chart
+          helm package deploy/helm/matos --app-version "$app_version" -d /tmp/chart
 
       - name: push chart
         if: steps.check.outputs.skip != 'true'
         env:
           VERSION: ${{ steps.chart.outputs.version }}
-        run: helm push "/tmp/chart/capitainerie-${VERSION}.tgz" oci://ghcr.io/ferrislabs/charts
+        run: helm push "/tmp/chart/matos-${VERSION}.tgz" oci://ghcr.io/matos-ai/charts

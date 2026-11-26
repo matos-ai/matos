@@ -2,27 +2,27 @@
 set -euo pipefail
 
 marker() {
-  printf '{"type":"capitainerie","event":"%s"%s}\n' "$1" "${2:-}"
+  printf '{"type":"matos","event":"%s"%s}\n' "$1" "${2:-}"
 }
 
 : "${GIT_REMOTE:?}" "${BASE_BRANCH:?}" "${BRANCH:?}" "${MODEL:?}" "${MAX_TURNS:?}" "${PROMPT:?}"
-: "${CAPITAINERIE_TASK_TOKEN:?}"
-harness="${CAPITAINERIE_HARNESS:-claude-code}"
+: "${MATOS_TASK_TOKEN:?}"
+harness="${MATOS_HARNESS:-claude-code}"
 case "$harness" in
   claude-code) ;;
-  codex) : "${CAPITAINERIE_OPENAI_BASE_URL:?}" "${CODEX_API_KEY:?}" "${CODEX_HOME:?}" ;;
+  codex) : "${MATOS_OPENAI_BASE_URL:?}" "${CODEX_API_KEY:?}" "${CODEX_HOME:?}" ;;
   antigravity) : "${GOOGLE_GEMINI_BASE_URL:?}" "${GEMINI_API_KEY:?}" ;;
-  mistral-vibe) : "${CAPITAINERIE_MISTRAL_BASE_URL:?}" "${MISTRAL_API_KEY:?}" "${VIBE_HOME:?}" ;;
+  mistral-vibe) : "${MATOS_MISTRAL_BASE_URL:?}" "${MISTRAL_API_KEY:?}" "${VIBE_HOME:?}" ;;
   *)
-    echo "unknown CAPITAINERIE_HARNESS: $harness" >&2
+    echo "unknown MATOS_HARNESS: $harness" >&2
     exit 2
     ;;
 esac
-mode="${CAPITAINERIE_MODE:-change}"
+mode="${MATOS_MODE:-change}"
 case "$mode" in
   change | audit) ;;
   *)
-    echo "unknown CAPITAINERIE_MODE: $mode" >&2
+    echo "unknown MATOS_MODE: $mode" >&2
     exit 2
     ;;
 esac
@@ -60,7 +60,7 @@ cat >"$askpass" <<'ASKPASS'
 #!/usr/bin/env bash
 case "$1" in
   Username*) printf '%s\n' "x-access-token" ;;
-  *) printf '%s\n' "$CAPITAINERIE_TASK_TOKEN" ;;
+  *) printf '%s\n' "$MATOS_TASK_TOKEN" ;;
 esac
 ASKPASS
 chmod 0700 "$askpass"
@@ -76,13 +76,13 @@ marker cloned
 write_codex_config() {
   mkdir -p "$CODEX_HOME"
   cat >"$CODEX_HOME/config.toml" <<CODEX_CONFIG
-model_provider = "capitainerie"
+model_provider = "matos"
 web_search = "disabled"
 check_for_update_on_startup = false
 
-[model_providers.capitainerie]
-name = "capitainerie"
-base_url = "$CAPITAINERIE_OPENAI_BASE_URL"
+[model_providers.matos]
+name = "matos"
+base_url = "$MATOS_OPENAI_BASE_URL"
 env_key = "CODEX_API_KEY"
 wire_api = "responses"
 
@@ -103,7 +103,7 @@ write_antigravity_config() {
 write_vibe_config() {
   mkdir -p "$VIBE_HOME"
   cat >"$VIBE_HOME/config.toml" <<VIBE_CONFIG
-active_model = "capitainerie"
+active_model = "matos"
 enable_telemetry = false
 enable_update_checks = false
 enable_auto_update = false
@@ -111,8 +111,8 @@ enable_mcp = false
 enable_connectors = false
 enable_notifications = false
 include_commit_signature = false
-vibe_base_url = "$CAPITAINERIE_MISTRAL_BASE_URL"
-console_base_url = "$CAPITAINERIE_MISTRAL_BASE_URL"
+vibe_base_url = "$MATOS_MISTRAL_BASE_URL"
+console_base_url = "$MATOS_MISTRAL_BASE_URL"
 
 [experiments]
 enable = false
@@ -122,16 +122,16 @@ enabled = false
 generate_titles = false
 
 [[providers]]
-name = "capitainerie"
-api_base = "$CAPITAINERIE_MISTRAL_BASE_URL/v1"
+name = "matos"
+api_base = "$MATOS_MISTRAL_BASE_URL/v1"
 api_key_env_var = "MISTRAL_API_KEY"
 backend = "generic"
 api_style = "openai"
 
 [[models]]
 name = "$MODEL"
-provider = "capitainerie"
-alias = "capitainerie"
+provider = "matos"
+alias = "matos"
 max_context_length = 262144
 VIBE_CONFIG
 }
@@ -142,7 +142,7 @@ run_vibe() {
   output_dir="$(mktemp -d /tmp/vibe-out.XXXXXX)"
   printf '%s' "$PROMPT" >"$prompt_file"
   vibe --prompt-file "$prompt_file" --output streaming --output-dir "$output_dir" \
-    --auto-approve --model capitainerie --max-turns "$MAX_TURNS" || status=$?
+    --auto-approve --model matos --max-turns "$MAX_TURNS" || status=$?
   if [ -s "$output_dir/export.json" ]; then
     printf '{"type":"vibe_export","export":%s}\n' "$(tr -d '\n' <"$output_dir/export.json")"
   fi

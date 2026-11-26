@@ -1,5 +1,5 @@
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CoreError, OrganizationId};
 
 use super::{AgentClientId, AgentIdentity, IdentitySummary, ProvisionedClient, UnsyncedClient};
 

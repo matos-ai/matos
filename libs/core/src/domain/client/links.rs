@@ -1,4 +1,4 @@
-use capitainerie_common::{ClientId, CoreError, OrganizationId, ProjectId};
+use matos_common::{ClientId, CoreError, OrganizationId, ProjectId};
 
 use super::{ClientRef, ports::ClientRepository};
 use crate::domain::{

@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-runtime-rig"
+name = "matos-runtime-rig"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,8 +7,8 @@ license.workspace = true
 
 [dependencies]
 aws-lc-rs.workspace = true
-capitainerie-common.workspace = true
-capitainerie-core.workspace = true
+matos-common.workspace = true
+matos-core.workspace = true
 chrono.workspace = true
 clap.workspace = true
 http.workspace = true

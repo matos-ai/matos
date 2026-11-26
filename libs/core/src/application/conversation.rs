@@ -1,8 +1,8 @@
-use capitainerie_common::{ConversationId, CoreError};
-use capitainerie_macros::transactional;
 use chrono::{DateTime, Utc};
+use matos_common::{ConversationId, CoreError};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::{AccessRequest, Action, ResourceKind, Subject, require},
@@ -17,7 +17,7 @@ use crate::{
     infrastructure::provider::postgres::PgProviderRepository,
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(conversation, conversation_message, authz)]
     pub async fn create_conversation(
         &self,

@@ -1,7 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::RunId;
-use capitainerie_core::{
+use chrono::{DateTime, Utc};
+use matos_common::RunId;
+use matos_core::{
     RunTimeline,
     domain::{
         authorization::DecisionRecord,
@@ -11,8 +12,7 @@ use capitainerie_core::{
         },
     },
 };
-use capitainerie_handlers::{ApiError, AppState, Caller};
-use chrono::{DateTime, Utc};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -214,8 +214,8 @@ impl From<DecisionRecord> for DecisionResponse {
     params(("run_id" = RunId, Path, description = "Run identifier")),
     responses(
         (status = 200, description = "Steps, tool calls and policy decisions of the run", body = RunTimelineResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such run in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such run in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -238,7 +238,7 @@ mod tests {
             "tool_calls": [],
             "dropped_tool_calls": 3,
             "summary": "Ajout du CHANGELOG.",
-            "branch": "capitainerie/0a1b2c3d4e5f",
+            "branch": "matos/0a1b2c3d4e5f",
             "sha": "abc123",
             "pull_request": "https://github.com/acme/web/pull/7",
             "no_changes": false,
@@ -248,10 +248,7 @@ mod tests {
 
         let execution: ExecutionResponse = serde_json::from_value(output).unwrap();
 
-        assert_eq!(
-            execution.branch.as_deref(),
-            Some("capitainerie/0a1b2c3d4e5f")
-        );
+        assert_eq!(execution.branch.as_deref(), Some("matos/0a1b2c3d4e5f"));
         assert_eq!(
             execution.pull_request.as_deref(),
             Some("https://github.com/acme/web/pull/7")

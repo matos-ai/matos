@@ -2,8 +2,8 @@ use std::time::Instant;
 
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_core::domain::provider::ports::ModelCatalog;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::provider::ports::ModelCatalog;
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 
 use crate::{dto::ModelCatalogResponse, state::ProvidersState};
@@ -20,8 +20,8 @@ pub struct ModelsPath;
     tag = super::TAG,
     responses(
         (status = 200, description = "What the configured providers offer; an unreachable provider is reported in `errors`", body = ModelCatalogResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

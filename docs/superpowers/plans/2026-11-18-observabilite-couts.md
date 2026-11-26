@@ -4,7 +4,7 @@
 
 **Goal:** Quatre routes en lecture seule qui donnent le coût des runs sur une période `from`/`to`, par projet, agent, tâche et utilisateur, avec le détail agent (projet, tâche) ou modèle (utilisateur).
 
-**Architecture:** Le motif de `budgets` : un service de domaine (`CostService`) avec un port `CostRepository` et l'`Authorizer`, un adapter Postgres sur `run_steps`, des méthodes `#[transactional]` sur `CapitainerieUseCase`, des handlers dans `handlers-audit`. Le dépôt renvoie des lignes de détail ; le service les replie en groupes et calcule les totaux, donc un détail somme toujours à son total.
+**Architecture:** Le motif de `budgets` : un service de domaine (`CostService`) avec un port `CostRepository` et l'`Authorizer`, un adapter Postgres sur `run_steps`, des méthodes `#[transactional]` sur `MatosUseCase`, des handlers dans `handlers-audit`. Le dépôt renvoie des lignes de détail ; le service les replie en groupes et calcule les totaux, donc un détail somme toujours à son total.
 
 **Tech Stack:** Rust, sqlx (requêtes vérifiées, cache `.sqlx`), axum, utoipa, Postgres.
 
@@ -36,7 +36,7 @@
 - Modify: `libs/core/src/domain/mod.rs` (ajouter `pub mod cost;`)
 
 **Interfaces:**
-- Consumes: `Subject`, `Authorizer`, `AccessRequest`, `Action::AuditRead`, `ResourceKind::Audit`, `require` (voir `domain/budget/service.rs`) ; `AgentId`, `CardId`, `ProjectId`, `OrganizationId`, `CoreError` de `capitainerie_common`.
+- Consumes: `Subject`, `Authorizer`, `AccessRequest`, `Action::AuditRead`, `ResourceKind::Audit`, `require` (voir `domain/budget/service.rs`) ; `AgentId`, `CardId`, `ProjectId`, `OrganizationId`, `CoreError` de `matos_common`.
 - Produces (`mod.rs`) :
   - `pub const DEFAULT_WINDOW_DAYS: i64 = 30;`
   - `pub struct Period` avec `pub fn new(from: Option<DateTime<Utc>>, to: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Result<Self, CoreError>`, `pub fn from(&self)`, `pub fn to(&self)` ; champs privés.
@@ -56,7 +56,7 @@
   - `defaults_to_the_last_thirty_days`: `Period::new(None, None, now)` donne `to == now`, `from == now - 30 jours`.
   - `rejects_an_empty_or_reversed_window`: `from == to` et `from > to` renvoient `CoreError::Invalid`.
   - `keeps_explicit_bounds`: `from` et `to` fournis sont conservés tels quels.
-- [ ] **Step 2: Lancer** `cargo test -p capitainerie-core cost::` ; attendu : échec de compilation (module absent).
+- [ ] **Step 2: Lancer** `cargo test -p matos-core cost::` ; attendu : échec de compilation (module absent).
 - [ ] **Step 3: Implémenter** `Period::new` (même logique que `handlers-analytics/src/costs.rs::window`, mais renvoie `CoreError::Invalid`) et les types ci-dessus.
 - [ ] **Step 4: Tests du service** avec `MockCostRepository` et l'`Authorizer` de test utilisé dans `domain/budget/service.rs` (ou son mock) :
   - `projects_group_agents_and_sum_to_the_total` : lignes `(P1, a1, 100)`, `(P1, a2, 50)`, `(None, a1, 10)` donnent `P1` à 150 avec deux agents, une ligne `project_id: None` à 10, `total == 160`, et pour chaque groupe `spent == somme de ses agents`.
@@ -66,7 +66,7 @@
   - `an_empty_organization_reports_zero` : aucune ligne donne `rows` vide et `total == Spent::default()`.
   - `a_refused_subject_reads_nothing` : l'`Authorizer` refuse, `Err(CoreError::Forbidden{..})`, aucune méthode du dépôt appelée.
 - [ ] **Step 5: Implémenter `CostService`** : `require(AuditRead)` d'abord, puis repli des lignes (`BTreeMap`/`HashMap` par clé de groupe), totaux calculés en sommant les détails.
-- [ ] **Step 6: Lancer** `cargo test -p capitainerie-core cost::` ; attendu : tout passe.
+- [ ] **Step 6: Lancer** `cargo test -p matos-core cost::` ; attendu : tout passe.
 - [ ] **Step 7: Commit** `feat(core): cost reports domain`
 
 ---
@@ -79,7 +79,7 @@
 
 **Interfaces:**
 - Consumes: `CostRepository`, `Period`, lignes de la Task 1 ; `SharedTx`, `map_sqlx_error`, `#[repository(domain = Cost, backend = Postgres)]` (voir `infrastructure/audit/budget.rs`).
-- Produces: `PgCostRepository<'tx>::new(&SharedTx<'tx>)` et, sur `CapitainerieUseCase`, des méthodes `#[transactional(cost, authz)]` :
+- Produces: `PgCostRepository<'tx>::new(&SharedTx<'tx>)` et, sur `MatosUseCase`, des méthodes `#[transactional(cost, authz)]` :
   - `project_costs(&self, subject: Subject, period: Period) -> Result<CostReport<ProjectSpend>, CoreError>`
   - `agent_costs(...) -> CostReport<AgentSpend>`
   - `task_costs(&self, subject, period, project: Option<ProjectId>) -> CostReport<TaskSpend>`
@@ -96,10 +96,10 @@ Requête commune (un seul gabarit, adapté par groupe) : `run_steps s JOIN runs 
   - `another_organization_never_shows` (7) : des étapes d'une autre organisation n'apparaissent dans aucune des quatre vues ; `task_costs` avec le `project_id` de l'autre organisation renvoie `NotFound`.
   - `missing_model_and_agent_fall_under_unknown` : étape sans `model` ni agent donne la clé `"unknown"`.
   - `an_archived_agent_keeps_its_past_cost`.
-- [ ] **Step 2: Lancer** `cargo test -p capitainerie-core --test cost` avec `DATABASE_URL` défini ; attendu : échec (adapter absent).
+- [ ] **Step 2: Lancer** `cargo test -p matos-core --test cost` avec `DATABASE_URL` défini ; attendu : échec (adapter absent).
 - [ ] **Step 3: Implémenter `PgCostRepository`** (4 requêtes `sqlx::query!` plus `project_exists`), l'enregistrer dans le registre, ajouter les 4 méthodes `#[transactional(cost, authz)]` qui appellent `CostService::new(cost_repository, authz)` avec `Period` déjà construit par l'appelant.
 - [ ] **Step 4: Régénérer le cache** `cargo sqlx prepare --workspace` (comme pour `budgets`) ; vérifier que `.sqlx/` contient les nouvelles requêtes.
-- [ ] **Step 5: Lancer** `cargo test -p capitainerie-core --test cost` ; attendu : tout passe. Si `runs.card_id` est NULL pour les runs d'agent (Acceptance 3 échoue), rattacher la carte via `agent_tasks.card_id` dans la jointure `cards` et le noter dans la spec.
+- [ ] **Step 5: Lancer** `cargo test -p matos-core --test cost` ; attendu : tout passe. Si `runs.card_id` est NULL pour les runs d'agent (Acceptance 3 échoue), rattacher la carte via `agent_tasks.card_id` dans la jointure `cards` et le noter dans la spec.
 - [ ] **Step 6: Commit** `feat(core): postgres cost reports`
 
 ---
@@ -111,7 +111,7 @@ Requête commune (un seul gabarit, adapté par groupe) : `run_steps s JOIN runs 
 - Modify: `libs/handlers-audit/src/lib.rs` (4 routes), `libs/handlers-audit/tests/api.rs`, `apps/api/src/openapi.rs` (chemins, schémas, test de présence)
 
 **Interfaces:**
-- Consumes: `CapitainerieUseCase::{project_costs, agent_costs, task_costs, user_costs}`, `Period::new`, types `CostReport` etc.
+- Consumes: `MatosUseCase::{project_costs, agent_costs, task_costs, user_costs}`, `Period::new`, types `CostReport` etc.
 - Produces: routes `GET /api/v1/analytics/costs/{projects,agents,tasks,users}` ; query `from`, `to` (`DateTime<Utc>` optionnels), `project_id` (tâches). Réponse `{from, to, total: {input_tokens, output_tokens, cost_micros}, rows: [...]}` ; `rows` de projet : `{project_id|null, name|null, input_tokens, output_tokens, cost_micros, agents: [{agent_id|null, name, runs, input_tokens, output_tokens, cost_micros}]}` ; tâche : `{card_id, title, project_id|null, ..., agents}` ; utilisateur : `{user, ..., models: [{model, input_tokens, output_tokens, cost_micros}]}` ; agent : `{agent_id|null, name, runs, ...}`. Handlers `projects_handler`, `agents_handler`, `tasks_handler`, `users_handler`.
 
 - [ ] **Step 1: Tests d'API** dans `tests/api.rs` (helpers `Fixture`/`Who` existants) :
@@ -120,10 +120,10 @@ Requête commune (un seul gabarit, adapté par groupe) : `run_steps s JOIN runs 
   - `costs_default_to_thirty_days`: sans paramètres, `to - from == 30 jours` dans la réponse (6).
   - `project_costs_return_agents_and_total`: après insertion de données, forme JSON ci-dessus, `total.cost_micros` = somme des lignes.
   - `tasks_with_a_foreign_project_are_not_found`: `project_id` d'une autre organisation renvoie 404 (7).
-- [ ] **Step 2: Lancer** `cargo test -p capitainerie-handlers-audit costs` ; attendu : échec (routes absentes).
+- [ ] **Step 2: Lancer** `cargo test -p matos-handlers-audit costs` ; attendu : échec (routes absentes).
 - [ ] **Step 3: Implémenter `costs.rs`** : un `TypedPath` par route, DTO de réponse (`Serialize` + `ToSchema`) avec `From<CostReport<_>>`, `#[utoipa::path]` par handler (200, 401, 403, 422, plus 404 pour les tâches), tag `super::TAG`. Convertir `CoreError::Invalid`/`NotFound` comme les autres handlers (`ApiError::from`). Enregistrer les quatre routes dans `router()`.
 - [ ] **Step 4: OpenAPI** : ajouter les 4 handlers à `paths(...)` de `apps/api/src/openapi.rs` et, dans son test existant, assert que les quatre chemins sont des objets et que `ProjectCostsResponse` expose `rows`.
-- [ ] **Step 5: Lancer** `cargo test -p capitainerie-handlers-audit` et `cargo test -p capitainerie-api openapi` ; attendu : tout passe.
+- [ ] **Step 5: Lancer** `cargo test -p matos-handlers-audit` et `cargo test -p matos-api openapi` ; attendu : tout passe.
 - [ ] **Step 6: Commit** `feat(api): cost reports by project, agent, task and user`
 
 ---
@@ -137,9 +137,9 @@ Requête commune (un seul gabarit, adapté par groupe) : `run_steps s JOIN runs 
 - [ ] **Step 2: Vérification de sortie** (une seule fois) :
   - `cargo fmt --check`
   - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo test -p capitainerie-core cost` et `cargo test -p capitainerie-core --test cost` (avec `DATABASE_URL`)
-  - `cargo test -p capitainerie-handlers-audit`
-  - `cargo test -p capitainerie-api openapi`
+  - `cargo test -p matos-core cost` et `cargo test -p matos-core --test cost` (avec `DATABASE_URL`)
+  - `cargo test -p matos-handlers-audit`
+  - `cargo test -p matos-api openapi`
   Attendu : tout vert. Sinon, nommer la commande et l'erreur.
 - [ ] **Step 3: Commit** `docs: cost reports`
 

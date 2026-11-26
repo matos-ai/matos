@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, RunId};
+use matos_common::{CoreError, RunId};
 
 use super::DelegatedToken;
 use crate::domain::agent::SecretToken;

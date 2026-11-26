@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use serde_json::{Map, Value, json};
 
 use super::{
@@ -471,8 +471,8 @@ fn odoo_unchanged(action: &IntegrationAction, current: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{IntegrationActionId, IntegrationInstanceId, OrganizationId};
     use chrono::Utc;
+    use matos_common::{IntegrationActionId, IntegrationInstanceId, OrganizationId};
     use serde_json::{Map, json};
 
     use super::*;

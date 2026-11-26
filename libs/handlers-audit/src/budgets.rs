@@ -1,9 +1,9 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{AgentId, CoreError};
-use capitainerie_core::domain::budget::{BudgetOverview, BudgetSettings, BudgetStatus, Limit};
-use capitainerie_handlers::{ApiError, AppState, Caller};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CoreError};
+use matos_core::domain::budget::{BudgetOverview, BudgetSettings, BudgetStatus, Limit};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -134,8 +134,8 @@ impl TryFrom<SaveBudgetsRequest> for BudgetSettings {
     tag = super::TAG,
     responses(
         (status = 200, description = "The organization's monthly budgets and what was spent against them this month", body = BudgetsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to budgets", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to budgets", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -156,9 +156,9 @@ pub async fn get_handler(
     request_body = SaveBudgetsRequest,
     responses(
         (status = 200, description = "The saved budgets, with this month's spend", body = BudgetsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Only an organization admin manages budgets; agents never do", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "A limit out of bounds, an agent named twice or not in the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Only an organization admin manages budgets; agents never do", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "A limit out of bounds, an agent named twice or not in the organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

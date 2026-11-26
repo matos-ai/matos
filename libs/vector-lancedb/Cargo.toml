@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-vector-lancedb"
+name = "matos-vector-lancedb"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,8 +8,8 @@ license.workspace = true
 [dependencies]
 arrow-array.workspace = true
 arrow-schema.workspace = true
-capitainerie-common.workspace = true
-capitainerie-core.workspace = true
+matos-common.workspace = true
+matos-core.workspace = true
 futures-util.workspace = true
 lancedb = { workspace = true, features = ["remote"] }
 thiserror.workspace = true

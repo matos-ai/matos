@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use capitainerie_bus_iggy::{IggyArgs, IggyEventBus, StartFrom};
-use capitainerie_core::domain::event::ports::EventBus;
-use capitainerie_events::{EventEnvelope, Topic};
 use chrono::Utc;
 use iggy::prelude::*;
+use matos_bus_iggy::{IggyArgs, IggyEventBus, StartFrom};
+use matos_core::domain::event::ports::EventBus;
+use matos_events::{EventEnvelope, Topic};
 use uuid::Uuid;
 
 fn address() -> Option<String> {
@@ -105,7 +105,7 @@ async fn publishing_nothing_is_ok() {
     drop_stream(&args).await;
 }
 
-async fn drain(subscription: &mut capitainerie_bus_iggy::Subscription) -> Vec<EventEnvelope> {
+async fn drain(subscription: &mut matos_bus_iggy::Subscription) -> Vec<EventEnvelope> {
     let mut all = Vec::new();
     for _ in 0..3 {
         match subscription.next_batch(10).await {

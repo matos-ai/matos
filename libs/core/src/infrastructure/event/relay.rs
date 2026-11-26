@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use sqlx::{PgPool, postgres::PgListener};
 
 use super::postgres::{OUTBOX_CHANNEL, claim_pending, mark_published};

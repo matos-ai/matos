@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::{SecretToken, Usage},
     conversation::turn::ToolSpec,
 };

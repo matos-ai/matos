@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_common::{AgentId, ProjectId, SourceId};
-use capitainerie_core::domain::source::service::UpdateSource;
-use capitainerie_handlers::{ApiError, AppState, Caller, Patch};
+use matos_common::{AgentId, ProjectId, SourceId};
+use matos_core::domain::source::service::UpdateSource;
+use matos_handlers::{ApiError, AppState, Caller, Patch};
 use serde::Deserialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -40,11 +40,11 @@ pub struct UpdateSourceRequest {
     request_body = UpdateSourceRequest,
     responses(
         (status = 200, description = "The updated source; absent fields are unchanged", body = SourceResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage sources", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such source in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A source of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to update, an invalid field, or an agent or project not usable in the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage sources", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such source in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A source of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to update, an invalid field, or an agent or project not usable in the organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -1,8 +1,8 @@
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::{AgentId, CardId, CoreError};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CardId, CoreError};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -332,7 +332,7 @@ mod tests {
             ActorRef::System
         );
         assert_eq!(crew_slug("agent:iris"), Some("iris"));
-        assert_eq!(crew_slug("capitainerie-captain"), None);
+        assert_eq!(crew_slug("matos-captain"), None);
     }
 
     #[test]

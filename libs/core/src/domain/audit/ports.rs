@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use capitainerie_common::{CoreError, OrganizationId};
+use matos_common::{CoreError, OrganizationId};
 use uuid::Uuid;
 
 use super::{AuditEvent, AuditFilter};

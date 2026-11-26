@@ -5,9 +5,10 @@
 
 use std::sync::Mutex;
 
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, IdentitySweep,
+use chrono::{Duration, Utc};
+use matos_common::{AgentId, CoreError, OrganizationId};
+use matos_core::{
+    IdentitySweep, MatosUseCase,
     domain::{
         agent::SecretToken,
         agent_identity::{
@@ -19,7 +20,6 @@ use capitainerie_core::{
         agent_identity::postgres::PgAgentIdentityRepository, crypto::SecretCipher, postgres,
     },
 };
-use chrono::{Duration, Utc};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 
@@ -117,8 +117,8 @@ fn cipher() -> SecretCipher {
     SecretCipher::new(&[9; 32]).unwrap()
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher())
 }
 
 async fn organization(pool: &PgPool) -> OrganizationId {

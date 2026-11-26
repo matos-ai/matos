@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
-use capitainerie_common::AgentId;
-use capitainerie_core::domain::crew::service::CreateAgent;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::AgentId;
+use matos_core::domain::crew::service::CreateAgent;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -32,10 +32,10 @@ pub struct CreateTeamAgentRequest {
     request_body = CreateTeamAgentRequest,
     responses(
         (status = 201, description = "The new agent, idle", body = TeamAgentResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage the registry", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "An agent of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An invalid field, or a manager that is not an agent of the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage the registry", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "An agent of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An invalid field, or a manager that is not an agent of the organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

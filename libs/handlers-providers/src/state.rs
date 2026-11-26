@@ -4,19 +4,19 @@ use std::{
     time::{Duration, Instant},
 };
 
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{CapitainerieUseCase, application::ModelListing};
+use matos_common::OrganizationId;
+use matos_core::{MatosUseCase, application::ModelListing};
 
 pub const CATALOG_TTL: Duration = Duration::from_secs(10 * 60);
 
 pub struct ProvidersState<C> {
-    pub usecase: CapitainerieUseCase,
+    pub usecase: MatosUseCase,
     pub catalog: Arc<C>,
     pub cache: Arc<CatalogCache>,
 }
 
 impl<C> ProvidersState<C> {
-    pub fn new(usecase: CapitainerieUseCase, catalog: C) -> Self {
+    pub fn new(usecase: MatosUseCase, catalog: C) -> Self {
         Self {
             usecase,
             catalog: Arc::new(catalog),

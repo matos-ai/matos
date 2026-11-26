@@ -198,7 +198,7 @@ export function saveRequestOf(drafts: ReadonlyArray<BudgetDraft>): DraftResult {
 export function describeBudgetError(error: unknown): string {
 	const status = (error as { status?: number } | null)?.status
 	if (status === 403)
-		return 'Seuls les administrateurs de la Capitainerie peuvent modifier les budgets.'
+		return 'Seuls les administrateurs de Matos peuvent modifier les budgets.'
 	if (status === 422)
 		return 'Budgets refusés par le serveur : vérifie les montants.'
 	return "Les budgets n'ont pas pu être enregistrés."

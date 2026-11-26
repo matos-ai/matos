@@ -2,7 +2,7 @@ pub mod ports;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 use crate::domain::provider::ModelRef;
 

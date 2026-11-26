@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, McpConnectorId};
 use chrono::Utc;
+use matos_common::{CoreError, McpConnectorId};
 
 use super::{
     Discovery, McpConnector, SCOPES_MAX_COUNT, parse_server_url, ports::McpConnectorRepository,
@@ -216,7 +216,7 @@ fn slug_taken(slug: &Slug) -> CoreError {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{

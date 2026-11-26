@@ -5,8 +5,8 @@ use std::{
 };
 
 use aws_lc_rs::digest::{SHA256, digest};
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::provider::{ModelTarget, ProviderAccess, ProviderKind};
+use matos_common::CoreError;
+use matos_core::domain::provider::{ModelTarget, ProviderAccess, ProviderKind};
 use rig_core::{
     DynModel,
     operation::Completion,
@@ -81,7 +81,7 @@ pub(crate) enum Endpoint {
     OpenAi {
         http: reqwest::Client,
         url: String,
-        key: capitainerie_core::domain::agent::SecretToken,
+        key: matos_core::domain::agent::SecretToken,
     },
 }
 
@@ -152,7 +152,7 @@ impl Clients {
     /// provider's own wire format.
     pub(crate) fn endpoint(&self, target: &ModelTarget) -> Result<Endpoint, CoreError> {
         let secret = |key: &str| {
-            capitainerie_core::domain::agent::SecretToken::new(match key {
+            matos_core::domain::agent::SecretToken::new(match key {
                 "" => UNUSED_KEY,
                 key => key,
             })
@@ -283,7 +283,7 @@ pub(crate) fn http_client(timeout_secs: u64) -> Result<reqwest::Client, RuntimeE
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use capitainerie_core::domain::{agent::SecretToken, provider::ModelRef};
+    use matos_core::domain::{agent::SecretToken, provider::ModelRef};
 
     use super::*;
 

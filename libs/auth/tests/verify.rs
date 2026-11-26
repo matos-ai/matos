@@ -7,8 +7,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use axum::Router;
 use axum::extract::State;
 use axum::routing::get;
-use capitainerie_auth::{AcceptedClients, AuthError, FerrisKeyVerifier, TokenVerifier};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
+use matos_auth::{AcceptedClients, AuthError, FerrisKeyVerifier, TokenVerifier};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -92,7 +92,7 @@ fn claims(issuer: &str) -> Value {
         "sub": "7b0f0c1e-0000-4000-8000-000000000001",
         "iss": issuer,
         "typ": "Bearer",
-        "azp": "capitainerie-web",
+        "azp": "matos-web",
         "aud": ["acme-realm", "account"],
         "exp": now() + 300,
         "iat": now(),
@@ -112,7 +112,7 @@ fn sign(claims: &Value, pem: &str, kid: &str) -> String {
 
 fn verifier() -> FerrisKeyVerifier {
     FerrisKeyVerifier::with_refresh_interval(
-        AcceptedClients::new(["capitainerie-web", "capitainerie-agent"]),
+        AcceptedClients::new(["matos-web", "matos-agent"]),
         Duration::ZERO,
     )
 }
@@ -124,7 +124,7 @@ async fn valid_token_yields_identity() {
     let identity = verifier().verify(&token, &server.issuer).await.unwrap();
     assert_eq!(identity.subject, "7b0f0c1e-0000-4000-8000-000000000001");
     assert_eq!(identity.issuer, server.issuer);
-    assert_eq!(identity.client_id, "capitainerie-web");
+    assert_eq!(identity.client_id, "matos-web");
     assert_eq!(identity.username.as_deref(), Some("jdoe"));
     assert_eq!(identity.email.as_deref(), Some("jdoe@example.com"));
     assert_eq!(identity.display_name.as_deref(), Some("Jane Doe"));
@@ -220,7 +220,7 @@ async fn rotated_key_triggers_refetch() {
 async fn unknown_kid_is_not_found_and_refetch_is_throttled() {
     let server = start().await;
     let verifier = FerrisKeyVerifier::with_refresh_interval(
-        AcceptedClients::new(["capitainerie-web"]),
+        AcceptedClients::new(["matos-web"]),
         Duration::from_secs(3600),
     );
     let known = sign(&claims(&server.issuer), KEY_A_PEM, "kid-a");
@@ -236,7 +236,7 @@ async fn unknown_kid_is_not_found_and_refetch_is_throttled() {
 #[tokio::test]
 async fn jwks_is_fetched_once_for_two_verifications() {
     let server = start().await;
-    let verifier = FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-web"]));
+    let verifier = FerrisKeyVerifier::new(AcceptedClients::new(["matos-web"]));
     let token = sign(&claims(&server.issuer), KEY_A_PEM, "kid-a");
     verifier.verify(&token, &server.issuer).await.unwrap();
     verifier.verify(&token, &server.issuer).await.unwrap();
@@ -250,14 +250,14 @@ async fn delegated_token_with_accepted_actor_is_accepted() {
     c["azp"] = json!("some-other-client");
     c["act"] = json!({
         "sub": "agent-sub",
-        "client_id": "capitainerie-agent",
+        "client_id": "matos-agent",
         "act": {"sub": "inner", "client_id": "deep"},
     });
     let token = sign(&c, KEY_A_PEM, "kid-a");
     let identity = verifier().verify(&token, &server.issuer).await.unwrap();
     let actor = identity.actor.unwrap();
     assert_eq!(actor.sub, "agent-sub");
-    assert_eq!(actor.client_id.as_deref(), Some("capitainerie-agent"));
+    assert_eq!(actor.client_id.as_deref(), Some("matos-agent"));
     assert_eq!(actor.act.unwrap().sub, "inner");
 }
 
@@ -285,7 +285,7 @@ async fn unreachable_issuer_is_discovery_error() {
 #[tokio::test]
 async fn a_required_audience_must_be_present() {
     let server = start().await;
-    let accepted = || AcceptedClients::new(["capitainerie-web"]);
+    let accepted = || AcceptedClients::new(["matos-web"]);
     let mut addressed = claims(&server.issuer);
     addressed["aud"] = json!(["http://api.test"]);
     let addressed = sign(&addressed, KEY_A_PEM, "kid-a");

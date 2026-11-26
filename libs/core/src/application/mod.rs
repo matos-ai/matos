@@ -32,7 +32,7 @@ mod worksite;
 
 use std::sync::Arc;
 
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use sqlx::PgPool;
 
 use crate::infrastructure::{
@@ -58,13 +58,13 @@ pub use provider::{ModelListing, ProviderFailure};
 pub use run::{AgentDelegation, RunTimeline, SubmittedTranscript};
 pub use transcription::PreparedTranscription;
 
-pub type CapitainerieAuthorizer = AuditedAuthorizer<LocalPolicyEngine>;
+pub type MatosAuthorizer = AuditedAuthorizer<LocalPolicyEngine>;
 
 /// Long-lived and cloned into every request: never hold request-scoped state here.
 #[derive(Clone)]
-pub struct CapitainerieUseCase {
+pub struct MatosUseCase {
     pub(crate) pool: PgPool,
-    pub(crate) authz: CapitainerieAuthorizer,
+    pub(crate) authz: MatosAuthorizer,
     /// Seals the delegated tokens kept between submission and execution.
     /// `None` without `DELEGATION_KEY`: submissions that need a delegation
     /// are then refused rather than stored in clear.
@@ -75,8 +75,8 @@ pub struct CapitainerieUseCase {
     pub(crate) secrets: Option<Arc<SecretCipher>>,
 }
 
-impl CapitainerieUseCase {
-    pub fn new(pool: PgPool, authz: CapitainerieAuthorizer) -> Self {
+impl MatosUseCase {
+    pub fn new(pool: PgPool, authz: MatosAuthorizer) -> Self {
         Self {
             pool,
             authz,

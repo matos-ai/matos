@@ -1,7 +1,5 @@
-use capitainerie_core::domain::execution::{
-    GithubAppSummary, GithubInstallation, RepositoryListing,
-};
 use chrono::{DateTime, Utc};
+use matos_core::domain::execution::{GithubAppSummary, GithubInstallation, RepositoryListing};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

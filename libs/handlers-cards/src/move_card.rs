@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CardId;
-use capitainerie_core::domain::card::service::MoveCard;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::CardId;
+use matos_core::domain::card::service::MoveCard;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -30,10 +30,10 @@ pub struct MoveCardRequest {
     request_body = MoveCardRequest,
     responses(
         (status = 200, description = "The moved card", body = CardResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the move", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such card in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "The card changed since it was read", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the move", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "The card changed since it was read", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

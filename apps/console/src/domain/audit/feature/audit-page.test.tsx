@@ -270,7 +270,7 @@ describe('AuditPage', () => {
 		await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
 		expect(
 			await screen.findByText(
-				'Seuls les administrateurs de la Capitainerie peuvent modifier les budgets.',
+				'Seuls les administrateurs de Matos peuvent modifier les budgets.',
 			),
 		).toBeTruthy()
 	})

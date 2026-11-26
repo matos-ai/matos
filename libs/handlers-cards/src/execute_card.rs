@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{CardId, CoreError, RunId};
-use capitainerie_core::domain::execution::ports::CodeHost;
-use capitainerie_github::GithubApps;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::{CardId, CoreError, RunId};
+use matos_core::domain::execution::ports::CodeHost;
+use matos_github::GithubApps;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -43,11 +43,11 @@ pub struct ExecuteCardResponse {
     request_body = ExecuteCardRequest,
     responses(
         (status = 202, description = "The card is In progress and an Execute run is queued", body = ExecuteCardResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused, or repository_not_allowed: the installation does not reach that repository", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such card in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "card_not_executable, execution_already_active, github_not_connected, or the card changed since it was read", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Not an owner/name repository", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused, or repository_not_allowed: the installation does not reach that repository", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "card_not_executable, execution_already_active, github_not_connected, or the card changed since it was read", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Not an owner/name repository", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

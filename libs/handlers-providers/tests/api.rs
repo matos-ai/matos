@@ -1,10 +1,10 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::Identity;
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use matos_auth::Identity;
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         provider::{
@@ -14,7 +14,7 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_handlers::Caller;
+use matos_handlers::Caller;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -89,7 +89,7 @@ fn caller(organization: &Organization, roles: &[&str]) -> Caller {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -102,10 +102,10 @@ fn caller(organization: &Organization, roles: &[&str]) -> Caller {
 }
 
 async fn serve(pool: &PgPool, caller: Caller) -> String {
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
-    let app: Router = capitainerie_handlers_providers::router::<(), _>(usecase, FakeCatalog)
-        .layer(Extension(caller));
+    let app: Router =
+        matos_handlers_providers::router::<(), _>(usecase, FakeCatalog).layer(Extension(caller));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await });
@@ -147,7 +147,7 @@ async fn a_non_admin_cannot_put_a_provider_and_the_denial_is_audited() {
 async fn an_admin_stores_a_key_and_no_response_ever_shows_it() {
     let Some(pool) = pool().await else { return };
     let organization = organization(&pool).await;
-    let admin = serve(&pool, caller(&organization, &["capitainerie-admin"])).await;
+    let admin = serve(&pool, caller(&organization, &["matos-admin"])).await;
     let member = serve(&pool, caller(&organization, &[])).await;
     let client = reqwest::Client::new();
 
@@ -182,7 +182,7 @@ async fn an_admin_stores_a_key_and_no_response_ever_shows_it() {
 async fn models_assignments_and_test_follow_the_providers() {
     let Some(pool) = pool().await else { return };
     let organization = organization(&pool).await;
-    let admin = serve(&pool, caller(&organization, &["capitainerie-admin"])).await;
+    let admin = serve(&pool, caller(&organization, &["matos-admin"])).await;
     let member = serve(&pool, caller(&organization, &[])).await;
     let client = reqwest::Client::new();
     client
@@ -283,7 +283,7 @@ async fn models_assignments_and_test_follow_the_providers() {
 async fn an_anthropic_transcriber_is_a_422() {
     let Some(pool) = pool().await else { return };
     let organization = organization(&pool).await;
-    let admin = serve(&pool, caller(&organization, &["capitainerie-admin"])).await;
+    let admin = serve(&pool, caller(&organization, &["matos-admin"])).await;
     let client = reqwest::Client::new();
     client
         .put(format!("{admin}/api/v1/providers/anthropic"))
@@ -327,7 +327,7 @@ async fn an_anthropic_transcriber_is_a_422() {
 async fn a_reader_outside_mistral_is_a_422() {
     let Some(pool) = pool().await else { return };
     let organization = organization(&pool).await;
-    let admin = serve(&pool, caller(&organization, &["capitainerie-admin"])).await;
+    let admin = serve(&pool, caller(&organization, &["matos-admin"])).await;
     let client = reqwest::Client::new();
     client
         .put(format!("{admin}/api/v1/providers/anthropic"))

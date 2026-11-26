@@ -6,8 +6,10 @@ use axum::{
     response::sse::{Event, KeepAlive, Sse},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{ConversationId, CoreError};
-use capitainerie_core::domain::{
+use chrono::{DateTime, Utc};
+use futures_util::{Stream, stream};
+use matos_common::{ConversationId, CoreError};
+use matos_core::domain::{
     authorization::Subject,
     conversation::{
         CAPTAIN_AGENT, MessageStatus,
@@ -20,9 +22,7 @@ use capitainerie_core::domain::{
     delegation::{delegate_to_mcp, ports::TokenExchanger},
     execution::ports::CodeHost,
 };
-use capitainerie_handlers::{ApiError, Caller};
-use chrono::{DateTime, Utc};
-use futures_util::{Stream, stream};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -127,11 +127,11 @@ fn refusal(error: TurnError) -> ApiError {
             content_type = "text/event-stream",
             body = String
         ),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Agents may not use conversations", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such conversation for the caller", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "turn_in_progress, conversation_full, captain_not_configured or captain_unavailable", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Empty or oversized message, archived conversation, or nothing to answer", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Agents may not use conversations", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such conversation for the caller", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "turn_in_progress, conversation_full, captain_not_configured or captain_unavailable", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Empty or oversized message, archived conversation, or nothing to answer", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

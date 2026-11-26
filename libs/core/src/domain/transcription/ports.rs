@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 use super::{AudioClip, TranscriptionText};
 use crate::domain::provider::{ModelRef, ProviderAccess};

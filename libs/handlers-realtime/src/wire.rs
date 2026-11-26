@@ -1,5 +1,5 @@
-use capitainerie_events::EventEnvelope;
 use chrono::{DateTime, Utc};
+use matos_events::EventEnvelope;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -58,7 +58,7 @@ fn id_in(payload: &serde_json::Value, field: &str) -> Option<Uuid> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_events::Topic;
+    use matos_events::Topic;
     use serde_json::json;
 
     use super::*;

@@ -5,9 +5,10 @@ use std::{
     time::Duration,
 };
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase, ExecuteConfig, ExecutePipeline, Executor,
+use chrono::Utc;
+use matos_common::{CardId, CoreError, OrganizationId, RunId};
+use matos_core::{
+    ExecuteConfig, ExecutePipeline, Executor, MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -31,7 +32,6 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -72,12 +72,12 @@ fn app_of(organization_id: OrganizationId) -> GithubAppCredentials {
     GithubAppCredentials {
         organization_id,
         app_id: fresh_installation(),
-        slug: "capitainerie-test".into(),
+        slug: "matos-test".into(),
         client_id: "Iv1.test".into(),
         client_secret: SecretToken::new("oauth-secret"),
         private_key_pem: SecretToken::new("pem"),
         webhook_secret: SecretToken::new("hook"),
-        html_url: "https://github.com/apps/capitainerie-test".into(),
+        html_url: "https://github.com/apps/matos-test".into(),
         owner_login: "acme".into(),
         owner_type: "Organization".into(),
         created_by: "user-1".into(),
@@ -87,7 +87,7 @@ fn app_of(organization_id: OrganizationId) -> GithubAppCredentials {
 
 struct World {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization_id: OrganizationId,
     installation_id: i64,
     run_id: RunId,
@@ -115,7 +115,7 @@ async fn world() -> Option<World> {
     .await
     .unwrap();
     let organization_id = OrganizationId(id);
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
     let installation_id = fresh_installation();
@@ -213,8 +213,8 @@ fn lines_of(sample: &str) -> Vec<TaskLine> {
         .lines()
         .map(|line| {
             let value: serde_json::Value = serde_json::from_str(line).unwrap();
-            if value["type"] == "capitainerie" {
-                TaskLine::Capitainerie(serde_json::from_value(value).unwrap())
+            if value["type"] == "matos" {
+                TaskLine::Matos(serde_json::from_value(value).unwrap())
             } else {
                 TaskLine::Agent(value)
             }
@@ -577,11 +577,11 @@ async fn a_pushed_branch_opens_a_draft_pull_request_and_comments_the_card() {
     let posted = comments(&world.pool, world.card.id).await;
     assert_eq!(posted.len(), 1);
     assert_eq!(posted[0].0, "user-1");
-    assert_eq!(posted[0].1.as_deref(), Some("capitainerie-agent-executor"));
+    assert_eq!(posted[0].1.as_deref(), Some("matos-agent-executor"));
     assert!(posted[0].2.contains(PR_URL));
     assert!(posted[0].2.contains("I added CHANGELOG.md"));
     let audited: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM authorization_decisions WHERE run_id = $1 AND action = 'card.comment' AND actor = 'capitainerie-agent-executor' AND allowed",
+        "SELECT count(*) FROM authorization_decisions WHERE run_id = $1 AND action = 'card.comment' AND actor = 'matos-agent-executor' AND allowed",
     )
     .bind(world.run_id.0)
     .fetch_one(&world.pool)
@@ -630,12 +630,12 @@ fn lines_with_contribution(text: &str) -> Vec<TaskLine> {
     let mut lines = lines_of(SAMPLE);
     let pushed = lines.pop().unwrap();
     for chunk in STANDARD.encode(text).as_bytes().chunks(12) {
-        lines.push(TaskLine::Capitainerie(TaskMarker::ContributionChunk {
+        lines.push(TaskLine::Matos(TaskMarker::ContributionChunk {
             data: String::from_utf8(chunk.to_vec()).unwrap(),
         }));
     }
     let hash = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, text.as_bytes());
-    lines.push(TaskLine::Capitainerie(TaskMarker::ContributionEnd {
+    lines.push(TaskLine::Matos(TaskMarker::ContributionEnd {
         sha256: hash.as_ref().iter().map(|b| format!("{b:02x}")).collect(),
         bytes: text.len() as u64,
         truncated: false,
@@ -704,17 +704,14 @@ async fn the_run_writes_the_pull_request_and_the_member_who_started_it_authors_t
     let terms: Vec<&str> = spec.commit.leak_terms.lines().collect();
     for term in [
         "claude-sonnet-5-5",
-        "capitainerie",
+        "matos",
         "console.test",
         world.run_id.0.to_string().as_str(),
         world.card.id.0.to_string().as_str(),
     ] {
         assert!(terms.contains(&term), "{term}");
     }
-    assert!(
-        spec.prompt
-            .contains("/workspace/.capitainerie/contribution.md")
-    );
+    assert!(spec.prompt.contains("/workspace/.matos/contribution.md"));
     let pull_request = seen.pull_requests.lock().unwrap()[0].clone();
     assert_eq!(pull_request.title, "docs: add a changelog");
     assert_eq!(
@@ -749,7 +746,7 @@ async fn a_contribution_naming_the_model_is_replaced_and_the_card_says_why() {
     let spec = specs.lock().unwrap()[0].clone();
     assert_eq!(
         spec.commit.author,
-        CommitAuthor::app_bot("capitainerie-test"),
+        CommitAuthor::app_bot("matos-test"),
         "no member is known for the initiator"
     );
     let pull_request = seen.pull_requests.lock().unwrap()[0].clone();
@@ -770,7 +767,7 @@ async fn without_changes_no_pull_request_is_opened_and_the_card_says_so() {
     let seen = Seen::default();
     let mut lines = lines_of(SAMPLE);
     lines.pop();
-    lines.push(TaskLine::Capitainerie(TaskMarker::NoChanges));
+    lines.push(TaskLine::Matos(TaskMarker::NoChanges));
     let runner = runner_ending(&seen, lines, TaskOutcome::Succeeded);
     let pipeline = pipeline(&world, runner, MockCodeHost::new());
 
@@ -861,7 +858,7 @@ async fn a_transient_runner_error_is_retried_and_the_run_succeeds() {
     let Some(world) = world().await else { return };
     let mut lines = lines_of(SAMPLE);
     lines.pop();
-    lines.push(TaskLine::Capitainerie(TaskMarker::NoChanges));
+    lines.push(TaskLine::Matos(TaskMarker::NoChanges));
     let mut runner = MockTaskRunner::new();
     let calls = Arc::new(Mutex::new(0u32));
     runner.expect_start().times(2).returning(move |_| {
@@ -894,7 +891,7 @@ async fn a_transient_runner_error_is_retried_and_the_run_succeeds() {
 fn no_changes_lines() -> Vec<TaskLine> {
     let mut lines = lines_of(SAMPLE);
     lines.pop();
-    lines.push(TaskLine::Capitainerie(TaskMarker::NoChanges));
+    lines.push(TaskLine::Matos(TaskMarker::NoChanges));
     lines
 }
 
@@ -943,12 +940,12 @@ async fn crashed_attempt(world: &World, token: &str, output: Option<serde_json::
         .unwrap();
     if let Some(output) = output {
         let step = Step {
-            id: capitainerie_common::StepId::new(),
+            id: matos_common::StepId::new(),
             run_id: world.run_id,
             organization_id: world.organization_id,
             seq: 0,
             kind: StepKind::Execute,
-            agent: Some("capitainerie-agent-executor".into()),
+            agent: Some("matos-agent-executor".into()),
             status: StepStatus::Running,
             attempt: 1,
             output: Some(output),

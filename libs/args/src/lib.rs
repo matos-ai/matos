@@ -53,7 +53,7 @@ pub struct AuthArgs {
         long = "auth-accepted-clients",
         env = "AUTH_ACCEPTED_CLIENTS",
         value_delimiter = ',',
-        default_value = "capitainerie-console"
+        default_value = "matos-console"
     )]
     pub accepted_clients: Vec<String>,
 
@@ -75,7 +75,7 @@ pub struct DelegationArgs {
         long = "pipeline-agents",
         env = "PIPELINE_AGENTS",
         value_delimiter = ',',
-        default_value = "capitainerie-agent-writer"
+        default_value = "matos-agent-writer"
     )]
     pub agents: Vec<String>,
 }

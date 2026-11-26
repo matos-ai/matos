@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 use axum::{Extension, Router};
 use axum_extra::routing::RouterExt;
-use capitainerie_github::GithubApps;
-use capitainerie_handlers::AppState;
+use matos_github::GithubApps;
+use matos_handlers::AppState;
 
 use crate::execute_card::CodeHostHandle;
 

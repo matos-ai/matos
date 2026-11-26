@@ -1,7 +1,7 @@
 @id("registry-agent-calls-connectors")
 permit (
   principal,
-  action == Capitainerie::Action::"mcp.call",
+  action == Matos::Action::"mcp.call",
   resource
 )
 when {

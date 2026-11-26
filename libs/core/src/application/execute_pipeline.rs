@@ -5,15 +5,15 @@ use aws_lc_rs::{
     rand::{SecureRandom, SystemRandom},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId};
-use capitainerie_events::run::RunStarted;
-use capitainerie_macros::transactional;
 use chrono::{DateTime, Utc};
+use matos_common::{CardId, CoreError, OrganizationId, RunId};
+use matos_events::run::RunStarted;
+use matos_macros::transactional;
 use tokio::sync::{Mutex, mpsc};
 use tracing::Instrument;
 
 use super::{
-    CapitainerieUseCase,
+    MatosUseCase,
     agent_run::ExecutionAgentSource,
     agent_task_pipeline::agent_identity,
     execute_stream::{Digest, Redactor, StreamReader, truncate_chars},
@@ -51,7 +51,7 @@ use crate::{
     infrastructure::delegation::PgDelegationVault,
 };
 
-const TASK_TOKEN_SLOT: &str = "capitainerie-task-token";
+const TASK_TOKEN_SLOT: &str = "matos-task-token";
 const GRANT_GRACE: Duration = Duration::from_secs(5 * 60);
 const COMMENT_MAX_CHARS: usize = 5_000;
 const FIELD_MAX_CHARS: usize = 8_000;
@@ -95,7 +95,7 @@ pub struct ExecutionContext {
     pub resumed: bool,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(run, step, emitter)]
     pub async fn claim_execution(
         &self,
@@ -205,7 +205,7 @@ fn new_task_token() -> Result<String, CoreError> {
 }
 
 pub struct ExecutePipeline<T, H> {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     executor: Executor<T, H>,
     config: ExecuteConfig,
 }
@@ -379,11 +379,7 @@ pub(super) fn defang_mentions(text: &str) -> String {
 }
 
 impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
-    pub fn new(
-        usecase: CapitainerieUseCase,
-        executor: Executor<T, H>,
-        config: ExecuteConfig,
-    ) -> Self {
+    pub fn new(usecase: MatosUseCase, executor: Executor<T, H>, config: ExecuteConfig) -> Self {
         Self {
             usecase,
             executor,
@@ -391,7 +387,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         }
     }
 
-    pub fn usecase(&self) -> &CapitainerieUseCase {
+    pub fn usecase(&self) -> &MatosUseCase {
         &self.usecase
     }
 
@@ -409,13 +405,13 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             gen_ai.operation.name = "invoke_workflow",
         );
         if let Some(traceparent) = traceparent {
-            capitainerie_telemetry::adopt_traceparent(&span, traceparent);
+            matos_telemetry::adopt_traceparent(&span, traceparent);
         }
         self.execute_in_span(run_id).instrument(span).await
     }
 
     async fn execute_in_span(&self, run_id: RunId) -> Result<(), CoreError> {
-        let trace_id = capitainerie_telemetry::current_trace_id();
+        let trace_id = matos_telemetry::current_trace_id();
         let Some(context) = self
             .usecase
             .claim_execution(run_id, self.stale_before(), trace_id)
@@ -1570,7 +1566,7 @@ fn build_agent_prompt(
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use capitainerie_common::{CardId, OrganizationId};
+    use matos_common::{CardId, OrganizationId};
 
     use super::*;
     use crate::domain::{
@@ -1587,7 +1583,7 @@ mod tests {
             description: description.into(),
             column: Column::Todo,
             provenance: Some(Provenance {
-                transcript_id: capitainerie_common::TranscriptId::new(),
+                transcript_id: matos_common::TranscriptId::new(),
                 start: 0,
                 end: 10,
                 quote: "il faut un changelog".into(),
@@ -1888,17 +1884,17 @@ mod tests {
             })));
         }
         if let Some(report) = report {
-            reader.accept(&TaskLine::Capitainerie(TaskMarker::ReportChunk {
+            reader.accept(&TaskLine::Matos(TaskMarker::ReportChunk {
                 data: STANDARD.encode(report),
             }));
             let hash = digest::digest(&digest::SHA256, report.as_bytes());
-            reader.accept(&TaskLine::Capitainerie(TaskMarker::ReportEnd {
+            reader.accept(&TaskLine::Matos(TaskMarker::ReportEnd {
                 sha256: hash.as_ref().iter().map(|b| format!("{b:02x}")).collect(),
                 bytes: report.len() as u64,
                 truncated: false,
             }));
         }
-        reader.accept(&TaskLine::Capitainerie(TaskMarker::AuditDone));
+        reader.accept(&TaskLine::Matos(TaskMarker::AuditDone));
         reader
     }
 
@@ -1987,7 +1983,7 @@ mod tests {
     fn the_members_replies_follow_the_card_latest_kept() {
         use crate::domain::card::Author;
         let reply = |minute: u32, body: &str| CardComment {
-            id: capitainerie_common::CardCommentId::new(),
+            id: matos_common::CardCommentId::new(),
             card_id: CardId::new(),
             organization_id: OrganizationId::new(),
             author: Author {

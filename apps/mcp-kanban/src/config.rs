@@ -1,8 +1,8 @@
-use capitainerie_args::{DatabaseArgs, LogArgs, ObservabilityArgs};
 use clap::Parser;
+use matos_args::{DatabaseArgs, LogArgs, ObservabilityArgs};
 
 #[derive(Debug, Clone, Parser)]
-#[command(name = "capitainerie-mcp-kanban", version)]
+#[command(name = "matos-mcp-kanban", version)]
 pub struct Args {
     #[arg(long = "mcp-host", env = "MCP_HOST", default_value = "0.0.0.0")]
     pub host: String,
@@ -17,14 +17,14 @@ pub struct Args {
     #[arg(
         long = "mcp-audience",
         env = "MCP_AUDIENCE",
-        default_value = "capitainerie-mcp"
+        default_value = "matos-mcp"
     )]
     pub audience: String,
     #[arg(
         long = "mcp-accepted-agents",
         env = "MCP_ACCEPTED_AGENTS",
         value_delimiter = ',',
-        default_value = "capitainerie-agent-writer,capitainerie-agent-captain"
+        default_value = "matos-agent-writer,matos-agent-captain"
     )]
     pub accepted_agents: Vec<String>,
     #[command(flatten)]
@@ -49,10 +49,10 @@ mod tests {
         let args = Args::parse_from(["bin", "--database-url", "postgres://x"]);
         assert_eq!(args.port, 4101);
         assert_eq!(args.public_url, "http://localhost:4101");
-        assert_eq!(args.audience, "capitainerie-mcp");
+        assert_eq!(args.audience, "matos-mcp");
         assert_eq!(
             args.accepted_agents,
-            vec!["capitainerie-agent-writer", "capitainerie-agent-captain"]
+            vec!["matos-agent-writer", "matos-agent-captain"]
         );
     }
 

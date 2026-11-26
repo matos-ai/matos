@@ -1,6 +1,6 @@
 pub mod ports;
 
-use capitainerie_common::{CardId, OrganizationId};
+use matos_common::{CardId, OrganizationId};
 
 use super::{agent::LocatedAction, card::Column};
 

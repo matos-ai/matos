@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 use crate::domain::{
     agent_task::is_agent_actor,
@@ -129,7 +129,7 @@ fn deny(reason: &str) -> Decision {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{
@@ -160,7 +160,7 @@ mod tests {
         decide(&request(action, actor, true)) == Decision::Allow
     }
 
-    const AGENT: Option<&str> = Some("capitainerie-agent-writer");
+    const AGENT: Option<&str> = Some("matos-agent-writer");
 
     #[test]
     fn humans_do_anything_in_their_organization() {

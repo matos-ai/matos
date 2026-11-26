@@ -14,7 +14,7 @@ Depuis l'accueil, un membre écrit une mission (« Ajoute un README au dépôt t
 | C2 | Entrée | Le champ de l'accueil ; envoyer crée une conversation `/chat/<id>` | Page chat seule |
 | C3 | Validation | Une carte proposée par le Capitaine est `proposed` ; seul un clic humain dans le fil la valide (`todo`) ou la confie à Claude Code | Le Capitaine valide lui-même |
 | C4 | Connecteurs | Plus tard, comme de nouveaux outils dans la même liste | — |
-| C5 (à confirmer) | Où tourne un tour de conversation | **Dans l'API**, pendant la requête : le jeton de l'utilisateur est disponible, échangé (RFC 8693) contre un jeton du client `capitainerie-agent-captain` avec `act`, comme le worker pour le Rédacteur | Dans le worker, avec les deltas relayés par Iggy et le WebSocket |
+| C5 (à confirmer) | Où tourne un tour de conversation | **Dans l'API**, pendant la requête : le jeton de l'utilisateur est disponible, échangé (RFC 8693) contre un jeton du client `matos-agent-captain` avec `act`, comme le worker pour le Rédacteur | Dans le worker, avec les deltas relayés par Iggy et le WebSocket |
 | C6 (à confirmer) | Transport | **SSE** sur la réponse de `POST /api/v1/conversations/{id}/messages` | WebSocket temps réel existant |
 | C7 (à confirmer) | Modèle | Nouveau rôle **`captain`**, assignable à tout modèle `chat` qui sait appeler des outils ; par défaut le modèle du Rédacteur | Réutiliser le rôle `writer` |
 | C8 (à confirmer) | Outils | Par le **serveur MCP du Kanban** (mêmes contrôles que les autres agents), plus des outils de lecture servis par l'API | Appels directs au cœur |
@@ -32,7 +32,7 @@ Depuis l'accueil, un membre écrit une mission (« Ajoute un README au dépôt t
 
 1. Une conversation appartient à son auteur et à son organisation ; personne d'autre ne la lit. [test : 404]
 2. Le Capitaine ne valide ni ne rejette une carte, et ne confie rien à Claude Code : ces actions sont des boutons humains. [test PDP + test du jeu d'outils]
-3. Chaque appel d'outil passe par le PDP avec `actor = capitainerie-agent-captain` et est enregistré dans la conversation (nom, arguments résumés, succès, latence). [test]
+3. Chaque appel d'outil passe par le PDP avec `actor = matos-agent-captain` et est enregistré dans la conversation (nom, arguments résumés, succès, latence). [test]
 4. Le jeton de l'utilisateur n'est ni stocké ni envoyé au modèle ; seul le jeton échangé sert, le temps du tour. [test]
 5. Un tour interrompu (fermeture de l'onglet, erreur du fournisseur) laisse une conversation cohérente : le message du membre est gardé, la réponse partielle est marquée `interrupted`. [test]
 6. Les bornes C9 sont appliquées côté serveur. [test]

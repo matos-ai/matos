@@ -3,10 +3,11 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{Router, extract::State, routing::get};
-use capitainerie_auth::{AcceptedClients, FerrisKeyVerifier};
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use jsonwebtoken::{Algorithm, EncodingKey, Header};
+use matos_auth::{AcceptedClients, FerrisKeyVerifier};
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent_identity::AgentClientId, authorization::Subject, client::service::CreateClient,
         crew::service::CreateAgent, project::service::CreateProject,
@@ -14,8 +15,7 @@ use capitainerie_core::{
     },
     infrastructure::postgres,
 };
-use capitainerie_mcp_kanban::router;
-use jsonwebtoken::{Algorithm, EncodingKey, Header};
+use matos_mcp_kanban::router;
 use rmcp::{
     ServiceExt,
     model::{CallToolRequestParams, CallToolResult, ClientConfig},
@@ -30,9 +30,9 @@ use uuid::Uuid;
 
 const KEY_A_PEM: &str = include_str!("../../../libs/auth/tests/fixtures/test-only-key-a.pem");
 const KEY_A_JWK: &str = include_str!("../../../libs/auth/tests/fixtures/test-only-key-a.jwk.json");
-const AGENT: &str = "capitainerie-agent-writer";
-const CAPTAIN: &str = "capitainerie-agent-captain";
-const AUDIENCE: &str = "capitainerie-mcp";
+const AGENT: &str = "matos-agent-writer";
+const CAPTAIN: &str = "matos-agent-captain";
+const AUDIENCE: &str = "matos-mcp";
 
 fn database_url() -> Option<String> {
     match std::env::var("DATABASE_URL") {
@@ -62,7 +62,7 @@ async fn jwks(State(state): State<IdpState>) -> axum::Json<Value> {
 }
 
 struct Harness {
-    usecase: Option<CapitainerieUseCase>,
+    usecase: Option<MatosUseCase>,
     pool: PgPool,
     organization_id: Uuid,
     issuer: String,
@@ -120,7 +120,7 @@ async fn harness() -> Option<Harness> {
         AcceptedClients::new([AGENT, CAPTAIN]).with_agent_clients(),
         AUDIENCE,
     );
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     let app = router(usecase.clone(), verifier, base.clone());
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -271,7 +271,7 @@ async fn a_request_without_a_token_is_challenged() {
 #[tokio::test]
 async fn a_token_for_another_audience_is_refused() {
     let Some(h) = harness().await else { return };
-    let response = h.post_mcp(Some(&h.token("capitainerie-api", true))).await;
+    let response = h.post_mcp(Some(&h.token("matos-api", true))).await;
     assert_eq!(response.status(), 401);
     assert!(
         response.headers()["www-authenticate"]
@@ -376,7 +376,7 @@ async fn a_crew_agents_own_client_acts_as_that_agent_only_while_it_is_active() {
         .unwrap();
     assert_eq!(h.post_mcp(Some(&token)).await.status(), 401, "archived");
 
-    let stranger = AgentClientId::of(capitainerie_common::AgentId(Uuid::now_v7()));
+    let stranger = AgentClientId::of(matos_common::AgentId(Uuid::now_v7()));
     let token = h.token_of(stranger.as_str(), AUDIENCE, true);
     assert_eq!(h.post_mcp(Some(&token)).await.status(), 401, "unknown");
 }

@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 use super::{Member, ports::MemberRepository};
 use crate::domain::{
@@ -72,8 +72,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
     use chrono::Utc;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{

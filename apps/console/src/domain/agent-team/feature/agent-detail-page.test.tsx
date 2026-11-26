@@ -108,9 +108,7 @@ describe('agent detail page', () => {
 		const section = (await screen.findByText('Identité FerrisKey')).closest(
 			'section',
 		) as HTMLElement
-		expect(
-			await within(section).findByText('capitainerie-agent-a-dev'),
-		).toBeTruthy()
+		expect(await within(section).findByText('matos-agent-a-dev')).toBeTruthy()
 		expect(within(section).getByText('active')).toBeTruthy()
 		expect(
 			within(section).getByText("L'agent agit avec son propre client."),

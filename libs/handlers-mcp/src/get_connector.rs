@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::McpConnectorId;
-use capitainerie_core::domain::mcp::ports::{McpGateway, McpOAuth};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_common::McpConnectorId;
+use matos_core::domain::mcp::ports::{McpGateway, McpOAuth};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 
 use crate::{response::McpConnectorResponse, state::McpState};
@@ -21,9 +21,9 @@ pub struct McpConnectorPath {
     params(("connector_id" = McpConnectorId, Path, description = "Connector identifier")),
     responses(
         (status = 200, description = "The connector with the caller's connection state", body = McpConnectorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to connectors", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such connector in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to connectors", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such connector in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -17,8 +17,8 @@ pub mod state;
 
 use axum::Router;
 use axum_extra::routing::RouterExt;
-use capitainerie_core::CapitainerieUseCase;
-use capitainerie_integrations::HttpConnector;
+use matos_core::MatosUseCase;
+use matos_integrations::HttpConnector;
 
 pub use actions::{
     dto::{
@@ -43,7 +43,7 @@ pub use state::{GithubIntegration, IntegrationsState};
 pub const TAG: &str = "integrations";
 
 pub fn router<S>(
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     github: GithubIntegration,
     connector: HttpConnector,
 ) -> Router<S>

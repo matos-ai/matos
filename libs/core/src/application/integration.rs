@@ -1,7 +1,7 @@
-use capitainerie_common::{ClientId, CoreError, IntegrationInstanceId};
-use capitainerie_macros::transactional;
+use matos_common::{ClientId, CoreError, IntegrationInstanceId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::Subject,
@@ -26,7 +26,7 @@ fn settled<T>(outcome: Result<T, InstanceError>) -> Stored<T> {
     }
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(client, authz)]
     pub async fn list_integration_instances(
         &self,

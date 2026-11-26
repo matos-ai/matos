@@ -1,7 +1,7 @@
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_macros::transactional;
+use matos_common::{CoreError, OrganizationId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::{Action, Subject},
@@ -27,7 +27,7 @@ pub struct ProviderFailure {
     pub message: String,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(model_assignment, authz)]
     pub async fn list_providers(
         &self,

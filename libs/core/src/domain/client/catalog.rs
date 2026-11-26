@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, OrganizationId};
 use uuid::Uuid;
 
 use super::{Client, links::Links, ports::ClientRepository};
@@ -183,8 +183,8 @@ pub async fn load<C: ClientRepository, P: ProjectRepository>(
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{ClientId, ProjectId};
     use chrono::Duration;
+    use matos_common::{ClientId, ProjectId};
 
     use super::*;
     use crate::domain::client::links::tests::{client, project};

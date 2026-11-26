@@ -1,10 +1,10 @@
-use capitainerie_common::{CardId, IntegrationActionId, IntegrationInstanceId, RunId};
-use capitainerie_core::domain::integration::{
+use chrono::{DateTime, Utc};
+use matos_common::{CardId, IntegrationActionId, IntegrationInstanceId, RunId};
+use matos_core::domain::integration::{
     IntegrationInstance,
     action::Access,
     journal::{IntegrationAction, Outcome},
 };
-use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;

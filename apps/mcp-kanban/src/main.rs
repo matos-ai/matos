@@ -1,9 +1,9 @@
 use anyhow::Context;
 use axum::http::Request;
-use capitainerie_auth::{AcceptedClients, FerrisKeyVerifier};
-use capitainerie_core::{CapitainerieUseCase, infrastructure::postgres};
-use capitainerie_mcp_kanban::{config::Args, router};
 use clap::Parser;
+use matos_auth::{AcceptedClients, FerrisKeyVerifier};
+use matos_core::{MatosUseCase, infrastructure::postgres};
+use matos_mcp_kanban::{config::Args, router};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
@@ -12,13 +12,12 @@ use tracing::Level;
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let args = Args::parse();
-    let _telemetry =
-        capitainerie_telemetry::init("capitainerie-mcp-kanban", &args.log, &args.observability)?;
+    let _telemetry = matos_telemetry::init("matos-mcp-kanban", &args.log, &args.observability)?;
 
     let pool = postgres::connect(&args.database.url, args.database.max_connections)
         .await
         .context("connecting to postgres")?;
-    let usecase = CapitainerieUseCase::with_local_policies(pool);
+    let usecase = MatosUseCase::with_local_policies(pool);
     let verifier = FerrisKeyVerifier::with_audience(
         AcceptedClients::new(args.accepted_agents).with_agent_clients(),
         args.audience,
@@ -38,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
                     .get("traceparent")
                     .and_then(|value| value.to_str().ok())
                 {
-                    capitainerie_telemetry::adopt_traceparent(&span, traceparent);
+                    matos_telemetry::adopt_traceparent(&span, traceparent);
                 }
                 span
             })
@@ -51,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("binding {addr}"))?;
     tracing::info!(%addr, "mcp-kanban listening");
     axum::serve(listener, app)
-        .with_graceful_shutdown(capitainerie_telemetry::shutdown_signal())
+        .with_graceful_shutdown(matos_telemetry::shutdown_signal())
         .await?;
     Ok(())
 }

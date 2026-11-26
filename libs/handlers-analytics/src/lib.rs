@@ -4,8 +4,8 @@ pub mod state;
 
 use axum::Router;
 use axum_extra::routing::RouterExt;
-use capitainerie_analytics::Analytics;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_analytics::Analytics;
+use matos_handlers::{ApiError, Caller};
 
 use crate::state::AnalyticsState;
 
@@ -31,7 +31,7 @@ pub(crate) fn human_only(caller: &Caller) -> Result<(), ApiError> {
     }
 }
 
-pub(crate) fn internal(error: capitainerie_analytics::AnalyticsError) -> ApiError {
+pub(crate) fn internal(error: matos_analytics::AnalyticsError) -> ApiError {
     ApiError::Internal(error.to_string())
 }
 
@@ -41,13 +41,13 @@ mod tests {
         Extension, Json,
         extract::{Query, State},
     };
-    use capitainerie_analytics::{
+    use chrono::{DateTime, Duration, Utc};
+    use matos_analytics::{
         AgentRow, AgentsQuery, Analytics, AnalyticsError, CostDimension, CostQuery, CostRow,
     };
-    use capitainerie_auth::{Actor, Identity};
-    use capitainerie_common::OrganizationId;
-    use capitainerie_core::{Organization, OrganizationSlug, domain::agent::SecretToken};
-    use chrono::{DateTime, Duration, Utc};
+    use matos_auth::{Actor, Identity};
+    use matos_common::OrganizationId;
+    use matos_core::{Organization, OrganizationSlug, domain::agent::SecretToken};
 
     use super::*;
     use crate::{
@@ -103,7 +103,7 @@ mod tests {
             identity: Identity {
                 subject: "user-1".into(),
                 issuer: "http://issuer".into(),
-                client_id: "capitainerie-console".into(),
+                client_id: "matos-console".into(),
                 username: None,
                 email: None,
                 display_name: None,

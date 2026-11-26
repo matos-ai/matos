@@ -103,40 +103,40 @@ datafusion = { version = "54.1", default-features = false, features = ["parquet"
 lancedb = { version = "0.40.0", default-features = false }
 parquet = { version = "58.4", default-features = false, features = ["arrow", "async", "zstd"] }
 
-capitainerie-analytics = { path = "libs/analytics" }
-capitainerie-args = { path = "libs/args" }
-capitainerie-auth = { path = "libs/auth" }
-capitainerie-bus-iggy = { path = "libs/bus-iggy" }
-capitainerie-common = { path = "libs/common" }
-capitainerie-events = { path = "libs/events" }
-capitainerie-github = { path = "libs/github" }
-capitainerie-core = { path = "libs/core" }
-capitainerie-handlers = { path = "libs/handlers" }
-capitainerie-handlers-analytics = { path = "libs/handlers-analytics" }
-capitainerie-handlers-approvals = { path = "libs/handlers-approvals" }
-capitainerie-handlers-artifacts = { path = "libs/handlers-artifacts" }
-capitainerie-handlers-audit = { path = "libs/handlers-audit" }
-capitainerie-handlers-cards = { path = "libs/handlers-cards" }
-capitainerie-handlers-clients = { path = "libs/handlers-clients" }
-capitainerie-handlers-conversations = { path = "libs/handlers-conversations" }
-capitainerie-handlers-identity = { path = "libs/handlers-identity" }
-capitainerie-handlers-inbox = { path = "libs/handlers-inbox" }
-capitainerie-handlers-integrations = { path = "libs/handlers-integrations" }
-capitainerie-handlers-mcp = { path = "libs/handlers-mcp" }
-capitainerie-handlers-providers = { path = "libs/handlers-providers" }
-capitainerie-handlers-realtime = { path = "libs/handlers-realtime" }
-capitainerie-handlers-runs ={ path = "libs/handlers-runs" }
-capitainerie-handlers-skills = { path = "libs/handlers-skills" }
-capitainerie-handlers-routines = { path = "libs/handlers-routines" }
-capitainerie-handlers-sources = { path = "libs/handlers-sources" }
-capitainerie-handlers-team = { path = "libs/handlers-team" }
-capitainerie-handlers-transcriptions = { path = "libs/handlers-transcriptions" }
-capitainerie-integrations = { path = "libs/integrations" }
-capitainerie-macros = { path = "libs/macros" }
-capitainerie-runner-kube = { path = "libs/runner-kube" }
-capitainerie-runtime-rig = { path = "libs/runtime-rig" }
-capitainerie-telemetry = { path = "libs/telemetry" }
-capitainerie-vector-lancedb = { path = "libs/vector-lancedb" }
+matos-analytics = { path = "libs/analytics" }
+matos-args = { path = "libs/args" }
+matos-auth = { path = "libs/auth" }
+matos-bus-iggy = { path = "libs/bus-iggy" }
+matos-common = { path = "libs/common" }
+matos-events = { path = "libs/events" }
+matos-github = { path = "libs/github" }
+matos-core = { path = "libs/core" }
+matos-handlers = { path = "libs/handlers" }
+matos-handlers-analytics = { path = "libs/handlers-analytics" }
+matos-handlers-approvals = { path = "libs/handlers-approvals" }
+matos-handlers-artifacts = { path = "libs/handlers-artifacts" }
+matos-handlers-audit = { path = "libs/handlers-audit" }
+matos-handlers-cards = { path = "libs/handlers-cards" }
+matos-handlers-clients = { path = "libs/handlers-clients" }
+matos-handlers-conversations = { path = "libs/handlers-conversations" }
+matos-handlers-identity = { path = "libs/handlers-identity" }
+matos-handlers-inbox = { path = "libs/handlers-inbox" }
+matos-handlers-integrations = { path = "libs/handlers-integrations" }
+matos-handlers-mcp = { path = "libs/handlers-mcp" }
+matos-handlers-providers = { path = "libs/handlers-providers" }
+matos-handlers-realtime = { path = "libs/handlers-realtime" }
+matos-handlers-runs ={ path = "libs/handlers-runs" }
+matos-handlers-skills = { path = "libs/handlers-skills" }
+matos-handlers-routines = { path = "libs/handlers-routines" }
+matos-handlers-sources = { path = "libs/handlers-sources" }
+matos-handlers-team = { path = "libs/handlers-team" }
+matos-handlers-transcriptions = { path = "libs/handlers-transcriptions" }
+matos-integrations = { path = "libs/integrations" }
+matos-macros = { path = "libs/macros" }
+matos-runner-kube = { path = "libs/runner-kube" }
+matos-runtime-rig = { path = "libs/runtime-rig" }
+matos-telemetry = { path = "libs/telemetry" }
+matos-vector-lancedb = { path = "libs/vector-lancedb" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

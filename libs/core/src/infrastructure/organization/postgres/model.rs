@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, OrganizationId};
 use uuid::Uuid;
 
 use crate::{Organization, OrganizationSlug};

@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-handlers-clients"
+name = "matos-handlers-clients"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,17 +8,17 @@ license.workspace = true
 [dependencies]
 axum.workspace = true
 axum-extra.workspace = true
-capitainerie-common.workspace = true
-capitainerie-core.workspace = true
-capitainerie-handlers.workspace = true
-capitainerie-handlers-cards.workspace = true
-capitainerie-handlers-runs.workspace = true
+matos-common.workspace = true
+matos-core.workspace = true
+matos-handlers.workspace = true
+matos-handlers-cards.workspace = true
+matos-handlers-runs.workspace = true
 chrono.workspace = true
 serde.workspace = true
 utoipa.workspace = true
 
 [dev-dependencies]
-capitainerie-auth.workspace = true
+matos-auth.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true

@@ -35,7 +35,7 @@ import { resolveTheme, systemPrefersDark } from '#/lib/theme'
 
 export const Route = createFileRoute('/_app')({ component: AppLayout })
 
-const RAIL_STORAGE_KEY = 'capitainerie.rail-expanded'
+const RAIL_STORAGE_KEY = 'matos.rail-expanded'
 
 function entityIdOf(
 	pathname: string,

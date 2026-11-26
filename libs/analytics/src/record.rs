@@ -4,11 +4,11 @@ use arrow_array::{
     ArrayRef, Int32Array, Int64Array, RecordBatch, StringArray, TimestampMicrosecondArray,
     UInt64Array,
 };
-use capitainerie_events::{
+use chrono::{DateTime, NaiveDate, Utc};
+use matos_events::{
     EventEnvelope,
     run::{RunFinished, RunQueued, RunStarted, StepFinished},
 };
-use chrono::{DateTime, NaiveDate, Utc};
 use uuid::Uuid;
 
 use crate::{AnalyticsError, schema};

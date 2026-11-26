@@ -11,28 +11,28 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
-use capitainerie_auth::Identity;
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::{Duration, Utc};
+use matos_auth::Identity;
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::agent::SecretToken,
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use capitainerie_handlers::Caller;
-use capitainerie_handlers_integrations::{
+use matos_github::{GithubApps, GithubBases};
+use matos_handlers::Caller;
+use matos_handlers_integrations::{
     GithubIntegration,
     signer::{StatePurpose, StateSigner},
 };
-use capitainerie_integrations::{HttpConnector, NetworkPolicy};
-use chrono::{Duration, Utc};
+use matos_integrations::{HttpConnector, NetworkPolicy};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
 const PEM: &str = include_str!("../../github/tests/fixtures/test-only-app-key.pem");
-const ADMIN: &str = "capitainerie-admin";
+const ADMIN: &str = "matos-admin";
 
 fn database_url() -> Option<String> {
     match std::env::var("DATABASE_URL") {
@@ -79,7 +79,7 @@ fn caller(organization: &Organization, subject: &str, roles: &[&str]) -> Caller 
         identity: Identity {
             subject: subject.into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -126,12 +126,12 @@ async fn fake_github(conversions: Arc<AtomicUsize>) -> String {
                     StatusCode::CREATED,
                     Json(json!({
                         "id": id,
-                        "slug": "capitainerie-test",
+                        "slug": "matos-test",
                         "client_id": "Iv1.test",
                         "client_secret": "oauth-secret",
                         "pem": PEM,
                         "webhook_secret": "hook-secret",
-                        "html_url": "https://github.com/apps/capitainerie-test",
+                        "html_url": "https://github.com/apps/matos-test",
                         "owner": {"login": "acme", "type": "Organization"},
                     })),
                 )
@@ -223,13 +223,13 @@ async fn backend() -> Backend {
     }
 }
 
-fn usecase_of(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase_of(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[5u8; 32]).unwrap())
 }
 
 fn integration(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     backend: &Backend,
     signer: Option<StateSigner>,
     console_url: Option<&str>,
@@ -263,7 +263,7 @@ async fn serve_with(
     let usecase = usecase_of(pool);
     let github = integration(&usecase, backend, signer, console_url);
     let connector = HttpConnector::new(NetworkPolicy::default()).unwrap();
-    let app: Router = capitainerie_handlers_integrations::router::<()>(usecase, github, connector)
+    let app: Router = matos_handlers_integrations::router::<()>(usecase, github, connector)
         .layer(Extension(caller));
     spawn(app).await
 }
@@ -337,9 +337,7 @@ async fn install_state(client: &reqwest::Client, admin: &str, base: &str) -> Str
         .unwrap();
     let url = body["url"].as_str().unwrap();
     assert!(
-        url.starts_with(&format!(
-            "{base}/apps/capitainerie-test/installations/new?state="
-        )),
+        url.starts_with(&format!("{base}/apps/matos-test/installations/new?state=")),
         "{url}"
     );
     url.split("state=").nth(1).unwrap().to_owned()
@@ -494,14 +492,11 @@ async fn the_admin_creates_the_app_installs_it_and_a_member_reads_the_result() {
     assert_eq!(no_install.status(), 409);
     assert_eq!(json_of(no_install).await["message"], "github_app_missing");
     assert_eq!(created_status, 201);
-    assert_eq!(created["slug"], "capitainerie-test");
+    assert_eq!(created["slug"], "matos-test");
     assert_eq!(created["owner_login"], "acme");
     assert_eq!(created["owner_type"], "Organization");
     assert_eq!(created["created_by"], "user-1");
-    assert_eq!(
-        created["html_url"],
-        "https://github.com/apps/capitainerie-test"
-    );
+    assert_eq!(created["html_url"], "https://github.com/apps/matos-test");
     for secret in [
         "client_secret",
         "pem",
@@ -511,11 +506,11 @@ async fn the_admin_creates_the_app_installs_it_and_a_member_reads_the_result() {
     ] {
         assert!(created.get(secret).is_none(), "{secret}");
     }
-    assert_eq!(with_app["app"]["slug"], "capitainerie-test");
+    assert_eq!(with_app["app"]["slug"], "matos-test");
     assert!(with_app["installation"].is_null());
     assert_eq!(connected_status, 200);
     for body in [&connected, &installed] {
-        assert_eq!(body["app"]["slug"], "capitainerie-test");
+        assert_eq!(body["app"]["slug"], "matos-test");
         assert_eq!(body["installation"]["account_login"], "acme");
         assert_eq!(body["installation"]["installation_id"], installation_id);
         assert_eq!(body["installation"]["connected_by"], "user-1");
@@ -535,7 +530,7 @@ async fn the_admin_creates_the_app_installs_it_and_a_member_reads_the_result() {
             .unwrap()
             .ends_with("/acme/api")
     );
-    assert_eq!(disconnected["app"]["slug"], "capitainerie-test");
+    assert_eq!(disconnected["app"]["slug"], "matos-test");
     assert!(disconnected["installation"].is_null());
 }
 
@@ -634,10 +629,7 @@ async fn deleting_the_app_removes_the_installation_and_points_to_github() {
         .unwrap();
 
     assert_eq!(status, 200);
-    assert_eq!(
-        deleted["html_url"],
-        "https://github.com/apps/capitainerie-test"
-    );
+    assert_eq!(deleted["html_url"], "https://github.com/apps/matos-test");
     assert_eq!(after, json!({"app": null, "installation": null}));
     assert_eq!(count(&pool, "github_apps", &organization).await, 0);
     assert_eq!(count(&pool, "github_installations", &organization).await, 0);
@@ -802,7 +794,7 @@ async fn the_manifest_targets_the_owner_and_the_console() {
     );
     let manifest: Value = serde_json::from_str(user["manifest"].as_str().unwrap()).unwrap();
     let name = manifest["name"].as_str().unwrap();
-    assert!(name.starts_with("Capitainerie Test "), "{name}");
+    assert!(name.starts_with("Matos Test "), "{name}");
     assert!(name.chars().count() <= 34);
     assert_eq!(manifest["url"], CONSOLE);
     assert_eq!(

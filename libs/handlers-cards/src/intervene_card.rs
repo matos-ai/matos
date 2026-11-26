@@ -5,12 +5,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{CardId, CoreError, IntegrationInstanceId, RunId};
-use capitainerie_core::domain::integration::{
+use matos_common::{CardId, CoreError, IntegrationInstanceId, RunId};
+use matos_core::domain::integration::{
     action::Access,
     intervention::{ConfideCard, ConfideRefusal, InterventionError},
 };
-use capitainerie_handlers::{ApiError, AppState, Caller, errors::ApiErrorResponse};
+use matos_handlers::{ApiError, AppState, Caller, errors::ApiErrorResponse};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -114,11 +114,11 @@ impl IntoResponse for InterveneError {
     request_body = InterveneCardRequest,
     responses(
         (status = 202, description = "The card is In progress and an intervention run is queued", body = InterveneCardResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused: an agent cannot hand a card over", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such card in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "card_not_executable, execution_already_active, or the card changed since it was read", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "card_without_client, no_instance_granted, instance_of_another_client, instance_archived, production_write_not_confirmed, instructions_too_long, or more than 100 grants", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused: an agent cannot hand a card over", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "card_not_executable, execution_already_active, or the card changed since it was read", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "card_without_client, no_instance_granted, instance_of_another_client, instance_archived, production_write_not_confirmed, instructions_too_long, or more than 100 grants", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

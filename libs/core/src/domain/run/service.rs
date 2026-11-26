@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, RunId, TranscriptId};
 use chrono::Utc;
+use matos_common::{CoreError, RunId, TranscriptId};
 
 use super::{Run, RunFilter, RunOverview, ports::RunRepository};
 use crate::domain::{
@@ -158,8 +158,8 @@ where
 mod tests {
     use std::sync::Mutex;
 
-    use capitainerie_common::OrganizationId;
-    use capitainerie_events::{DomainEvent, run::RunQueued};
+    use matos_common::OrganizationId;
+    use matos_events::{DomainEvent, run::RunQueued};
 
     use super::*;
     use crate::domain::{

@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::RunId;
-use capitainerie_handlers::Caller;
+use matos_common::RunId;
+use matos_handlers::Caller;
 use serde::Deserialize;
 
 use super::{describe, dto::IntegrationActionListResponse};
@@ -21,9 +21,9 @@ pub struct RunIntegrationActionsPath {
     params(("run_id" = RunId, Path, description = "Run identifier")),
     responses(
         (status = 200, description = "Every action of the intervention, oldest first, with the instance each one targeted; the sealed copy kept before a write is never part of it", body = IntegrationActionListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no integration access", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such run in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no integration access", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such run in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

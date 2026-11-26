@@ -1,8 +1,8 @@
-use capitainerie_common::{ClientId, IntegrationInstanceId};
-use capitainerie_core::domain::integration::{
+use chrono::{DateTime, Utc};
+use matos_common::{ClientId, IntegrationInstanceId};
+use matos_core::domain::integration::{
     ConnectorFailure, Environment, IntegrationInstance, IntegrationKind, ProbeReport,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

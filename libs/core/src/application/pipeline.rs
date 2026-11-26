@@ -1,13 +1,13 @@
 use std::time::{Duration, Instant};
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId, StepId};
-use capitainerie_events::run::{RunFinished, RunStarted, StepFinished};
-use capitainerie_macros::transactional;
 use chrono::{DateTime, Utc};
+use matos_common::{CardId, CoreError, OrganizationId, RunId, StepId};
+use matos_events::run::{RunFinished, RunStarted, StepFinished};
+use matos_macros::transactional;
 use serde_json::json;
 use tracing::Instrument;
 
-use super::{CapitainerieUseCase, RunCardLinks};
+use super::{MatosUseCase, RunCardLinks};
 use crate::{
     domain::{
         agent::{DuplicateAction, LocatedAction, SecretToken, WriteRequest, ports::AgentRuntime},
@@ -60,7 +60,7 @@ pub struct PipelineConfig {
     pub default_models: ModelAssignments,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     /// Takes a run for this worker: a queued one starts, an abandoned one
     /// resumes. `None` when the run is finished, missing, or alive elsewhere.
     #[transactional(run, step, transcript, organization, emitter)]
@@ -383,7 +383,7 @@ pub fn target_of(
 /// Extract → Deduplicate → Write, one step at a time, each committed before
 /// the next starts. Model calls never run inside a database transaction.
 pub struct MeetingPipeline<R, X, E, V> {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     runtime: R,
     exchanger: X,
     embedder: E,
@@ -402,7 +402,7 @@ struct ExtractOutput {
 
 impl<R: AgentRuntime, X: TokenExchanger, E: Embedder, V: VectorStore> MeetingPipeline<R, X, E, V> {
     pub fn new(
-        usecase: CapitainerieUseCase,
+        usecase: MatosUseCase,
         runtime: R,
         exchanger: X,
         embedder: E,
@@ -419,7 +419,7 @@ impl<R: AgentRuntime, X: TokenExchanger, E: Embedder, V: VectorStore> MeetingPip
         }
     }
 
-    pub fn usecase(&self) -> &CapitainerieUseCase {
+    pub fn usecase(&self) -> &MatosUseCase {
         &self.usecase
     }
 
@@ -439,13 +439,13 @@ impl<R: AgentRuntime, X: TokenExchanger, E: Embedder, V: VectorStore> MeetingPip
             gen_ai.operation.name = "invoke_workflow",
         );
         if let Some(traceparent) = traceparent {
-            capitainerie_telemetry::adopt_traceparent(&span, traceparent);
+            matos_telemetry::adopt_traceparent(&span, traceparent);
         }
         self.execute_in_span(run_id).instrument(span).await
     }
 
     async fn execute_in_span(&self, run_id: RunId) -> Result<(), CoreError> {
-        let trace_id = capitainerie_telemetry::current_trace_id();
+        let trace_id = matos_telemetry::current_trace_id();
         let Some(context) = self
             .usecase
             .claim_run(run_id, self.stale_before(), trace_id)
@@ -909,7 +909,7 @@ impl<R: AgentRuntime, X: TokenExchanger, E: Embedder, V: VectorStore> MeetingPip
                             actions: actions.to_vec(),
                             duplicates: duplicates.to_vec(),
                             mcp_token: SecretToken::new(mcp_token.token.expose()),
-                            traceparent: capitainerie_telemetry::current_traceparent(),
+                            traceparent: matos_telemetry::current_traceparent(),
                         },
                     )
                     .await

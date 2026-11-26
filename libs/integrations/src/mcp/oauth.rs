@@ -1,9 +1,9 @@
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use chrono::{DateTime, Duration, Utc};
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::SecretToken,
     mcp::{CodeExchange, Discovery, RefreshExchange, TokenSet, parse_server_url, ports::McpOAuth},
 };
-use chrono::{DateTime, Duration, Utc};
 use reqwest::header::{ACCEPT, CONTENT_TYPE, WWW_AUTHENTICATE};
 use serde_json::{Value, json};
 use url::Url;
@@ -14,7 +14,7 @@ use crate::guard::{self, Answer};
 const DOCUMENT_MAX_BYTES: usize = 256 * 1024;
 const RECONNECT: &str = "la connexion a expiré, reconnectez-vous";
 const PROTOCOL_VERSION: &str = "2025-06-18";
-const CLIENT_NAME: &str = "Capitainerie";
+const CLIENT_NAME: &str = "Matos";
 const MAX_SCOPES: usize = 100;
 const MAX_CLIENT_ID_CHARS: usize = 512;
 const MAX_ERROR_CODE_CHARS: usize = 64;
@@ -574,7 +574,7 @@ mod tests {
             "https://console.example/connectors/oauth/callback",
             &["mestier.read".into(), "mestier.doe.write".into()],
         );
-        assert_eq!(body["client_name"], "Capitainerie");
+        assert_eq!(body["client_name"], "Matos");
         assert_eq!(
             body["redirect_uris"],
             json!(["https://console.example/connectors/oauth/callback"])

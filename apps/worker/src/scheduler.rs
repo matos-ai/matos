@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use capitainerie_core::CapitainerieUseCase;
 use chrono::Utc;
+use matos_core::MatosUseCase;
 use tokio::sync::watch;
 
 const TICK_EVERY: Duration = Duration::from_secs(30);
@@ -11,11 +11,11 @@ const BATCH: i64 = 20;
 /// `FOR UPDATE SKIP LOCKED` and reschedules them in the same transaction,
 /// so several workers can run it side by side without running a passage twice.
 pub struct RoutineScheduler {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
 }
 
 impl RoutineScheduler {
-    pub fn new(usecase: CapitainerieUseCase) -> Self {
+    pub fn new(usecase: MatosUseCase) -> Self {
         Self { usecase }
     }
 

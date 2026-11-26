@@ -3,8 +3,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::integration::{BaseUrl, ConnectorFailure};
+use matos_common::CoreError;
+use matos_core::domain::integration::{BaseUrl, ConnectorFailure};
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{Client, RequestBuilder, StatusCode, Url, redirect};

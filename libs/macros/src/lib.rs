@@ -26,13 +26,13 @@ pub fn repository(args: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         #item
 
-        impl ::capitainerie_core::infrastructure::registry::RepoFor<
-            ::capitainerie_core::infrastructure::registry::domain::#domain
-        > for ::capitainerie_core::infrastructure::registry::backend::#backend {
+        impl ::matos_core::infrastructure::registry::RepoFor<
+            ::matos_core::infrastructure::registry::domain::#domain
+        > for ::matos_core::infrastructure::registry::backend::#backend {
             type Repo<'tx> = #name<'tx>;
 
             fn build<'tx>(
-                tx: &::capitainerie_core::infrastructure::postgres::SharedTx<'tx>,
+                tx: &::matos_core::infrastructure::postgres::SharedTx<'tx>,
             ) -> Self::Repo<'tx> {
                 #name::new(tx)
             }
@@ -75,9 +75,9 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
         let domain = Ident::new(&pascal_case(&name.to_string()), name.span());
         quote! {
             let #binding = <
-                ::capitainerie_core::infrastructure::registry::Backend
-                as ::capitainerie_core::infrastructure::registry::RepoFor<
-                    ::capitainerie_core::infrastructure::registry::domain::#domain
+                ::matos_core::infrastructure::registry::Backend
+                as ::matos_core::infrastructure::registry::RepoFor<
+                    ::matos_core::infrastructure::registry::domain::#domain
                 >
             >::build(&tx);
         }
@@ -88,8 +88,8 @@ pub fn transactional(args: TokenStream, input: TokenStream) -> TokenStream {
         #(#attrs)*
         #vis #sig {
             let __event_emitter =
-                ::capitainerie_core::infrastructure::event::TransactionalEventEmitter::new();
-            ::capitainerie_core::infrastructure::postgres::with_tx_emitting(
+                ::matos_core::infrastructure::event::TransactionalEventEmitter::new();
+            ::matos_core::infrastructure::postgres::with_tx_emitting(
                 &self.pool,
                 &__event_emitter,
                 async |tx| {

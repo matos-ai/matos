@@ -1,4 +1,4 @@
-use capitainerie_common::{ArtifactId, CoreError, OrganizationId};
+use matos_common::{ArtifactId, CoreError, OrganizationId};
 
 use super::{Artifact, ArtifactFilter, ArtifactView};
 

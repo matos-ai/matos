@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-export const CURRENT_PROJECT_STORAGE_KEY = 'capitainerie.current-project'
+export const CURRENT_PROJECT_STORAGE_KEY = 'matos.current-project'
 
 function read(): string {
 	try {

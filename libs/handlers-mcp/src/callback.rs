@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::McpConnectorId;
-use capitainerie_core::domain::mcp::ports::{McpGateway, McpOAuth};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_common::McpConnectorId;
+use matos_core::domain::mcp::ports::{McpGateway, McpOAuth};
+use matos_handlers::{ApiError, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -31,10 +31,10 @@ pub struct McpOAuthCallbackResponse {
     request_body = McpOAuthCallbackRequest,
     responses(
         (status = 200, description = "The code was exchanged and the caller's tokens stored, sealed", body = McpOAuthCallbackResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The state was issued to another user, or the policy refused it", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Unknown, used or expired state, or a code the server refused", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 503, description = "SECRETS_KEY is not configured", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The state was issued to another user, or the policy refused it", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Unknown, used or expired state, or a code the server refused", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 503, description = "SECRETS_KEY is not configured", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

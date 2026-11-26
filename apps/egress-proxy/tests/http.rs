@@ -18,15 +18,15 @@ use axum::{
     response::Response,
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use capitainerie_common::{OrganizationId, RunId};
-use capitainerie_core::domain::{
+use chrono::Utc;
+use futures_util::stream;
+use matos_common::{OrganizationId, RunId};
+use matos_core::domain::{
     agent::SecretToken,
     execution::{ExecutionMode, RepositoryRef, TaskGrant},
     provider::ProviderKind,
 };
-use capitainerie_egress_proxy::{Credentials, CredentialsError, Proxy, ProxyConfig, router};
-use chrono::Utc;
-use futures_util::stream;
+use matos_egress_proxy::{Credentials, CredentialsError, Proxy, ProxyConfig, router};
 use tokio::{net::TcpListener, sync::mpsc};
 
 const TASK_TOKEN: &str = "task-token-0001";
@@ -48,7 +48,7 @@ const READ_ONLY_TOKEN: &str = "ghs_read_only";
 const INITIATOR: &str = "user-1";
 const INITIATOR_KEY: &str = "sk-ant-initiator-key";
 const MODEL: &str = "claude-sonnet-5-5";
-const BRANCH: &str = "capitainerie/0a1b2c3d4e5f";
+const BRANCH: &str = "matos/0a1b2c3d4e5f";
 const OLD: &str = "1111111111111111111111111111111111111111";
 const NEW: &str = "2222222222222222222222222222222222222222";
 const MESSAGE: &str = r#"{"model":"claude-sonnet-5-5","max_tokens":1024}"#;
@@ -502,7 +502,7 @@ async fn git_without_credentials_gets_a_basic_challenge() {
     assert_eq!(response.status(), 401);
     assert_eq!(
         response.headers()["www-authenticate"],
-        r#"Basic realm="capitainerie""#
+        r#"Basic realm="matos""#
     );
 }
 

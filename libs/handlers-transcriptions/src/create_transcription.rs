@@ -4,10 +4,10 @@ use axum::{
     http::{HeaderMap, StatusCode, header::CONTENT_LENGTH},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_core::domain::transcription::{
+use matos_core::domain::transcription::{
     AudioClip, AudioMime, MAX_AUDIO_BYTES, TranscribeError, ports::TranscriberFactory,
 };
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -43,14 +43,14 @@ pub struct TranscriptionResponse {
     request_body(content = CreateTranscriptionRequest, content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "The audio, transcribed and not kept", body = TranscriptionResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Agents may not transcribe", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "No transcriber is assigned (code transcriber_not_configured)", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 413, description = "The file is over 25 MiB", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 415, description = "The format is not mp3, m4a, wav, webm, ogg or aac", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "No file part, an unexpected part or an empty file", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 503, description = "Four audio files are already being transcribed", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 502, description = "The provider failed; its message is returned", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Agents may not transcribe", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "No transcriber is assigned (code transcriber_not_configured)", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 413, description = "The file is over 25 MiB", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 415, description = "The format is not mp3, m4a, wav, webm, ogg or aac", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "No file part, an unexpected part or an empty file", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 503, description = "Four audio files are already being transcribed", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 502, description = "The provider failed; its message is returned", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

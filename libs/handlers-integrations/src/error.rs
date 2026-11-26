@@ -3,10 +3,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::integration::InstanceError;
-use capitainerie_github::GithubError;
-use capitainerie_handlers::{ApiError, errors::ApiErrorResponse};
+use matos_common::CoreError;
+use matos_core::domain::integration::InstanceError;
+use matos_github::GithubError;
+use matos_handlers::{ApiError, errors::ApiErrorResponse};
 use thiserror::Error;
 
 use crate::signer::InvalidState;
@@ -111,7 +111,7 @@ impl IntoResponse for IntegrationError {
 #[cfg(test)]
 mod tests {
     use axum::body::to_bytes;
-    use capitainerie_core::domain::integration::ConnectorFailure;
+    use matos_core::domain::integration::ConnectorFailure;
 
     use super::*;
 

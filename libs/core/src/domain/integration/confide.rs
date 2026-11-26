@@ -51,8 +51,8 @@ pub fn grants_for(
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{CardId, ClientId, IntegrationInstanceId, OrganizationId};
     use chrono::Utc;
+    use matos_common::{CardId, ClientId, IntegrationInstanceId, OrganizationId};
 
     use super::*;
     use crate::domain::{

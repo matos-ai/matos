@@ -1,6 +1,6 @@
 mod tx;
 
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
 pub use tx::{SharedTx, with_tx, with_tx_emitting};

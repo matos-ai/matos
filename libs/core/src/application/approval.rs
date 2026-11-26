@@ -1,8 +1,8 @@
-use capitainerie_common::{ApprovalId, CardId, CoreError, OrganizationId, RunId};
-use capitainerie_macros::transactional;
+use matos_common::{ApprovalId, CardId, CoreError, OrganizationId, RunId};
+use matos_macros::transactional;
 
 use super::{
-    CapitainerieUseCase, agent_run::UNNAMED_MEMBER, execute_pipeline::defang_mentions,
+    MatosUseCase, agent_run::UNNAMED_MEMBER, execute_pipeline::defang_mentions,
     execute_stream::truncate_chars,
 };
 use crate::domain::{
@@ -24,7 +24,7 @@ pub struct DecidedApproval {
     pub resume_error: Option<String>,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(approval, emitter, authz)]
     pub async fn list_approvals(
         &self,
@@ -257,8 +257,8 @@ fn rejection_comment(approval: &Approval, decider: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{AgentId, OrganizationId};
     use chrono::Utc;
+    use matos_common::{AgentId, OrganizationId};
     use serde_json::json;
 
     use super::*;

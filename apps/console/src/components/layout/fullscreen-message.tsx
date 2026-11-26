@@ -1,8 +1,5 @@
 import type { ReactNode } from 'react'
-import {
-	CapitainerieMark,
-	CapitainerieWordmark,
-} from '#/components/brand/capitainerie-mark'
+import { MatosMark, MatosWordmark } from '#/components/brand/matos-mark'
 
 interface Props {
 	icon?: ReactNode
@@ -15,8 +12,8 @@ export function FullscreenMessage({ icon, title, message, action }: Props) {
 	return (
 		<main className="flex min-h-dvh flex-col bg-background">
 			<div className="flex h-14 items-center gap-2.5 bg-rail px-5 text-rail-foreground-active">
-				<CapitainerieMark className="size-7" />
-				<CapitainerieWordmark />
+				<MatosMark className="size-7" />
+				<MatosWordmark />
 			</div>
 			<div className="flex flex-1 items-center justify-center p-6">
 				<div className="flex w-full max-w-md flex-col items-center gap-4 rounded-lg border bg-card px-8 py-10 text-center">

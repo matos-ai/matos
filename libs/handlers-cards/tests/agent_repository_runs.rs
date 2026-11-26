@@ -6,10 +6,11 @@ use std::sync::{
 };
 
 use axum::{Extension, Json, Router, routing::get, routing::post};
-use capitainerie_auth::{AcceptedClients, FerrisKeyVerifier, Identity};
-use capitainerie_common::{CardId, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::{Duration, Utc};
+use matos_auth::{AcceptedClients, FerrisKeyVerifier, Identity};
+use matos_common::{CardId, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -22,13 +23,12 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_core::{
+use matos_core::{
     domain::agent_identity::{AgentIdentity, ProvisionedClient, ports::AgentIdentityRepository},
     infrastructure::agent_identity::postgres::PgAgentIdentityRepository,
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use capitainerie_handlers::{AppState, Caller};
-use chrono::{Duration, Utc};
+use matos_github::{GithubApps, GithubBases};
+use matos_handlers::{AppState, Caller};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -95,7 +95,7 @@ async fn fake_github(calls: Arc<AtomicUsize>) -> String {
 struct Fixture {
     github_calls: Arc<AtomicUsize>,
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization: Organization,
     base: String,
 }
@@ -125,12 +125,12 @@ async fn fixture() -> Option<Fixture> {
         issuer_url,
         created_at: Utc::now(),
     };
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     let state = AppState {
         usecase: usecase.clone(),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     let github_calls = Arc::new(AtomicUsize::new(0));
@@ -149,7 +149,7 @@ async fn fixture() -> Option<Fixture> {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -159,7 +159,7 @@ async fn fixture() -> Option<Fixture> {
         organization: organization.clone(),
         token: SecretToken::new("user-token"),
     };
-    let app = capitainerie_handlers_cards::router(github)
+    let app = matos_handlers_cards::router(github)
         .layer(Extension(caller))
         .with_state(state);
     let fixture = Fixture {
@@ -218,12 +218,12 @@ impl Fixture {
                 GithubAppCredentials {
                     organization_id: self.organization.id,
                     app_id: fresh_id(),
-                    slug: "capitainerie-test".into(),
+                    slug: "matos-test".into(),
                     client_id: "Iv1.test".into(),
                     client_secret: SecretToken::new("oauth-secret"),
                     private_key_pem: SecretToken::new(PEM),
                     webhook_secret: SecretToken::new("hook"),
-                    html_url: "https://github.com/apps/capitainerie-test".into(),
+                    html_url: "https://github.com/apps/matos-test".into(),
                     owner_login: "acme".into(),
                     owner_type: "Organization".into(),
                     created_by: "user-1".into(),
@@ -436,14 +436,14 @@ async fn a_granted_repository_queues_an_execute_run_linked_to_the_agent() {
     assert!(
         fixture
             .usecase
-            .is_execution_run(capitainerie_common::RunId(run_id))
+            .is_execution_run(matos_common::RunId(run_id))
             .await
             .unwrap()
     );
     assert!(
         !fixture
             .usecase
-            .is_agent_task_run(capitainerie_common::RunId(run_id))
+            .is_agent_task_run(matos_common::RunId(run_id))
             .await
             .unwrap()
     );

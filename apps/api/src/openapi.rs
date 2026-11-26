@@ -1,10 +1,10 @@
-use capitainerie_handlers::{errors::ApiErrorResponse, health};
-use capitainerie_handlers_analytics::{
+use matos_handlers::{errors::ApiErrorResponse, health};
+use matos_handlers_analytics::{
     self as analytics,
     agents::AgentResponse,
     costs::{CostDimensionParam, CostRowResponse, CostTotals, CostsResponse},
 };
-use capitainerie_handlers_approvals::{
+use matos_handlers_approvals::{
     self as approvals,
     decide_approval::{ApprovalDecisionDto, DecideApprovalRequest},
     response::{
@@ -12,9 +12,9 @@ use capitainerie_handlers_approvals::{
         DecideApprovalResponse,
     },
 };
-use capitainerie_handlers_artifacts as artifacts;
-use capitainerie_handlers_audit as audit;
-use capitainerie_handlers_cards::{
+use matos_handlers_artifacts as artifacts;
+use matos_handlers_audit as audit;
+use matos_handlers_cards::{
     self as cards,
     comment_card::CommentCardRequest,
     create_card::CreateCardRequest,
@@ -35,7 +35,7 @@ use capitainerie_handlers_cards::{
         WorksiteListResponse, WorksiteResponse,
     },
 };
-use capitainerie_handlers_clients::{
+use matos_handlers_clients::{
     self as clients,
     create_client::CreateClientRequest,
     create_project::CreateProjectRequest,
@@ -47,7 +47,7 @@ use capitainerie_handlers_clients::{
     update_client::UpdateClientRequest,
     update_project::UpdateProjectRequest,
 };
-use capitainerie_handlers_conversations::{
+use matos_handlers_conversations::{
     self as conversations,
     dto::{
         ChatToolCallResponse, ConversationListResponse, ConversationResponse,
@@ -56,13 +56,13 @@ use capitainerie_handlers_conversations::{
         SendMessageRequest, UpdateConversationRequest,
     },
 };
-use capitainerie_handlers_identity::{
+use matos_handlers_identity::{
     self as identity,
     list_members::{MemberListResponse, MemberResponse},
     me::{MeOrganization, MeResponse},
 };
-use capitainerie_handlers_inbox as inbox;
-use capitainerie_handlers_integrations::{
+use matos_handlers_inbox as inbox;
+use matos_handlers_integrations::{
     self as integrations, ActionAccessDto, ActionOutcomeDto, CheckIntegrationInstanceResponse,
     ConnectGithubRequest, CreateGithubAppRequest, CreateIntegrationInstanceRequest,
     CreateManifestRequest, GithubAppResponse, GithubInstallationResponse,
@@ -72,7 +72,7 @@ use capitainerie_handlers_integrations::{
     IssueListResponse, IssueResponse, ManifestOwner, ManifestResponse, RepositoryListResponse,
     RepositoryResponse, RevertIntegrationActionRequest, UpdateIntegrationInstanceRequest,
 };
-use capitainerie_handlers_mcp::{
+use matos_handlers_mcp::{
     self as mcp,
     authorize::AuthorizeMcpConnectorResponse,
     callback::{McpOAuthCallbackRequest, McpOAuthCallbackResponse},
@@ -81,7 +81,7 @@ use capitainerie_handlers_mcp::{
     test_connector::TestMcpConnectorResponse,
     update_connector::UpdateMcpConnectorRequest,
 };
-use capitainerie_handlers_providers::{
+use matos_handlers_providers::{
     self as providers,
     dto::{
         CapabilitiesResponse, HarnessDto, HarnessListResponse, HarnessResponse,
@@ -94,7 +94,7 @@ use capitainerie_handlers_providers::{
     test_provider::TestProviderResponse,
     test_user_provider::TestUserProviderResponse,
 };
-use capitainerie_handlers_routines::{
+use matos_handlers_routines::{
     self as routines,
     response::{
         AgentRunStatusDto, CardColumnDto, FrequencyDto, IfMissedDto, IfOpenDto,
@@ -105,7 +105,7 @@ use capitainerie_handlers_routines::{
     routines::{CreateRoutineRequest, UpdateRoutineRequest},
     triggers::{AddTriggerRequest, UpdateTriggerRequest},
 };
-use capitainerie_handlers_runs::{
+use matos_handlers_runs::{
     self as runs,
     list_active_runs::{ActiveRunListResponse, ActiveRunResponse, ActiveStepResponse},
     list_runs::RunListResponse,
@@ -116,13 +116,13 @@ use capitainerie_handlers_runs::{
         UsageTotals,
     },
 };
-use capitainerie_handlers_skills::{
+use matos_handlers_skills::{
     self as skills,
     create_skill::CreateSkillRequest,
     response::{SkillListResponse, SkillResponse},
     update_skill::UpdateSkillRequest,
 };
-use capitainerie_handlers_sources::{
+use matos_handlers_sources::{
     self as sources,
     create_source::CreateSourceRequest,
     hook::HookResponse,
@@ -132,7 +132,7 @@ use capitainerie_handlers_sources::{
     },
     update_source::UpdateSourceRequest,
 };
-use capitainerie_handlers_team::{
+use matos_handlers_team::{
     self as team,
     agent_identity::{TeamAgentIdentityResponse, TeamAgentIdentityStatusDto},
     create_agent::CreateTeamAgentRequest,
@@ -142,7 +142,7 @@ use capitainerie_handlers_team::{
     },
     update_agent::UpdateTeamAgentRequest,
 };
-use capitainerie_handlers_transcriptions::{
+use matos_handlers_transcriptions::{
     self as transcriptions,
     create_transcription::{CreateTranscriptionRequest, TranscriptionResponse},
     read_document::{DocumentTextResponse, ReadDocumentRequest},
@@ -154,7 +154,7 @@ use utoipa::{
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "Capitainerie API"),
+    info(title = "Matos API"),
     paths(
         health::live,
         health::ready,

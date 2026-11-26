@@ -3,11 +3,11 @@ mod batcher;
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
-use capitainerie_analytics::{AnalyticsArgs, Dataset, EventRecord, ParquetEventWriter};
-use capitainerie_args::{LogArgs, ObservabilityArgs};
-use capitainerie_bus_iggy::{IggyArgs, IggyEventBus};
-use capitainerie_events::Topic;
 use clap::Parser;
+use matos_analytics::{AnalyticsArgs, Dataset, EventRecord, ParquetEventWriter};
+use matos_args::{LogArgs, ObservabilityArgs};
+use matos_bus_iggy::{IggyArgs, IggyEventBus};
+use matos_events::Topic;
 use tokio::sync::watch;
 
 use crate::batcher::Batcher;
@@ -18,7 +18,7 @@ const IDLE: Duration = Duration::from_secs(1);
 const RETRY: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Parser)]
-#[command(name = "capitainerie-exporter", version)]
+#[command(name = "matos-exporter", version)]
 struct Args {
     #[command(flatten)]
     iggy: IggyArgs,
@@ -46,8 +46,7 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let args = Args::parse();
-    let _telemetry =
-        capitainerie_telemetry::init("capitainerie-exporter", &args.log, &args.observability)?;
+    let _telemetry = matos_telemetry::init("matos-exporter", &args.log, &args.observability)?;
 
     let writer = ParquetEventWriter::new(Dataset::parse(&args.analytics.uri)?);
     let bus = IggyEventBus::connect(&args.iggy)
@@ -57,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (stop, mut stopped) = watch::channel(false);
     tokio::spawn(async move {
-        capitainerie_telemetry::shutdown_signal().await;
+        matos_telemetry::shutdown_signal().await;
         let _ = stop.send(true);
     });
     tracing::info!(

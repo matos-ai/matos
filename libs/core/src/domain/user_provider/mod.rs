@@ -3,8 +3,8 @@ pub mod service;
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use capitainerie_common::{CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, OrganizationId};
 
 use crate::domain::{
     agent::SecretToken,

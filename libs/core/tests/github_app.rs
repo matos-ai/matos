@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::Utc;
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{agent::SecretToken, authorization::Subject, execution::GithubAppCredentials},
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -59,12 +59,12 @@ fn credentials(organization_id: OrganizationId) -> GithubAppCredentials {
     GithubAppCredentials {
         organization_id,
         app_id: app_id(),
-        slug: "capitainerie-acme".into(),
+        slug: "matos-acme".into(),
         client_id: "Iv1.client".into(),
         client_secret: SecretToken::new("client-secret-value"),
         private_key_pem: SecretToken::new("pem-value"),
         webhook_secret: SecretToken::new("webhook-value"),
-        html_url: "https://github.com/apps/capitainerie-acme".into(),
+        html_url: "https://github.com/apps/matos-acme".into(),
         owner_login: "acme".into(),
         owner_type: "Organization".into(),
         created_by: "someone-else".into(),
@@ -72,8 +72,8 @@ fn credentials(organization_id: OrganizationId) -> GithubAppCredentials {
     }
 }
 
-fn usecase(pool: &PgPool, byte: u8) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool, byte: u8) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[byte; 32]).unwrap())
 }
 
@@ -154,7 +154,7 @@ async fn a_second_app_is_a_conflict_until_the_first_is_deleted() {
         .await;
 
     assert!(matches!(second, Err(CoreError::Conflict(code)) if code == "github_app_exists"));
-    assert_eq!(removed.slug, "capitainerie-acme");
+    assert_eq!(removed.slug, "matos-acme");
     assert!(third.is_ok());
     assert!(matches!(
         usecase
@@ -197,7 +197,7 @@ async fn sealed_secrets_are_bound_to_their_organization_and_key() {
     assert!(usecase.github_app_for(second).await.is_err());
     assert!(self::usecase(&pool, 2).github_app_for(first).await.is_err());
     assert!(
-        CapitainerieUseCase::with_local_policies(pool.clone())
+        MatosUseCase::with_local_policies(pool.clone())
             .github_app_for(first)
             .await
             .is_err()

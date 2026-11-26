@@ -1,5 +1,5 @@
-use capitainerie_common::{ConversationId, CoreError};
 use chrono::{DateTime, Utc};
+use matos_common::{ConversationId, CoreError};
 
 use super::{
     Conversation, Message, MessageContent, MessageRole, MessageStatus, TURN_LEASE_SECS,
@@ -301,7 +301,7 @@ fn history_of(messages: Vec<Message>) -> Vec<ChatMessage> {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{
@@ -346,7 +346,7 @@ mod tests {
 
     fn message(conversation: &Conversation, seq: i32, role: MessageRole, text: &str) -> Message {
         Message {
-            id: capitainerie_common::ConversationMessageId::new(),
+            id: matos_common::ConversationMessageId::new(),
             conversation_id: conversation.id,
             seq,
             role,
@@ -398,7 +398,7 @@ mod tests {
                     .unwrap()
                     .push((role, content.text.clone(), status));
                 let message = Message {
-                    id: capitainerie_common::ConversationMessageId::new(),
+                    id: matos_common::ConversationMessageId::new(),
                     conversation_id: id,
                     seq: 1,
                     role,
@@ -561,7 +561,7 @@ mod tests {
                     .unwrap()
                     .push((role, status, content.text.clone()));
                 let message = Message {
-                    id: capitainerie_common::ConversationMessageId::new(),
+                    id: matos_common::ConversationMessageId::new(),
                     conversation_id: id,
                     seq: 2,
                     role,

@@ -2,11 +2,11 @@
 
 use std::time::Duration;
 
-use capitainerie_handlers_realtime::{
-    Authenticate, Denied, Gateway, Hub, Notice, ServerMessage, Session, Timing, router,
-};
 use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
+use matos_handlers_realtime::{
+    Authenticate, Denied, Gateway, Hub, Notice, ServerMessage, Session, Timing, router,
+};
 use serde_json::{Value, json};
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};

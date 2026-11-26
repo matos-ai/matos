@@ -1,6 +1,6 @@
-use capitainerie_common::SkillId;
-use capitainerie_core::domain::skill::CatalogSkill;
 use chrono::{DateTime, Utc};
+use matos_common::SkillId;
+use matos_core::domain::skill::CatalogSkill;
 use serde::Serialize;
 use utoipa::ToSchema;
 

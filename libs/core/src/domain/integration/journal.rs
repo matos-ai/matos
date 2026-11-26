@@ -1,13 +1,13 @@
-use capitainerie_common::{
+use chrono::{DateTime, Utc};
+use matos_common::{
     CardId, ClientId, CoreError, IntegrationActionId, IntegrationInstanceId, OrganizationId, RunId,
 };
-use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use super::action::Access;
 use crate::domain::authorization::Subject;
 
-pub const INTEGRATOR_AGENT: &str = "capitainerie-agent-integrator";
+pub const INTEGRATOR_AGENT: &str = "matos-agent-integrator";
 
 pub const SENSITIVE_ODOO_MODELS: [&str; 6] = [
     "ir.config_parameter",

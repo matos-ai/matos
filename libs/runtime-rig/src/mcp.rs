@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use capitainerie_common::{CardId, CoreError, RunId, TranscriptId};
-use capitainerie_core::domain::agent::{LocatedAction, SecretToken};
 use http::{HeaderName, HeaderValue};
+use matos_common::{CardId, CoreError, RunId, TranscriptId};
+use matos_core::domain::agent::{LocatedAction, SecretToken};
 use rmcp::{
     RoleClient, ServiceExt,
     model::{CallToolRequestParams, ClientConfig},
@@ -209,7 +209,7 @@ pub(crate) fn outcome_of(result: &Value) -> CardOutcome {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_core::domain::agent::ExtractedAction;
+    use matos_core::domain::agent::ExtractedAction;
     use uuid::Uuid;
 
     use super::*;

@@ -1,4 +1,4 @@
-# Conventions Capitainerie
+# Conventions Matos
 
 Synthèse tirée des deux repos de référence : `../mestier` (ERP, le plus récent) et `../autharie` (control plane FerrisKey).
 Chaque règle cite sa source. Les points où les deux repos divergent sont regroupés en fin de document, section **Décisions**.
@@ -33,10 +33,10 @@ libs/core/src/
 
 - **Ports** : traits définis dans `domain/<contexte>/ports.rs`. Exemple : M `libs/core/src/domain/customer/ports.rs:7`, A `libs/autharie-domain/src/deployments/ports.rs:162`.
 - **Services de domaine** : structs génériques sur leurs ports, sans I/O directe. Exemple : A `libs/autharie-domain/src/deployments/service.rs:110` (`DeploymentServiceImpl<D, U, DP, O, CP, P>`).
-- **Couche application** (décision D1, comme mestier) : une struct `CapitainerieUseCase` (sur le modèle de `MestierUseCase`, M `libs/core/src/application/mod.rs:133`). Chaque use case est une méthode `#[transactional(repo1, repo2, authz, emitter)]` : la macro ouvre la transaction, injecte les repositories nommés, puis commit. La méthode instancie le service de domaine avec ces repositories et lui délègue. Aucune règle métier dans cette couche.
+- **Couche application** (décision D1, comme mestier) : une struct `MatosUseCase` (sur le modèle de `MestierUseCase`, M `libs/core/src/application/mod.rs:133`). Chaque use case est une méthode `#[transactional(repo1, repo2, authz, emitter)]` : la macro ouvre la transaction, injecte les repositories nommés, puis commit. La méthode instancie le service de domaine avec ces repositories et lui délègue. Aucune règle métier dans cette couche.
 
 ```rust
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(run, transcript, authz, emitter)]
     pub async fn submit_transcript(&self, command: SubmitTranscript) -> Result<Run, CoreError> {
         RunService::new(run_repository, transcript_repository, emitter, authz)
@@ -124,7 +124,7 @@ M : `async-trait` n'est jamais utilisé directement. A : il apparaît seulement 
 - Authz :
   - M : port de forme AuthZEN (`libs/authz/src/domain/ports.rs:13`), moteur local `LocalPolicyEngine`, client `AuthzenPdp` dans `apps/mcp-gateway/src/pdp.rs:73`.
   - A : bits de permission (`AuthariePolicy::require`).
-  - Pour Capitainerie, Capitainerie vise le PDP AuthZEN de FerrisKey : on suit la forme M.
+  - Pour Matos, Matos vise le PDP AuthZEN de FerrisKey : on suit la forme M.
 - MCP : `rmcp` (`#[tool_router]`, `#[tool]`), transport streamable HTTP, challenge `WWW-Authenticate: Bearer` et `resource_metadata` RFC 9728 (M `apps/mcp-server/src/app.rs:53`, `apps/mcp-gateway/src/app.rs:107`).
 
 ## 9. Config et observabilité
@@ -146,7 +146,7 @@ M : `async-trait` n'est jamais utilisé directement. A : il apparaît seulement 
 
 - Pas de `rustfmt.toml`, `clippy.toml` ni `[workspace.lints]` dans les deux repos : rustfmt et clippy par défaut.
 - CI : `cargo fmt --all -- --check` et `cargo clippy --workspace --all-targets --locked -- -D warnings`.
-- `unwrap` / `expect` ne sont interdits nulle part (A en compte plus de 1 600 hors tests). Capitainerie les interdit : voir D8.
+- `unwrap` / `expect` ne sont interdits nulle part (A en compte plus de 1 600 hors tests). Matos les interdit : voir D8.
 
 ## 12. CI (GitHub Actions)
 
@@ -155,7 +155,7 @@ M `.github/workflows/docker.yaml`, le plus complet :
 - jobs en matrice `fmt`, `clippy`, `test` ;
 - job `integration` avec un service Postgres, `sqlx-cli 0.8.6`, `sqlx migrate run`, `--test-threads=1` ;
 - job `webapp` : `pnpm install --frozen-lockfile`, `pnpm check`, `pnpm test` ;
-- build d'images multi-arch vers `ghcr.io/ferrislabs/<app>`.
+- build d'images multi-arch vers `ghcr.io/matos-ai/<app>`.
 
 A ajoute un job `generated-client-is-current` : il régénère le client OpenAPI du front et échoue s'il y a un diff. **À reprendre.**
 
@@ -185,7 +185,7 @@ Les points de divergence front (routing, store, lint, dossiers, tests de composa
 ## 15. Git
 
 - Les deux repos utilisent `type(scope): sujet (#PR)` (par exemple `feat(maintenance): ...`).
-- Capitainerie impose `<type>(<subject>): <verbe><message>`.
+- Matos impose `<type>(<subject>): <verbe><message>`.
 - Aucun outil d'IA n'apparaît comme auteur ni co-auteur : pas de ligne `Co-Authored-By`.
 
 ---
@@ -201,12 +201,12 @@ Toutes validées le 2026-10-16 : la recommandation de la colonne de droite s'app
 | D3 | Dépendances | `[workspace.dependencies]` | Versions par crate | M. |
 | D4 | Tests DB | `#[ignore]`, lancés avec `-- --ignored` | Skip si `DATABASE_URL` est absent, échec si `REQUIRE_DATABASE_URL=1` (CI) ; `cargo nextest` | A : un test ignoré par erreur reste visible en CI. |
 | D5 | `anyhow` | Absent (`Box<dyn Error>`) | Absent | ✅ **Tranché** : `anyhow` dans les binaires, `thiserror` partout dans les libs. |
-| D6 | Préfixe des crates | Sans préfixe (`core`, `auth`), sauf `mestier-core` | `autharie-*` | Préfixe `capitainerie-*` sur les noms de package, chemins de dossier courts (`libs/core`). |
+| D6 | Préfixe des crates | Sans préfixe (`core`, `auth`), sauf `mestier-core` | `autharie-*` | Préfixe `matos-*` sur les noms de package, chemins de dossier courts (`libs/core`). |
 | D7 | Row → domaine | `TryFrom` / `From` | `into_x()` | `TryFrom`. |
 | D8 | `unwrap` / `expect` | Non interdits | Non interdits | `[workspace.lints.clippy]` : `unwrap_used = "deny"`, `expect_used = "deny"`, avec `allow-unwrap-in-tests` dans `clippy.toml`. |
 | D9 | Routing front | TanStack Router basé sur les fichiers (`routes/`, notation à points), TanStack Start en mode SPA | TanStack Router basé sur le code (`router.tsx`) | M : routes typées générées, fichiers de route minces. |
 | D10 | État global front | `@tanstack/store` | `zustand` | M : une dépendance de moins, même famille que le reste. |
 | D11 | Lint et format front | Biome (tabs, quotes simples, sans `;`) | ESLint flat + Prettier (2 espaces) | M : un seul outil, plus rapide. |
-| D12 | Dossiers front | `pages/<domaine>/{feature,ui}`, `hooks/use-*.ts` | `domain/<domaine>/{services,hooks,types,pages/{feature,ui}}` | A : tout un domaine dans un seul dossier, mieux adapté aux domaines Capitainerie (runs, cartes, agents). |
+| D12 | Dossiers front | `pages/<domaine>/{feature,ui}`, `hooks/use-*.ts` | `domain/<domaine>/{services,hooks,types,pages/{feature,ui}}` | A : tout un domaine dans un seul dossier, mieux adapté aux domaines Matos (runs, cartes, agents). |
 | D13 | Tests de composants | jsdom + Testing Library | Aucun | M. |
 | D14 | Toolchain Rust | Épinglée `1.95.0` | `stable` | ✅ Épinglée à `1.97.1` dans `rust-toolchain.toml` (version installée en local). |

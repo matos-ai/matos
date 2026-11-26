@@ -10,8 +10,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::SecretToken,
     document::{
         PdfDocument,
@@ -19,7 +19,7 @@ use capitainerie_core::domain::{
     },
     provider::{ModelRef, ProviderAccess, ProviderKind},
 };
-use capitainerie_runtime_rig::RigDocumentReaders;
+use matos_runtime_rig::RigDocumentReaders;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
@@ -110,7 +110,7 @@ fn pdf() -> PdfDocument {
 async fn read(
     fake: &Fake,
     key: &str,
-) -> Result<capitainerie_core::domain::document::DocumentText, CoreError> {
+) -> Result<matos_core::domain::document::DocumentText, CoreError> {
     let base = fake.serve().await;
     RigDocumentReaders::new()
         .unwrap()

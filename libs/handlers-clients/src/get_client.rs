@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::ClientId;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::ClientId;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 
 use crate::response::ClientDetailResponse;
@@ -20,9 +20,9 @@ pub struct ClientPath {
     params(("client_id" = ClientId, Path, description = "Client identifier")),
     responses(
         (status = 200, description = "The client with its active projects and its card count per column", body = ClientDetailResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no client access", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such client in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no client access", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such client in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

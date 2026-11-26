@@ -1,8 +1,8 @@
-use capitainerie_core::domain::execution::{TaskLine, TaskMarker};
 use futures_util::{AsyncBufRead, AsyncBufReadExt};
+use matos_core::domain::execution::{TaskLine, TaskMarker};
 use serde_json::Value;
 
-const MARKER_TYPE: &str = "capitainerie";
+const MARKER_TYPE: &str = "matos";
 pub const MAX_LINE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,9 +63,9 @@ pub fn parse_line(line: &str) -> Option<TaskLine> {
     }
     if value.get("type").and_then(Value::as_str) == Some(MARKER_TYPE) {
         return match serde_json::from_value::<TaskMarker>(value) {
-            Ok(marker) => Some(TaskLine::Capitainerie(marker)),
+            Ok(marker) => Some(TaskLine::Matos(marker)),
             Err(error) => {
-                tracing::debug!(%error, "dropping an unknown capitainerie marker");
+                tracing::debug!(%error, "dropping an unknown matos marker");
                 None
             }
         };
@@ -118,18 +118,18 @@ mod tests {
     #[test]
     fn markers_are_parsed() {
         assert_eq!(
-            parse_line(r#"{"type":"capitainerie","event":"cloned"}"#),
-            Some(TaskLine::Capitainerie(TaskMarker::Cloned))
+            parse_line(r#"{"type":"matos","event":"cloned"}"#),
+            Some(TaskLine::Matos(TaskMarker::Cloned))
         );
         assert_eq!(
-            parse_line(r#"{"type":"capitainerie","event":"pushed","sha":"abc123"}"#),
-            Some(TaskLine::Capitainerie(TaskMarker::Pushed {
+            parse_line(r#"{"type":"matos","event":"pushed","sha":"abc123"}"#),
+            Some(TaskLine::Matos(TaskMarker::Pushed {
                 sha: "abc123".into()
             }))
         );
         assert_eq!(
-            parse_line(r#"{"type":"capitainerie","event":"no_changes"}"#),
-            Some(TaskLine::Capitainerie(TaskMarker::NoChanges))
+            parse_line(r#"{"type":"matos","event":"no_changes"}"#),
+            Some(TaskLine::Matos(TaskMarker::NoChanges))
         );
     }
 
@@ -146,9 +146,6 @@ mod tests {
         assert_eq!(parse_line(""), None);
         assert_eq!(parse_line("42"), None);
         assert_eq!(parse_line(r#"["a"]"#), None);
-        assert_eq!(
-            parse_line(r#"{"type":"capitainerie","event":"nope"}"#),
-            None
-        );
+        assert_eq!(parse_line(r#"{"type":"matos","event":"nope"}"#), None);
     }
 }

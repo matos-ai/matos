@@ -1,14 +1,14 @@
 [package]
-name = "capitainerie-bus-iggy"
+name = "matos-bus-iggy"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-capitainerie-common.workspace = true
-capitainerie-core.workspace = true
-capitainerie-events.workspace = true
+matos-common.workspace = true
+matos-core.workspace = true
+matos-events.workspace = true
 clap.workspace = true
 iggy.workspace = true
 serde_json.workspace = true

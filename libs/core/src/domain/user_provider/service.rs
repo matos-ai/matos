@@ -1,5 +1,5 @@
-use capitainerie_common::CoreError;
 use chrono::Utc;
+use matos_common::CoreError;
 
 use super::{
     UserProviderCredential, UserProviderSummary, ports::UserProviderRepository,
@@ -143,7 +143,7 @@ where
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::authorization::Decision;

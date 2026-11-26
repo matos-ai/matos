@@ -1,8 +1,8 @@
-use capitainerie_common::{
+use chrono::Utc;
+use matos_common::{
     AgentId, CardCommentId, CardId, ClientId, CoreError, ProjectId, RunId, TranscriptId,
 };
-use capitainerie_events::card::{CardAuthor, CardCommented, CardMoved, CardProposed, CardUpdated};
-use chrono::Utc;
+use matos_events::card::{CardAuthor, CardCommented, CardMoved, CardProposed, CardUpdated};
 
 use super::{
     Author, COMMENT_MAX_CHARS, Card, CardComment, CardTitle, Column, DESCRIPTION_MAX_CHARS,
@@ -340,8 +340,8 @@ fn author(subject: &Subject) -> Author {
 mod tests {
     use std::sync::Mutex;
 
-    use capitainerie_common::OrganizationId;
-    use capitainerie_events::DomainEvent;
+    use matos_common::OrganizationId;
+    use matos_events::DomainEvent;
 
     use super::*;
     use crate::domain::{
@@ -368,7 +368,7 @@ mod tests {
         Subject {
             id: "user-1".into(),
             organization_id,
-            actor: Some("capitainerie-agent-writer".into()),
+            actor: Some("matos-agent-writer".into()),
             is_admin: false,
         }
     }
@@ -472,10 +472,7 @@ mod tests {
 
         assert_eq!(card.column, Column::Proposed);
         assert_eq!(card.version, 1);
-        assert_eq!(
-            card.created_by.actor.as_deref(),
-            Some("capitainerie-agent-writer")
-        );
+        assert_eq!(card.created_by.actor.as_deref(), Some("matos-agent-writer"));
         assert_eq!(*emitter.0.lock().unwrap(), [CardProposed::KIND]);
     }
 

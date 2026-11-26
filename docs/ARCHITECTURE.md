@@ -1,10 +1,10 @@
-# Architecture Capitainerie
+# Architecture Matos
 
 Statut : **MVP en place** (jalon 1 fonctionnel de bout en bout). Les conventions de code sont dans `docs/CONVENTIONS.md` (décisions `D<n>`), les choix d'architecture en fin de document (décisions `A<n>`), et les manques côté FerrisKey dans `docs/ferriskey-needs.md`.
 
 ## 1. Workspace
 
-Aligné sur mestier (un crate `core` hexagonal). Les adapters lourds sont isolés dans des crates dédiés (D2). Les noms de package sont préfixés `capitainerie-` (D6).
+Aligné sur mestier (un crate `core` hexagonal). Les adapters lourds sont isolés dans des crates dédiés (D2). Les noms de package sont préfixés `matos-` (D6).
 
 ```
 apps/
@@ -22,7 +22,7 @@ libs/
   auth/                vérification JWT FerrisKey multi-realm, token exchange RFC 8693
   core/
     domain/            organization, transcript, run (+ étapes), card, agent, similarity, authorization, event
-    application/       CapitainerieUseCase (méthodes #[transactional]) et MeetingPipeline
+    application/       MatosUseCase (méthodes #[transactional]) et MeetingPipeline
     infrastructure/    postgres (repositories, outbox, relais), autorisation locale auditée, coffre de délégations
   handlers/            AppState, ApiError, middleware d'authentification
   handlers-identity/   GET /api/v1/me
@@ -119,7 +119,7 @@ sequenceDiagram
   API-->>C: WebSocket : nouvelle carte, timeline
 ```
 
-Outbox (A1, en place) : `with_tx_emitting` écrit les événements émis dans `outbox_events` **dans la transaction métier**, puis `pg_notify('outbox_events')`, livré au commit seulement. Le relais (`OutboxRelay`, dans `apps/worker`) se réveille sur la notification, ou toutes les 2 s en secours. Il verrouille un lot (`FOR UPDATE SKIP LOCKED`), le publie dans Iggy puis marque `published_at`. Si le process meurt entre la publication et le marquage, le lot est republié : la livraison est *at least once*, et les consommateurs dédupliquent sur `EventEnvelope.id` (aussi utilisé comme id de message Iggy). Topologie Iggy : stream `capitainerie`, un topic par `Topic` (`runs`), 3 partitions, clé de partition = `run_id`, ce qui garde l'ordre des événements d'un même run.
+Outbox (A1, en place) : `with_tx_emitting` écrit les événements émis dans `outbox_events` **dans la transaction métier**, puis `pg_notify('outbox_events')`, livré au commit seulement. Le relais (`OutboxRelay`, dans `apps/worker`) se réveille sur la notification, ou toutes les 2 s en secours. Il verrouille un lot (`FOR UPDATE SKIP LOCKED`), le publie dans Iggy puis marque `published_at`. Si le process meurt entre la publication et le marquage, le lot est republié : la livraison est *at least once*, et les consommateurs dédupliquent sur `EventEnvelope.id` (aussi utilisé comme id de message Iggy). Topologie Iggy : stream `matos`, un topic par `Topic` (`runs`), 3 partitions, clé de partition = `run_id`, ce qui garde l'ordre des événements d'un même run.
 
 Autorisation (en place) : le port `Authorizer` est de forme AuthZEN (sujet, action, ressource, acteur). L'adapter actuel est `LocalPolicyEngine` (A9, option 2) : il refuse tout accès entre organisations et réserve `transcript.create` et `run.read` aux humains. Il est vérifié avant chaque écriture et chaque lecture dans les services de domaine.
 
@@ -137,9 +137,9 @@ sequenceDiagram
   actor U as Utilisateur
   participant C as Console (client public)
   participant FK as FerrisKey (realm de l'org)
-  participant API as apps/api (capitainerie-api)
-  participant W as worker (capitainerie-agent-writer)
-  participant MCP as mcp-kanban (capitainerie-mcp)
+  participant API as apps/api (matos-api)
+  participant W as worker (matos-agent-writer)
+  participant MCP as mcp-kanban (matos-mcp)
   participant PDP as Authorizer (local, audité)
 
   U->>C: login
@@ -147,14 +147,14 @@ sequenceDiagram
   FK-->>C: token { sub: U, azp: console, aud: [http://localhost:4100] }
   C->>API: requêtes Bearer
   Note over API: issuer connu (organizations) puis signature, exp, aud = AUTH_AUDIENCE, azp accepté
-  API->>FK: token exchange (impersonation) subject = token U, audience = capitainerie-agent-writer
-  Note over API,FK: capitainerie-api possède la ressource http://localhost:4100, donc il est partie au token de U
+  API->>FK: token exchange (impersonation) subject = token U, audience = matos-agent-writer
+  Note over API,FK: matos-api possède la ressource http://localhost:4100, donc il est partie au token de U
   FK-->>API: token { sub: U, azp: api, aud: [agent-writer] }, même exp
   W->>FK: client_credentials → actor_token { sub: compte de service, azp: agent-writer }
-  W->>FK: token exchange (délégation) subject = token précédent, actor = actor_token, audience = capitainerie-mcp
-  FK-->>W: token { sub: U, azp: agent-writer, aud: [capitainerie-mcp], act: { client_id: agent-writer } }, même exp
+  W->>FK: token exchange (délégation) subject = token précédent, actor = actor_token, audience = matos-mcp
+  FK-->>W: token { sub: U, azp: agent-writer, aud: [matos-mcp], act: { client_id: agent-writer } }, même exp
   W->>MCP: tools/call create_card (Bearer délégué)
-  MCP->>MCP: issuer connu, signature, aud = capitainerie-mcp, act présent (sinon 403 delegation_required)
+  MCP->>MCP: issuer connu, signature, aud = matos-mcp, act présent (sinon 403 delegation_required)
   MCP->>PDP: evaluate(subject = U, actor = agent-writer, card.create, run_id)
   PDP-->>MCP: allow / deny, écrit dans authorization_decisions
 ```
@@ -164,10 +164,10 @@ sequenceDiagram
   1. lecture de `iss` sans vérification ;
   2. l'issuer doit appartenir à une organisation, sinon 401 (aucune clé n'est jamais récupérée chez un issuer inconnu) ;
   3. JWKS obtenu via la découverte OIDC, en cache par issuer, re-fetch au plus une fois par 30 s sur `kid` inconnu ;
-  4. signature RS256, `iss`, `exp` (30 s de tolérance), `typ = Bearer`, `aud` (API : `AUTH_AUDIENCE` ; MCP : `capitainerie-mcp`) ;
+  4. signature RS256, `iss`, `exp` (30 s de tolérance), `typ = Bearer`, `aud` (API : `AUTH_AUDIENCE` ; MCP : `matos-mcp`) ;
   5. `azp` dans la liste des clients acceptés ; pour un token délégué, c'est le `client_id` de l'acteur courant (`act`) qui compte.
 - La console utilise le flux Authorization Code + PKCE, avec `redirect_uri = /callback` et `resource` (RFC 8707). La route `/callback` est hors du layout authentifié : elle traite le `code`, puis renvoie vers la page demandée au départ (`returnTo`, chemin local uniquement).
-- Provisioning : `deploy/ferriskey/terraform` (realm, clients) et `scripts/bootstrap-ferriskey.sh` (`allowed_resources`, propriétaire de la ressource API, `token_exchange_enabled`, policies `api → agent` en impersonation et `agent → capitainerie-mcp` en délégation).
+- Provisioning : `deploy/ferriskey/terraform` (realm, clients) et `scripts/bootstrap-ferriskey.sh` (`allowed_resources`, propriétaire de la ressource API, `token_exchange_enabled`, policies `api → agent` en impersonation et `agent → matos-mcp` en délégation).
 - Chaque jeton de la chaîne garde l'`exp` du jeton de l'utilisateur (30 min sur la stack locale) : voir A2 et `docs/ferriskey-needs.md`, besoin 2.
 - Le MCP Kanban est une ressource protégée : métadonnées RFC 9728 (`/.well-known/oauth-protected-resource`), challenge `WWW-Authenticate: Bearer resource_metadata=…`, comme `mestier/apps/mcp-gateway`. Il est sans état : chaque requête porte son jeton.
 - Règles des agents (`LocalPolicyEngine`) :
@@ -203,7 +203,7 @@ sequenceDiagram
 
 `docker-compose.yml` : `postgres:17`, `apache/iggy:0.9.0`, FerrisKey (API + migrations + console, figés sur un build de `main`), `ollama`, `jaeger`. Ports dans la plage 4000–4199 pour ne pas entrer en conflit avec mestier et FerrisKey en local (voir `README.md`).
 
-`scripts/bootstrap-ferriskey.sh` (Terraform + API admin) crée le realm de démo, les clients `capitainerie-console`, `capitainerie-api`, `capitainerie-mcp`, un client par agent, la ressource API et les policies d'échange.
+`scripts/bootstrap-ferriskey.sh` (Terraform + API admin) crée le realm de démo, les clients `matos-console`, `matos-api`, `matos-mcp`, un client par agent, la ressource API et les policies d'échange.
 
 Iggy 0.9 sous Docker Desktop : `IGGY_SHARDING_CPU_ALLOCATION=1`, sinon le serveur échoue à fixer la mémoire des shards sur un nœud NUMA.
 
@@ -218,7 +218,7 @@ Ces choix ne sont couverts par aucun des repos de référence. Chacun a été pr
 | A3 | Hébergement du MCP Kanban | **Binaire séparé** `apps/mcp-kanban` | Routes montées dans `apps/api` | 1 : audience distincte et surface réduite, comme `mestier/apps/mcp-server`. |
 | A4 | Embeddings pour LanceDB | **Même endpoint OpenAI-compatible** (`/v1/embeddings`) | Modèle local in-process (`fastembed`) | 1 : aucune nouvelle dépendance, un seul endpoint à opérer. |
 | A5 | Stockage Parquet | **S3-compatible** (RustFS en dev, comme les deux repos) | Volume local | 1 : déjà présent dans la stack Ferrislabs, et adapté à Kubernetes. |
-| A6 | Backend de traces en dev | **SigNoz** (comme mestier) | Jaeger seul | 2 pour le MVP : un seul conteneur, et la console Capitainerie affiche elle-même coûts et timeline. |
+| A6 | Backend de traces en dev | **SigNoz** (comme mestier) | Jaeger seul | 2 pour le MVP : un seul conteneur, et la console Matos affiche elle-même coûts et timeline. |
 | A7 | Provisioning des clients agents | **Seed déclaratif** (script au démarrage du compose) | Provisioning par l'API admin FerrisKey à la création de l'org | 1 pour le MVP, 2 plus tard. |
 | A8 | LLM en dev | **Ollama** (API OpenAI-compatible) | vLLM en CPU | 1 : plus simple sur un poste de dev. |
 | A9 | PDP AuthZEN FerrisKey : le endpoint HTTP est seulement spécifié (`docs/design/authz/07-http-authzen.md`), et ni `main` ni `origin/main` ne l'exposent. | Attendre le endpoint FerrisKey | Adapter `Authorizer` local temporaire (comme `LocalPolicyEngine` de mestier) derrière le même port, puis bascule | 2. Besoin transmis dans `docs/ferriskey-needs.md` Besoin 1. |

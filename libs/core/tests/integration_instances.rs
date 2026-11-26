@@ -2,9 +2,10 @@
 
 use std::sync::Mutex;
 
-use capitainerie_common::{ClientId, CoreError, IntegrationInstanceId, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::Utc;
+use matos_common::{ClientId, CoreError, IntegrationInstanceId, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -29,7 +30,6 @@ use capitainerie_core::{
         crypto::SecretCipher, integration::postgres::PgIntegrationInstanceRepository, postgres,
     },
 };
-use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -80,15 +80,11 @@ fn cipher() -> SecretCipher {
     SecretCipher::new(&[7u8; 32]).unwrap()
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher())
 }
 
-async fn client(
-    usecase: &CapitainerieUseCase,
-    organization_id: OrganizationId,
-    name: &str,
-) -> Client {
+async fn client(usecase: &MatosUseCase, organization_id: OrganizationId, name: &str) -> Client {
     usecase
         .create_client(
             subject(organization_id, false),
@@ -174,7 +170,7 @@ fn odoo(client: &Client, name: &str) -> CreateInstance {
 }
 
 async fn add(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     client: &Client,
     name: &str,
@@ -515,7 +511,7 @@ async fn a_failed_probe_stores_nothing_on_creation() {
 #[cfg(feature = "mock")]
 #[tokio::test]
 async fn a_connector_that_fails_leaves_no_row_behind() {
-    use capitainerie_core::domain::integration::ports::MockIntegrationConnector;
+    use matos_core::domain::integration::ports::MockIntegrationConnector;
 
     let Some(pool) = pool().await else { return };
     let organization_id = organization(&pool).await;
@@ -845,7 +841,7 @@ async fn an_archived_instance_is_hidden_unless_asked_for_and_can_no_longer_chang
 }
 
 async fn todo_card(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     client: &Client,
 ) -> Card {
@@ -1011,7 +1007,7 @@ async fn a_member_reads_but_only_an_admin_manages_and_the_refusals_are_audited()
     let created = add(&usecase, organization_id, &acme, "Odoo prod", &connector).await;
     let member = subject(organization_id, false);
     let agent = Subject {
-        actor: Some("capitainerie-agent-writer".into()),
+        actor: Some("matos-agent-writer".into()),
         ..member.clone()
     };
 
@@ -1082,7 +1078,7 @@ async fn without_a_secrets_key_nothing_is_probed_or_stored() {
         &ScriptedConnector::healthy(),
     )
     .await;
-    let keyless = CapitainerieUseCase::with_local_policies(pool.clone());
+    let keyless = MatosUseCase::with_local_policies(pool.clone());
     let connector = ScriptedConnector::healthy();
     let admin = subject(organization_id, true);
 

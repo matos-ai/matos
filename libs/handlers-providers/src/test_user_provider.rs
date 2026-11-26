@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_core::domain::provider::ports::ModelCatalog;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::provider::ports::ModelCatalog;
+use matos_handlers::{ApiError, Caller};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -21,9 +21,9 @@ pub struct TestUserProviderResponse {
     params(("kind" = crate::dto::ProviderKindDto, Path, description = "Provider")),
     responses(
         (status = 200, description = "The outcome of a live call with the caller's stored key", body = TestUserProviderResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "The caller has no such connection", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "The caller has no such connection", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -3,9 +3,9 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::ClientId;
-use capitainerie_core::domain::project::ProjectFilter;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::ClientId;
+use matos_core::domain::project::ProjectFilter;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -31,8 +31,8 @@ pub struct ListProjectsQuery {
     params(ListProjectsQuery),
     responses(
         (status = 200, description = "The organization's projects by name; without archived, the active ones only", body = ProjectListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no client access", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no client access", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

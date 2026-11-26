@@ -8,9 +8,10 @@ use std::{
     time::Duration,
 };
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId, StepId};
-use capitainerie_core::{
-    CapitainerieUseCase, InterventionConfig, InterventionPipeline,
+use chrono::{DateTime, Utc};
+use matos_common::{CardId, CoreError, OrganizationId, RunId, StepId};
+use matos_core::{
+    InterventionConfig, InterventionPipeline, MatosUseCase,
     domain::{
         agent::{SecretToken, Usage},
         authorization::Subject,
@@ -39,7 +40,6 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -231,7 +231,7 @@ enum Slot {
 
 struct World {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization_id: OrganizationId,
     card: Card,
     staging: IntegrationInstance,
@@ -252,7 +252,7 @@ fn config() -> InterventionConfig {
 }
 
 async fn instance(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     client: &Client,
     name: &str,
@@ -294,7 +294,7 @@ async fn world(grants: &[(Slot, Access)]) -> Option<World> {
     .await
     .unwrap();
     let organization_id = OrganizationId(id);
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
     let acme = usecase

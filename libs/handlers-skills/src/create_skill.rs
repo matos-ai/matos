@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
-use capitainerie_core::domain::skill::service::CreateSkill;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_core::domain::skill::service::CreateSkill;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -26,10 +26,10 @@ pub struct CreateSkillRequest {
     request_body = CreateSkillRequest,
     responses(
         (status = 201, description = "The new skill", body = SkillResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage the catalog", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A skill of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An invalid field", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage the catalog", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A skill of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An invalid field", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

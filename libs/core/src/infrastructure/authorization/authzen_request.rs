@@ -7,7 +7,7 @@ use crate::domain::{
     integration::journal::INTEGRATOR_AGENT,
 };
 
-const NAMESPACE: &str = "Capitainerie";
+const NAMESPACE: &str = "Matos";
 const NO_RESOURCE_ID: &str = "none";
 
 pub fn evaluation_of(request: &AccessRequest) -> Value {

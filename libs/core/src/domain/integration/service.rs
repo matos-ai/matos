@@ -1,4 +1,4 @@
-use capitainerie_common::{ClientId, CoreError, IntegrationInstanceId};
+use matos_common::{ClientId, CoreError, IntegrationInstanceId};
 
 use super::{
     BaseUrl, ConnectorFailure, Environment, InstanceConnection, InstanceError, InstanceName,
@@ -466,7 +466,7 @@ fn checked_secret(secret: &SecretToken) -> Result<(), CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use chrono::Utc;
 

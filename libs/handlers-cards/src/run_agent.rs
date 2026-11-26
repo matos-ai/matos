@@ -5,8 +5,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{CardId, CoreError, RunId};
-use capitainerie_core::{
+use matos_common::{CardId, CoreError, RunId};
+use matos_core::{
     RunDelegation,
     domain::{
         agent_task::{AgentRunError, AgentRunRefusal, RepositoryTarget, StartAgentRun},
@@ -14,8 +14,8 @@ use capitainerie_core::{
         execution::{RepositoryRef, ports::CodeHost},
     },
 };
-use capitainerie_github::GithubApps;
-use capitainerie_handlers::{ApiError, AppState, Caller, errors::ApiErrorResponse};
+use matos_github::GithubApps;
+use matos_handlers::{ApiError, AppState, Caller, errors::ApiErrorResponse};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -104,11 +104,11 @@ impl IntoResponse for RunAgentError {
     request_body = RunAgentRequest,
     responses(
         (status = 202, description = "A run of the card's assignee agent is queued: with its connectors, or with `repository` an Execute run in the sandboxed executor (audit when writes are not allowed, change otherwise)", body = RunAgentResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused (an agent cannot start an agent run), or repository_not_allowed: the GitHub installation does not reach that repository", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such card in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "not_connected (the message names the connector slug), agent_identity_not_active (the agent's FerrisKey client is not ready yet), no_provider (neither the caller nor the organization connected an LLM provider; with `repository`, one of the provider of the harness the agent's model runs on, Anthropic when no harness takes it), github_not_connected, executor_disabled, execution_already_active, or the card changed since it was read", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "card_without_agent, agent_archived, agent_paused, agent_without_connector (without `repository`), repository_not_granted (the agent may not work on that repository), or an invalid repository or base_branch", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused (an agent cannot start an agent run), or repository_not_allowed: the GitHub installation does not reach that repository", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "not_connected (the message names the connector slug), agent_identity_not_active (the agent's FerrisKey client is not ready yet), no_provider (neither the caller nor the organization connected an LLM provider; with `repository`, one of the provider of the harness the agent's model runs on, Anthropic when no harness takes it), github_not_connected, executor_disabled, execution_already_active, or the card changed since it was read", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "card_without_agent, agent_archived, agent_paused, agent_without_connector (without `repository`), repository_not_granted (the agent may not work on that repository), or an invalid repository or base_branch", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -145,7 +145,7 @@ pub(crate) async fn start_with_connectors(
     caller: &Caller,
     card_id: CardId,
     command: StartAgentRun,
-) -> Result<capitainerie_core::StartedAgentRun, AgentRunError> {
+) -> Result<matos_core::StartedAgentRun, AgentRunError> {
     match &state.delegation {
         Some(delegation) => {
             state
@@ -180,7 +180,7 @@ pub(crate) async fn start_on_repository(
     card_id: CardId,
     command: StartAgentRun,
     mut target: RepositoryTarget,
-) -> Result<capitainerie_core::StartedAgentRun, RunAgentError> {
+) -> Result<matos_core::StartedAgentRun, RunAgentError> {
     state
         .usecase
         .check_agent_repository_run(subject.clone(), card_id, command, target.repository.clone())

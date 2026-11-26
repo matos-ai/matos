@@ -1,6 +1,6 @@
 use axum::Json;
 use axum_extra::routing::TypedPath;
-use capitainerie_core::domain::execution::harness::Harness;
+use matos_core::domain::execution::harness::Harness;
 use serde::Deserialize;
 
 use crate::dto::{HarnessListResponse, HarnessResponse};
@@ -16,7 +16,7 @@ pub struct HarnessesPath;
     tag = super::TAG,
     responses(
         (status = 200, description = "The coding agents an execution can run on, with the provider whose key each one uses and the models it accepts", body = HarnessListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -1,4 +1,4 @@
-# Capitainerie
+# Matos
 
 Plateforme open source d'orchestration d'agents IA, écrite en Rust et pensée pour Kubernetes.
 
@@ -51,10 +51,10 @@ sqlx migrate run --source migrations
 Le script de bootstrap affiche `EXCHANGE_CLIENT_SECRET` et `AGENT_CREDENTIALS` sans les écrire. Reportez-les dans `.env`, avec une `DELEGATION_KEY` (`openssl rand -base64 32`, la même pour l'API et le worker). Ensuite, lancez chaque service dans son propre terminal :
 
 ```bash
-cargo run -p capitainerie-api
-cargo run -p capitainerie-mcp-kanban
-cargo run -p capitainerie-worker     # relais outbox, orchestrateur, indexeur des cartes
-cargo run -p capitainerie-exporter   # événements de run → Parquet (page Agents)
+cargo run -p matos-api
+cargo run -p matos-mcp-kanban
+cargo run -p matos-worker     # relais outbox, orchestrateur, indexeur des cartes
+cargo run -p matos-exporter   # événements de run → Parquet (page Agents)
 cd apps/console && cp .env.example .env && corepack pnpm install && corepack pnpm dev
 ```
 
@@ -75,7 +75,7 @@ Sous Docker Desktop, Ollama tourne sur CPU : comptez une à deux minutes par ét
 
 ### Exécutant (optionnel)
 
-L'Exécutant lance Claude Code dans un Job Kubernetes. Prérequis : [kind](https://kind.sigs.k8s.io) et `kubectl`. `./scripts/kind-up.sh` crée le cluster `capitainerie`, le namespace `capitainerie-tasks`, construit l'image `capitainerie-executor:dev` et la charge dans kind, puis affiche le contexte kubeconfig à utiliser (`kind-capitainerie`).
+L'Exécutant lance Claude Code dans un Job Kubernetes. Prérequis : [kind](https://kind.sigs.k8s.io) et `kubectl`. `./scripts/kind-up.sh` crée le cluster `matos`, le namespace `matos-tasks`, construit l'image `matos-executor:dev` et la charge dans kind, puis affiche le contexte kubeconfig à utiliser (`kind-matos`).
 
 **GitHub App** : chaque organisation crée sa propre GitHub App depuis la console, sans variable d'environnement côté opérateur ni étape manuelle sur GitHub.
 
@@ -84,17 +84,17 @@ L'Exécutant lance Claude Code dans un Job Kubernetes. Prérequis : [kind](https
 3. Après la validation sur GitHub, le navigateur revient sur la console, qui échange le code temporaire contre l'identité de l'App ; son identifiant, sa clé privée, son secret OAuth et son secret de webhook sont stockés scellés par organisation.
 4. L'admin clique sur « Installer sur vos dépôts », choisit les dépôts sur GitHub, et revient connecté.
 
-En local, `CONSOLE_URL` n'a besoin d'être joignable que par le navigateur : GitHub redirige le navigateur, il n'appelle jamais Capitainerie (pas de tunnel ni de webhook). Pour GitHub Enterprise, `GITHUB_API_BASE` et `GITHUB_WEB_BASE` remplacent les hôtes publics. Supprimer l'App dans la console l'oublie côté Capitainerie, ainsi que son installation ; elle reste sur GitHub, où il faut aussi la supprimer (lien affiché).
+En local, `CONSOLE_URL` n'a besoin d'être joignable que par le navigateur : GitHub redirige le navigateur, il n'appelle jamais Matos (pas de tunnel ni de webhook). Pour GitHub Enterprise, `GITHUB_API_BASE` et `GITHUB_WEB_BASE` remplacent les hôtes publics. Supprimer l'App dans la console l'oublie côté Matos, ainsi que son installation ; elle reste sur GitHub, où il faut aussi la supprimer (lien affiché).
 
 Isolation et moindre privilège :
 
 - **DNS** : le pod ne résout rien. Le worker résout l'hôte de `EXECUTOR_PROXY_URL` à la création du Job et l'inscrit dans `hostAliases` ; le pod a `dnsPolicy: None` avec `127.0.0.1` pour seul serveur, et la `NetworkPolicy` des tâches n'autorise plus le DNS. Cela ferme l'exfiltration par requêtes DNS. L'IP du Service du proxy doit rester stable : utiliser un Service `ClusterIP` (le défaut du chart). Les pods déjà lancés gardent l'IP résolue à leur création.
-- **Base du proxy** : le proxy ne fait que lire `task_grants`, `provider_credentials`, `github_installations` et `github_apps`. `deploy/postgres/egress-proxy-role.sql` crée le rôle `capitainerie_egress_proxy` avec `SELECT` sur ces seules tables ; lui donner un mot de passe (`ALTER ROLE capitainerie_egress_proxy PASSWORD '…'`), puis, dans le chart, pointer `egressProxy.databaseUrlSecretKey` vers la clé du Secret qui contient sa `DATABASE_URL`. Une faille du proxy ne donne alors ni lecture des autres tables ni écriture.
+- **Base du proxy** : le proxy ne fait que lire `task_grants`, `provider_credentials`, `github_installations` et `github_apps`. `deploy/postgres/egress-proxy-role.sql` crée le rôle `matos_egress_proxy` avec `SELECT` sur ces seules tables ; lui donner un mot de passe (`ALTER ROLE matos_egress_proxy PASSWORD '…'`), puis, dans le chart, pointer `egressProxy.databaseUrlSecretKey` vers la clé du Secret qui contient sa `DATABASE_URL`. Une faille du proxy ne donne alors ni lecture des autres tables ni écriture.
 - **Révocation** : le proxy garde une grant valide 10 s en cache et refuse pendant 10 s un jeton inconnu ou révoqué. La révocation peut donc mettre jusqu'à 10 s à s'appliquer. Il sert au plus 16 requêtes simultanées par exécution (429 au-delà).
 - **Modèle et outils** : le proxy ne laisse passer que le modèle de l'exécution, des réponses plafonnées à 128 000 tokens, des outils côté client (ni `web_search`, `code_execution`, `computer`, ni `mcp_servers`) et une liste fermée d'en-têtes `anthropic-beta`.
 - **Usage** : les tokens et le coût viennent du flux `stream-json` de Claude Code, qui tourne dans le conteneur : ils sont indicatifs, pas une preuve de facturation.
 
-Risque résiduel, GitHub Actions : une branche poussée par l'Exécutant peut déclencher des workflows qui disposent de secrets du dépôt. Restreindre les workflows qui utilisent des secrets aux branches protégées ou à des environnements (`environment:` avec relecteurs requis), et ne pas les déclencher sur `push` d'une branche `capitainerie/*`.
+Risque résiduel, GitHub Actions : une branche poussée par l'Exécutant peut déclencher des workflows qui disposent de secrets du dépôt. Restreindre les workflows qui utilisent des secrets aux branches protégées ou à des environnements (`environment:` avec relecteurs requis), et ne pas les déclencher sur `push` d'une branche `matos/*`.
 
 Limite connue : le CNI par défaut de kind n'applique pas les `NetworkPolicy`. L'isolation réseau des conteneurs n'est donc pas vérifiée en local ; elle l'est seulement sur un cluster dont le CNI les applique (Cilium, Calico).
 
@@ -107,7 +107,7 @@ cargo test --workspace     # tests Postgres et Iggy sautés sans DATABASE_URL / 
 
 # Comme en CI : une base de test dédiée, jamais la base de dev (un worker qui
 # tourne publierait l'outbox pendant les tests).
-export DATABASE_URL=postgres://capitainerie:capitainerie@localhost:5442/capitainerie_test
+export DATABASE_URL=postgres://matos:matos@localhost:5442/matos_test
 sqlx migrate run --source migrations
 IGGY_ADDRESS=localhost:4190 REQUIRE_DATABASE_URL=1 REQUIRE_IGGY=1 \
   cargo test --workspace -- --test-threads=1
@@ -117,17 +117,17 @@ cd apps/console && corepack pnpm check && corepack pnpm test && corepack pnpm bu
 
 Une nouvelle requête `query!` demande une base vivante, puis `cargo sqlx prepare --workspace -- --all-targets`.
 
-Le jeu d'évaluation de l'extraction s'exécute contre le vrai modèle : `cargo run -p capitainerie-runtime-rig --example eval`.
+Le jeu d'évaluation de l'extraction s'exécute contre le vrai modèle : `cargo run -p matos-runtime-rig --example eval`.
 
 ## Déployer
 
-Une image par service (`Dockerfile` à cibles multiples : `api`, `worker`, `mcp-kanban`, `exporter`, `migrations`, `console`) et un chart Helm dans [`deploy/helm/capitainerie`](deploy/helm/capitainerie). Postgres, Iggy, FerrisKey et l'endpoint LLM sont des dépendances externes.
+Une image par service (`Dockerfile` à cibles multiples : `api`, `worker`, `mcp-kanban`, `exporter`, `migrations`, `console`) et un chart Helm dans [`deploy/helm/matos`](deploy/helm/matos). Postgres, Iggy, FerrisKey et l'endpoint LLM sont des dépendances externes.
 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) : domaine, ports et adapters, flux, identité, décisions.
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) : conventions de code Rust et front.
-- [`docs/ferriskey-needs.md`](docs/ferriskey-needs.md) : ce que Capitainerie attend de FerrisKey.
+- [`docs/ferriskey-needs.md`](docs/ferriskey-needs.md) : ce que Matos attend de FerrisKey.
 
 ## Licence
 

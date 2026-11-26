@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 
 use crate::{dto::ModelAssignmentsResponse, state::ProvidersState};
@@ -16,8 +16,8 @@ pub struct ModelAssignmentsPath;
     tag = super::TAG,
     responses(
         (status = 200, description = "The model chosen for each role, `null` when the organization chose none", body = ModelAssignmentsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

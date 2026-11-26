@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, InboxItemId};
 use chrono::Utc;
+use matos_common::{CoreError, InboxItemId};
 
 use super::{InboxPage, ReadSelection, ports::InboxRepository};
 use crate::domain::authorization::{
@@ -73,7 +73,7 @@ impl<'a, R: InboxRepository, A: Authorizer> InboxService<'a, R, A> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
     use uuid::Uuid;
 
     use super::*;

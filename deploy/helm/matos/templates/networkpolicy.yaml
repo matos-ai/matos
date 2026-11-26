@@ -1,0 +1,197 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+{{- if .Values.api.enabled }}
+{{- $ctx := dict "root" . "component" "api" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "matos.componentName" $ctx }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- toYaml $np.gatewayFrom | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port }}
+  egress:
+    {{- include "matos.egressDns" . | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.postgres | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.iggy | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.ferriskey | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.integrations | nindent 4 }}
+    {{- if .Values.config.otlpEndpoint }}
+    {{- include "matos.egressDependency" $np.external.otlp | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if .Values.mcpKanban.enabled }}
+{{- $ctx := dict "root" . "component" "mcp-kanban" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "matos.componentName" $ctx }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- toYaml $np.gatewayFrom | nindent 8 }}
+        - podSelector:
+            matchLabels:
+              {{- include "matos.selectorLabels" (dict "root" . "component" "worker") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.mcpKanban.port }}
+  egress:
+    {{- include "matos.egressDns" . | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.postgres | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.ferriskey | nindent 4 }}
+    {{- if .Values.config.otlpEndpoint }}
+    {{- include "matos.egressDependency" $np.external.otlp | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if .Values.worker.enabled }}
+{{- $ctx := dict "root" . "component" "worker" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "matos.componentName" $ctx }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    {{- include "matos.egressDns" . | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.postgres | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.iggy | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.ferriskey | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.llm | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.integrations | nindent 4 }}
+    {{- if .Values.config.otlpEndpoint }}
+    {{- include "matos.egressDependency" $np.external.otlp | nindent 4 }}
+    {{- end }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "matos.selectorLabels" (dict "root" . "component" "mcp-kanban") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.mcpKanban.port }}
+    {{- if .Values.executor.enabled }}
+    {{- include "matos.egressDependency" $np.external.kubeApi | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if .Values.executor.enabled }}
+{{- $ctx := dict "root" . "component" "egress-proxy" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "matos.componentName" $ctx }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.executor.namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.egressProxy.port }}
+  egress:
+    {{- include "matos.egressDns" . | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.postgres | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.upstream | nindent 4 }}
+    {{- if .Values.config.otlpEndpoint }}
+    {{- include "matos.egressDependency" $np.external.otlp | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if .Values.exporter.enabled }}
+{{- $ctx := dict "root" . "component" "exporter" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "matos.componentName" $ctx }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    {{- include "matos.egressDns" . | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.iggy | nindent 4 }}
+    {{- if .Values.config.otlpEndpoint }}
+    {{- include "matos.egressDependency" $np.external.otlp | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if .Values.console.enabled }}
+{{- $ctx := dict "root" . "component" "console" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "matos.componentName" $ctx }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- toYaml $np.gatewayFrom | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress: []
+{{- end }}
+{{- if .Values.migrations.enabled }}
+{{- $ctx := dict "root" . "component" "migrations" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "matos.componentName" $ctx }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    {{- include "matos.egressDns" . | nindent 4 }}
+    {{- include "matos.egressDependency" $np.external.postgres | nindent 4 }}
+{{- end }}
+{{- end }}

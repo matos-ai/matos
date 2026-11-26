@@ -1,9 +1,9 @@
 use std::{collections::BTreeSet, time::Duration};
 
-use capitainerie_bus_iggy::IggyEventBus;
-use capitainerie_common::{CardId, CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_bus_iggy::IggyEventBus;
+use matos_common::{CardId, CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         card::Card,
         provider::{ModelAssignments, ModelTarget},
@@ -13,11 +13,11 @@ use capitainerie_core::{
         },
     },
 };
-use capitainerie_events::{
+use matos_events::{
     DomainEvent, EventEnvelope, Topic,
     card::{CardMoved, CardProposed, CardUpdated},
 };
-use capitainerie_vector_lancedb::LanceVectorStore;
+use matos_vector_lancedb::LanceVectorStore;
 use tokio::sync::watch;
 
 const CONSUMER_GROUP: &str = "card-indexer";
@@ -32,7 +32,7 @@ const BATCH: u32 = 20;
 /// index wiped while the group's offset survived, and an organization that has
 /// no index yet for its embedding model.
 pub struct CardIndexer<E> {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     bus: IggyEventBus,
     embedder: E,
     vectors: LanceVectorStore,
@@ -41,7 +41,7 @@ pub struct CardIndexer<E> {
 
 impl<E: Embedder> CardIndexer<E> {
     pub fn new(
-        usecase: CapitainerieUseCase,
+        usecase: MatosUseCase,
         bus: IggyEventBus,
         embedder: E,
         vectors: LanceVectorStore,
@@ -190,7 +190,8 @@ async fn index_cards<E: Embedder, V: VectorStore>(
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use capitainerie_core::domain::{
+    use chrono::Utc;
+    use matos_core::domain::{
         agent::Usage,
         card::{Author, CardTitle, Column},
         provider::{ModelRef, ProviderKind},
@@ -199,8 +200,7 @@ mod tests {
             ports::{MockEmbedder, MockVectorStore},
         },
     };
-    use capitainerie_events::card::{CardAuthor, CardCommented};
-    use chrono::Utc;
+    use matos_events::card::{CardAuthor, CardCommented};
     use uuid::Uuid;
 
     use super::*;

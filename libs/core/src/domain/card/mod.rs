@@ -6,9 +6,9 @@ pub mod ports;
 pub mod relations;
 pub mod service;
 
-use capitainerie_common::{CardCommentId, CardId, CoreError, OrganizationId, RunId, TranscriptId};
-use capitainerie_events::card::CardAuthor;
 use chrono::{DateTime, Utc};
+use matos_common::{CardCommentId, CardId, CoreError, OrganizationId, RunId, TranscriptId};
+use matos_events::card::CardAuthor;
 
 use crate::domain::{client::links::Links, execution::RepositoryRef, transcript::TranscriptBody};
 

@@ -3,10 +3,11 @@
 use std::sync::Arc;
 
 use axum::{Extension, Router};
-use capitainerie_auth::Identity;
-use capitainerie_common::{ClientId, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::Utc;
+use matos_auth::Identity;
+use matos_common::{ClientId, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -25,17 +26,16 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use capitainerie_handlers::Caller;
-use capitainerie_handlers_integrations::GithubIntegration;
-use capitainerie_integrations::{HttpConnector, NetworkPolicy};
-use chrono::Utc;
+use matos_github::{GithubApps, GithubBases};
+use matos_handlers::Caller;
+use matos_handlers_integrations::GithubIntegration;
+use matos_integrations::{HttpConnector, NetworkPolicy};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
-const ADMIN: &str = "capitainerie-admin";
+const ADMIN: &str = "matos-admin";
 const KEY: &str = "sk-0123456789abcdef-supersecret-wxyz";
 
 fn database_url() -> Option<String> {
@@ -83,7 +83,7 @@ fn caller(organization: &Organization, roles: &[&str]) -> Caller {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -104,8 +104,8 @@ fn subject(organization: &Organization, is_admin: bool) -> Subject {
     }
 }
 
-fn usecase_of(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase_of(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[5u8; 32]).unwrap())
 }
 
@@ -142,7 +142,7 @@ async fn serve(pool: &PgPool, caller: Caller) -> String {
     .unwrap();
     let github = GithubIntegration::new(Arc::new(apps));
     let connector = HttpConnector::new(NetworkPolicy::default()).unwrap();
-    let app: Router = capitainerie_handlers_integrations::router::<()>(usecase, github, connector)
+    let app: Router = matos_handlers_integrations::router::<()>(usecase, github, connector)
         .layer(Extension(caller));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -414,7 +414,7 @@ async fn an_admin_renames_an_instance_and_a_taken_name_is_a_409() {
     let unknown = http
         .patch(format!(
             "{admin}/api/v1/integration-instances/{}",
-            capitainerie_common::IntegrationInstanceId::new()
+            matos_common::IntegrationInstanceId::new()
         ))
         .json(&json!({"name": "x"}))
         .send()
@@ -614,7 +614,7 @@ async fn checking_an_unknown_instance_is_a_404() {
     let response = reqwest::Client::new()
         .post(format!(
             "{admin}/api/v1/integration-instances/{}/check",
-            capitainerie_common::IntegrationInstanceId::new()
+            matos_common::IntegrationInstanceId::new()
         ))
         .send()
         .await

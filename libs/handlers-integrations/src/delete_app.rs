@@ -1,5 +1,5 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_handlers::Caller;
+use matos_handlers::Caller;
 
 use crate::{GithubAppResponse, IntegrationError, state::IntegrationsState};
 
@@ -12,9 +12,9 @@ pub use crate::create_app::AppPath as DeleteAppPath;
     tag = super::TAG,
     responses(
         (status = 200, description = "The App and the installation of the organization are forgotten; the App stays on GitHub, to be deleted at its html_url", body = GithubAppResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "The organization has no App", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "The organization has no App", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

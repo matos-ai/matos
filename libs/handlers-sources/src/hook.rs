@@ -6,9 +6,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::SourceEventId;
-use capitainerie_core::domain::source::{PAYLOAD_MAX_BYTES, check_payload, service::HookRefusal};
-use capitainerie_handlers::{ApiError, AppState, errors::ApiErrorResponse};
+use matos_common::SourceEventId;
+use matos_core::domain::source::{PAYLOAD_MAX_BYTES, check_payload, service::HookRefusal};
+use matos_handlers::{ApiError, AppState, errors::ApiErrorResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -36,8 +36,8 @@ impl From<ApiError> for HookError {
     }
 }
 
-impl From<capitainerie_common::CoreError> for HookError {
-    fn from(error: capitainerie_common::CoreError) -> Self {
+impl From<matos_common::CoreError> for HookError {
+    fn from(error: matos_common::CoreError) -> Self {
         Self::Api(error.into())
     }
 }
@@ -73,10 +73,10 @@ impl IntoResponse for HookError {
     ),
     responses(
         (status = 202, description = "The event is stored, its card created and, when the source asks for it, its agent run queued", body = HookResponse),
-        (status = 404, description = "No enabled source has this token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 413, description = "The body exceeds 256 KiB", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "The body is neither JSON nor UTF-8 text", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 429, description = "The source received too many events in the last minute", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No enabled source has this token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 413, description = "The body exceeds 256 KiB", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "The body is neither JSON nor UTF-8 text", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 429, description = "The source received too many events in the last minute", body = matos_handlers::errors::ApiErrorResponse),
     ),
 )]
 pub async fn handler(

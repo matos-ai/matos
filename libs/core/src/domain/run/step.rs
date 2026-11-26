@@ -1,5 +1,5 @@
-use capitainerie_common::{OrganizationId, RunId, StepId};
 use chrono::{DateTime, Utc};
+use matos_common::{OrganizationId, RunId, StepId};
 
 use super::StepKind;
 use crate::domain::agent::{ToolCall, Usage};
@@ -88,7 +88,7 @@ impl StepStatus {
 }
 
 impl TryFrom<&str> for StepStatus {
-    type Error = capitainerie_common::CoreError;
+    type Error = matos_common::CoreError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
@@ -96,7 +96,7 @@ impl TryFrom<&str> for StepStatus {
             "succeeded" => Ok(Self::Succeeded),
             "failed" => Ok(Self::Failed),
             "skipped" => Ok(Self::Skipped),
-            other => Err(capitainerie_common::CoreError::Internal(format!(
+            other => Err(matos_common::CoreError::Internal(format!(
                 "unknown step status {other}"
             ))),
         }

@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_core::domain::provider::ports::ModelCatalog;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::provider::ports::ModelCatalog;
+use matos_handlers::{ApiError, Caller};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -25,9 +25,9 @@ pub struct TestProviderResponse {
     params(("kind" = crate::dto::ProviderKindDto, Path, description = "Provider")),
     responses(
         (status = 200, description = "The outcome of listing the provider's models with the stored key", body = TestProviderResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "The provider is not configured", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "The provider is not configured", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

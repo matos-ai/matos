@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-integrations"
+name = "matos-integrations"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,8 +7,8 @@ license.workspace = true
 
 [dependencies]
 base64.workspace = true
-capitainerie-common.workspace = true
-capitainerie-core.workspace = true
+matos-common.workspace = true
+matos-core.workspace = true
 chrono.workspace = true
 pdf-extract.workspace = true
 reqwest.workspace = true

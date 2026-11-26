@@ -1,8 +1,8 @@
-use capitainerie_common::ConversationId;
-use capitainerie_core::domain::conversation::{
+use chrono::{DateTime, Utc};
+use matos_common::ConversationId;
+use matos_core::domain::conversation::{
     Conversation, Message, MessageRole, MessageStatus, ProposedCard, ToolRecord,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;

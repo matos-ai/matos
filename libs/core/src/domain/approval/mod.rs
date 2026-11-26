@@ -2,8 +2,8 @@ pub mod ports;
 pub mod service;
 
 use aws_lc_rs::digest;
-use capitainerie_common::{AgentId, ApprovalId, CardId, CoreError, OrganizationId, RunId};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, ApprovalId, CardId, CoreError, OrganizationId, RunId};
 use serde_json::{Value, json};
 
 use crate::domain::card::bounded_text;
@@ -75,7 +75,7 @@ pub struct PlannedChange {
 }
 
 /// Author of the comments the system posts on a card about an approval.
-pub const SYSTEM_ACTOR: &str = "Capitainerie";
+pub const SYSTEM_ACTOR: &str = "Matos";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApprovalKind {

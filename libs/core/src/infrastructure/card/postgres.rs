@@ -1,5 +1,5 @@
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId};
-use capitainerie_macros::repository;
+use matos_common::{CardId, CoreError, OrganizationId, RunId};
+use matos_macros::repository;
 
 use super::model::{CardCommentRow, CardRow, criteria_json, stored_offset};
 use crate::{

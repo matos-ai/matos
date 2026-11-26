@@ -7,16 +7,16 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use capitainerie_auth::{AuthError, Identity, TokenVerifier, unverified_issuer};
-use capitainerie_common::CoreError;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_auth::{AuthError, Identity, TokenVerifier, unverified_issuer};
+use matos_common::CoreError;
+use matos_core::{
+    MatosUseCase,
     domain::{agent_identity::AgentClientId, authorization::Subject},
 };
 use serde_json::{Value, json};
 
 pub struct AuthState<V> {
-    pub usecase: CapitainerieUseCase,
+    pub usecase: MatosUseCase,
     pub verifier: V,
     pub public_url: String,
 }
@@ -113,7 +113,7 @@ pub fn bearer_token(headers: &HeaderMap) -> Option<&str> {
 
 pub fn delegated_subject(
     identity: &Identity,
-    organization_id: capitainerie_common::OrganizationId,
+    organization_id: matos_common::OrganizationId,
 ) -> Result<Subject, Rejection> {
     let agent = identity
         .actor
@@ -184,8 +184,8 @@ async fn subject_of<V: TokenVerifier>(
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_auth::Actor;
-    use capitainerie_common::OrganizationId;
+    use matos_auth::Actor;
+    use matos_common::OrganizationId;
     use uuid::Uuid;
 
     use super::*;
@@ -194,7 +194,7 @@ mod tests {
         Identity {
             subject: "user-1".into(),
             issuer: "http://idp/realms/r".into(),
-            client_id: "capitainerie-agent-writer".into(),
+            client_id: "matos-agent-writer".into(),
             username: None,
             email: None,
             display_name: None,
@@ -223,13 +223,13 @@ mod tests {
         let organization = OrganizationId(Uuid::now_v7());
         let actor = Actor {
             sub: "service-account".into(),
-            client_id: Some("capitainerie-agent-writer".into()),
+            client_id: Some("matos-agent-writer".into()),
             act: None,
         };
         let subject = delegated_subject(&identity(Some(actor)), organization).unwrap();
         assert_eq!(subject.id, "user-1");
         assert_eq!(subject.organization_id, organization);
-        assert_eq!(subject.actor.as_deref(), Some("capitainerie-agent-writer"));
+        assert_eq!(subject.actor.as_deref(), Some("matos-agent-writer"));
     }
 
     #[test]

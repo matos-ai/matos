@@ -1,6 +1,6 @@
-use capitainerie_common::{ConversationId, CoreError, OrganizationId};
-use capitainerie_macros::repository;
 use chrono::{DateTime, Utc};
+use matos_common::{ConversationId, CoreError, OrganizationId};
+use matos_macros::repository;
 use sqlx::types::Json;
 
 use super::model::{ConversationRow, MessageRow, stored_counter};
@@ -203,7 +203,7 @@ impl MessageRepository for PgMessageRepository<'_> {
         content: &MessageContent,
         status: MessageStatus,
     ) -> Result<Message, CoreError> {
-        let id = capitainerie_common::ConversationMessageId::new();
+        let id = matos_common::ConversationMessageId::new();
         let mut tx = self.tx.lock().await;
         let row = sqlx::query_as!(
             MessageRow,

@@ -6,13 +6,13 @@ use axum::body::{Body, Bytes};
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use capitainerie_common::IntegrationInstanceId;
-use capitainerie_core::domain::agent::SecretToken;
-use capitainerie_core::domain::integration::{
+use matos_common::IntegrationInstanceId;
+use matos_core::domain::agent::SecretToken;
+use matos_core::domain::integration::{
     BaseUrl, ConnectorFailure, InstanceConnection, IntegrationKind, ProbeReport,
     ports::IntegrationConnector,
 };
-use capitainerie_integrations::{HttpConnector, NetworkPolicy};
+use matos_integrations::{HttpConnector, NetworkPolicy};
 use serde_json::Value;
 
 pub const SECRET: &str = "s3cr3t-token-value";

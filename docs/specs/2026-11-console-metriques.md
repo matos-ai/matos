@@ -71,8 +71,8 @@ Goal:
 ```
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test -p capitainerie-core cost
-cargo test -p capitainerie-handlers-audit
+cargo test -p matos-core cost
+cargo test -p matos-handlers-audit
 pnpm --dir apps/console check
 pnpm --dir apps/console test
 pnpm --dir apps/console build

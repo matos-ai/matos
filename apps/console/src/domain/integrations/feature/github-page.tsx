@@ -111,9 +111,9 @@ function CreateAppForm() {
 	return (
 		<form onSubmit={submit} className="grid max-w-[520px] gap-3" noValidate>
 			<p className="m-0 text-muted-foreground">
-				Capitainerie crée sur GitHub une application privée dédiée à ton
-				organisation. Elle demande le minimum : lire et écrire le code et les
-				pull requests, lire les issues et les membres.
+				Matos crée sur GitHub une application privée dédiée à ton organisation.
+				Elle demande le minimum : lire et écrire le code et les pull requests,
+				lire les issues et les membres.
 			</p>
 			<Field label="Propriétaire de l'application" group>
 				<RadioGroup
@@ -243,7 +243,7 @@ export function GithubPage({ banner }: Props) {
 			deleteApp.mutate(undefined, {
 				onSuccess: () =>
 					setNotice(
-						'Application oubliée par Capitainerie. Supprime-la aussi sur GitHub.',
+						'Application oubliée par Matos. Supprime-la aussi sur GitHub.',
 					),
 				onError: (error) => setNotice(describeDeleteAppError(error)),
 			})
@@ -356,7 +356,7 @@ export function GithubPage({ banner }: Props) {
 				}
 				description={
 					confirm === 'delete'
-						? "Capitainerie oublie l'application et son installation. L'application reste sur GitHub : supprime-la depuis sa page GitHub."
+						? "Matos oublie l'application et son installation. L'application reste sur GitHub : supprime-la depuis sa page GitHub."
 						: "Les agents ne pourront plus travailler sur les dépôts. Les exécutions en cours gardent l'accès qu'elles ont déjà."
 				}
 				confirmLabel={confirm === 'delete' ? 'Oublier' : 'Déconnecter'}

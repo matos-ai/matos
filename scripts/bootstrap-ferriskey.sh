@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Declares the demo organization's realm and clients in FerrisKey, then
-# registers the organization in Capitainerie so the API trusts its issuer.
+# registers the organization in Matos so the API trusts its issuer.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TF_DIR="${REPO_ROOT}/deploy/ferriskey/terraform"
 FERRISKEY_URL="${FERRISKEY_URL:-http://localhost:4110}"
-ORGANIZATION_NAME="${ORGANIZATION_NAME:-Capitainerie Demo}"
+ORGANIZATION_NAME="${ORGANIZATION_NAME:-Matos Demo}"
 
 for tool in terraform docker curl jq; do
     command -v "${tool}" >/dev/null 2>&1 || { echo "❌ ${tool} is required" >&2; exit 1; }
@@ -52,7 +52,7 @@ ensure_policy() {
         "{\"target_audience\":\"${target}\",\"allow_impersonation\":${impersonation},\"allow_delegation\":${delegation}}" >/dev/null
 }
 
-echo "🔁 token exchange: ${API_RESOURCE} owned by capitainerie-api, api -> agents -> ${MCP_CLIENT_ID}"
+echo "🔁 token exchange: ${API_RESOURCE} owned by matos-api, api -> agents -> ${MCP_CLIENT_ID}"
 admin PUT /settings "{\"allowed_resources\":[\"${API_RESOURCE}\"]}" >/dev/null
 admin PUT /resource-owners "{\"owners\":[{\"uri\":\"${API_RESOURCE}\",\"client_id\":\"${API_CLIENT_UUID}\"}]}" >/dev/null
 admin PATCH "/clients/${API_CLIENT_UUID}" '{"token_exchange_enabled":true}' >/dev/null
@@ -72,13 +72,13 @@ admin_user_id="$(admin GET "/users" \
     | jq -r --arg u "${ADMIN_USERNAME}" '(if type == "array" then . else .data end)[]? | select(.username == $u) | .id' \
     | head -1)"
 if [ -n "${admin_user_id}" ]; then
-    echo "👑 ${ADMIN_USERNAME} -> capitainerie-admin"
+    echo "👑 ${ADMIN_USERNAME} -> matos-admin"
     if ! admin GET "/users/${admin_user_id}/roles" \
-        | jq -e '(if type == "array" then . else .data end)[]? | select(.name == "capitainerie-admin")' >/dev/null; then
+        | jq -e '(if type == "array" then . else .data end)[]? | select(.name == "matos-admin")' >/dev/null; then
         admin POST "/users/${admin_user_id}/roles/${ADMIN_ROLE_UUID}" >/dev/null
     fi
 else
-    echo "ℹ️  no user ${ADMIN_USERNAME} yet: register it, then run this script again to grant capitainerie-admin"
+    echo "ℹ️  no user ${ADMIN_USERNAME} yet: register it, then run this script again to grant matos-admin"
 fi
 
 # The provisioner's service account manages the agents' clients, and only
@@ -88,9 +88,9 @@ provisioner_user_id="$(admin GET "/users" \
     | jq -r --arg u "${provisioner_account}" '(if type == "array" then . else .data end)[]? | select(.username == $u) | .id' \
     | head -1)"
 [ -n "${provisioner_user_id}" ] || { echo "❌ no user ${provisioner_account}" >&2; exit 1; }
-echo "🛠  ${provisioner_account} -> capitainerie-provisioner"
+echo "🛠  ${provisioner_account} -> matos-provisioner"
 if ! admin GET "/users/${provisioner_user_id}/roles" \
-    | jq -e '(if type == "array" then . else .data end)[]? | select(.name == "capitainerie-provisioner")' >/dev/null; then
+    | jq -e '(if type == "array" then . else .data end)[]? | select(.name == "matos-provisioner")' >/dev/null; then
     admin POST "/users/${provisioner_user_id}/roles/${PROVISIONER_ROLE_UUID}" >/dev/null
 fi
 
@@ -107,7 +107,7 @@ done
 
 echo "🏢 organization ${REALM} -> ${ISSUER}"
 docker compose -f "${REPO_ROOT}/docker-compose.yml" exec -T postgres \
-    psql -v ON_ERROR_STOP=1 -U capitainerie -d capitainerie \
+    psql -v ON_ERROR_STOP=1 -U matos -d matos \
     -v slug="${REALM}" -v name="${ORGANIZATION_NAME}" -v issuer="${ISSUER}" >/dev/null <<'SQL'
 INSERT INTO organizations (id, slug, name, issuer_url)
 VALUES (gen_random_uuid(), :'slug', :'name', :'issuer')
@@ -125,7 +125,7 @@ cat <<SUMMARY
 
    API and worker (.env) — secrets are printed, not written: they belong in
    whatever holds your secrets, not in the working tree:
-     EXCHANGE_CLIENT_ID=capitainerie-api
+     EXCHANGE_CLIENT_ID=matos-api
      EXCHANGE_CLIENT_SECRET=${API_SECRET}
      AGENT_CREDENTIALS=${AGENT_CREDENTIALS}
      PROVISIONER_CLIENT_ID=${PROVISIONER_CLIENT_ID}

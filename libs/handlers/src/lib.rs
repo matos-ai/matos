@@ -9,4 +9,4 @@ pub use auth::Caller;
 pub use errors::ApiError;
 pub use patch::Patch;
 pub use public_url::PublicBaseUrl;
-pub use state::{AppState, CapitainerieTokenExchanger, CapitainerieTokenVerifier, Delegation};
+pub use state::{AppState, Delegation, MatosTokenExchanger, MatosTokenVerifier};

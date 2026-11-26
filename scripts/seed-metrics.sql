@@ -1,7 +1,7 @@
 -- Données de démonstration pour la page Métriques de la console.
 --
---   psql "$DATABASE_URL" -v org=capitainerie -f scripts/seed-metrics.sql
---   psql "$DATABASE_URL" -v org=capitainerie -v clean=1 -f scripts/seed-metrics.sql   # retire tout
+--   psql "$DATABASE_URL" -v org=matos -f scripts/seed-metrics.sql
+--   psql "$DATABASE_URL" -v org=matos -v clean=1 -f scripts/seed-metrics.sql   # retire tout
 --
 -- Tout ce qui est créé porte `created_by = 'seed-metrics'` (agents, projets, cartes, transcripts)
 -- ou un `initiated_by` listé plus bas ; relancer le script remplace le jeu précédent.
@@ -9,7 +9,7 @@
 
 \if :{?org}
 \else
-  \set org capitainerie
+  \set org matos
 \endif
 \if :{?clean}
 \else

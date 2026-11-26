@@ -5,9 +5,9 @@ use std::{
     sync::Mutex,
 };
 
-use capitainerie_common::{CardId, CoreError, IntegrationActionId, OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CardId, CoreError, IntegrationActionId, OrganizationId, RunId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -205,7 +205,7 @@ impl IntegrationConnector for Scripted {
 
 struct World {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization_id: OrganizationId,
     acme: Client,
     run_id: RunId,
@@ -232,8 +232,7 @@ async fn world() -> Option<World> {
     })?;
     let pool = postgres::connect(&url, 4).await.unwrap();
     let organization_id = organization(&pool).await;
-    let usecase =
-        CapitainerieUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher());
+    let usecase = MatosUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher());
     let acme = client(&usecase, organization_id, "Acme").await;
     let run_id = run(&usecase, organization_id).await;
     Some(World {
@@ -245,11 +244,7 @@ async fn world() -> Option<World> {
     })
 }
 
-async fn client(
-    usecase: &CapitainerieUseCase,
-    organization_id: OrganizationId,
-    name: &str,
-) -> Client {
+async fn client(usecase: &MatosUseCase, organization_id: OrganizationId, name: &str) -> Client {
     usecase
         .create_client(
             human(organization_id, false),
@@ -263,7 +258,7 @@ async fn client(
         .unwrap()
 }
 
-async fn run(usecase: &CapitainerieUseCase, organization_id: OrganizationId) -> RunId {
+async fn run(usecase: &MatosUseCase, organization_id: OrganizationId) -> RunId {
     usecase
         .submit_transcript(SubmitTranscript {
             subject: human(organization_id, false),
@@ -277,7 +272,7 @@ async fn run(usecase: &CapitainerieUseCase, organization_id: OrganizationId) -> 
         .run_id
 }
 
-async fn card(usecase: &CapitainerieUseCase, organization_id: OrganizationId) -> CardId {
+async fn card(usecase: &MatosUseCase, organization_id: OrganizationId) -> CardId {
     usecase
         .create_card(
             human(organization_id, false),
@@ -699,7 +694,7 @@ async fn an_instance_that_does_not_exist_is_refused_without_a_row() {
     let context = world.context(&[(&prod, Access::Write)]);
     let connector = Scripted::new(&world.pool);
     let call = ActionCall {
-        instance: capitainerie_common::IntegrationInstanceId::new(),
+        instance: matos_common::IntegrationInstanceId::new(),
         request: odoo_count(&prod).request,
     };
 
@@ -1262,7 +1257,7 @@ async fn without_a_secrets_key_a_call_fails_before_any_request_or_row() {
     let Some(world) = world().await else { return };
     let prod = world.odoo("Odoo prod").await;
     let context = world.context(&[(&prod, Access::Write)]);
-    let keyless = CapitainerieUseCase::with_local_policies(world.pool.clone());
+    let keyless = MatosUseCase::with_local_policies(world.pool.clone());
     let connector = Scripted::new(&world.pool);
 
     let outcome = keyless

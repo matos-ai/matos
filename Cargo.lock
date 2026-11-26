@@ -1047,787 +1047,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "capitainerie-analytics"
-version = "0.1.0"
-dependencies = [
- "arrow-array",
- "arrow-schema",
- "capitainerie-events",
- "chrono",
- "clap",
- "datafusion",
- "parquet",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "capitainerie-analytics",
- "capitainerie-args",
- "capitainerie-auth",
- "capitainerie-bus-iggy",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-github",
- "capitainerie-handlers",
- "capitainerie-handlers-analytics",
- "capitainerie-handlers-approvals",
- "capitainerie-handlers-artifacts",
- "capitainerie-handlers-audit",
- "capitainerie-handlers-cards",
- "capitainerie-handlers-clients",
- "capitainerie-handlers-conversations",
- "capitainerie-handlers-identity",
- "capitainerie-handlers-inbox",
- "capitainerie-handlers-integrations",
- "capitainerie-handlers-mcp",
- "capitainerie-handlers-providers",
- "capitainerie-handlers-realtime",
- "capitainerie-handlers-routines",
- "capitainerie-handlers-runs",
- "capitainerie-handlers-skills",
- "capitainerie-handlers-sources",
- "capitainerie-handlers-team",
- "capitainerie-handlers-transcriptions",
- "capitainerie-integrations",
- "capitainerie-runtime-rig",
- "capitainerie-telemetry",
- "clap",
- "dotenvy",
- "serde_json",
- "tokio",
- "tower-http",
- "tracing",
- "utoipa",
- "utoipa-scalar",
-]
-
-[[package]]
-name = "capitainerie-args"
-version = "0.1.0"
-dependencies = [
- "clap",
-]
-
-[[package]]
-name = "capitainerie-auth"
-version = "0.1.0"
-dependencies = [
- "axum",
- "capitainerie-common",
- "capitainerie-core",
- "chrono",
- "clap",
- "jsonwebtoken",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-bus-iggy"
-version = "0.1.0"
-dependencies = [
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-events",
- "chrono",
- "clap",
- "iggy",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-common"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror 2.0.21",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-core"
-version = "0.1.0"
-dependencies = [
- "aws-lc-rs",
- "base64 0.22.1",
- "bytes",
- "capitainerie-common",
- "capitainerie-events",
- "capitainerie-macros",
- "capitainerie-telemetry",
- "cedar-policy",
- "chrono",
- "chrono-tz",
- "croner",
- "mockall",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-egress-proxy"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-lc-rs",
- "axum",
- "base64 0.22.1",
- "capitainerie-args",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-github",
- "capitainerie-telemetry",
- "chrono",
- "clap",
- "dotenvy",
- "futures-util",
- "reqwest 0.12.28",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-events"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-exporter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "capitainerie-analytics",
- "capitainerie-args",
- "capitainerie-bus-iggy",
- "capitainerie-events",
- "capitainerie-telemetry",
- "chrono",
- "clap",
- "dotenvy",
- "serde_json",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-github"
-version = "0.1.0"
-dependencies = [
- "axum",
- "capitainerie-common",
- "capitainerie-core",
- "chrono",
- "jsonwebtoken",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "capitainerie-handlers"
-version = "0.1.0"
-dependencies = [
- "axum",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "utoipa",
-]
-
-[[package]]
-name = "capitainerie-handlers-analytics"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-analytics",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "serde",
- "serde_json",
- "tokio",
- "utoipa",
-]
-
-[[package]]
-name = "capitainerie-handlers-approvals"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-artifacts"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-audit"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-events",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-cards"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-github",
- "capitainerie-handlers",
- "capitainerie-handlers-runs",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-clients"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "capitainerie-handlers-cards",
- "capitainerie-handlers-runs",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-conversations"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "futures-util",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-identity"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-inbox"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-integrations"
-version = "0.1.0"
-dependencies = [
- "aws-lc-rs",
- "axum",
- "axum-extra",
- "base64 0.22.1",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-github",
- "capitainerie-handlers",
- "capitainerie-integrations",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.21",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-mcp"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "capitainerie-integrations",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "url",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-providers"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-realtime"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base64 0.22.1",
- "capitainerie-auth",
- "capitainerie-bus-iggy",
- "capitainerie-events",
- "capitainerie-handlers",
- "chrono",
- "futures-util",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite 0.29.0",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-routines"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "chrono-tz",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-runs"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-skills"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-sources"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-team"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "chrono",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-handlers-transcriptions"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-extra",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-handlers",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-integrations"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base64 0.22.1",
- "capitainerie-common",
- "capitainerie-core",
- "chrono",
- "futures-util",
- "pdf-extract",
- "reqwest 0.12.28",
- "reqwest 0.13.5",
- "rmcp",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "capitainerie-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "capitainerie-mcp-kanban"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "capitainerie-args",
- "capitainerie-auth",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-telemetry",
- "chrono",
- "clap",
- "dotenvy",
- "jsonwebtoken",
- "reqwest 0.12.28",
- "rmcp",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tower-http",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-runner-kube"
-version = "0.1.0"
-dependencies = [
- "capitainerie-common",
- "capitainerie-core",
- "futures-util",
- "k8s-openapi",
- "kube",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-runtime-rig"
-version = "0.1.0"
-dependencies = [
- "aws-lc-rs",
- "axum",
- "capitainerie-common",
- "capitainerie-core",
- "chrono",
- "clap",
- "http",
- "rig-agent",
- "rig-core",
- "rig-reqwest",
- "rmcp",
- "schemars 1.2.3",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-telemetry"
-version = "0.1.0"
-dependencies = [
- "capitainerie-args",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "capitainerie-vector-lancedb"
-version = "0.1.0"
-dependencies = [
- "arrow-array",
- "arrow-schema",
- "capitainerie-common",
- "capitainerie-core",
- "futures-util",
- "lancedb",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "capitainerie-worker"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-lc-rs",
- "base64 0.22.1",
- "capitainerie-args",
- "capitainerie-auth",
- "capitainerie-bus-iggy",
- "capitainerie-common",
- "capitainerie-core",
- "capitainerie-events",
- "capitainerie-github",
- "capitainerie-integrations",
- "capitainerie-runner-kube",
- "capitainerie-runtime-rig",
- "capitainerie-telemetry",
- "capitainerie-vector-lancedb",
- "chrono",
- "clap",
- "dotenvy",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "cbc"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5828,6 +5047,787 @@ name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
+
+[[package]]
+name = "matos-analytics"
+version = "0.1.0"
+dependencies = [
+ "arrow-array",
+ "arrow-schema",
+ "chrono",
+ "clap",
+ "datafusion",
+ "matos-events",
+ "parquet",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "dotenvy",
+ "matos-analytics",
+ "matos-args",
+ "matos-auth",
+ "matos-bus-iggy",
+ "matos-common",
+ "matos-core",
+ "matos-github",
+ "matos-handlers",
+ "matos-handlers-analytics",
+ "matos-handlers-approvals",
+ "matos-handlers-artifacts",
+ "matos-handlers-audit",
+ "matos-handlers-cards",
+ "matos-handlers-clients",
+ "matos-handlers-conversations",
+ "matos-handlers-identity",
+ "matos-handlers-inbox",
+ "matos-handlers-integrations",
+ "matos-handlers-mcp",
+ "matos-handlers-providers",
+ "matos-handlers-realtime",
+ "matos-handlers-routines",
+ "matos-handlers-runs",
+ "matos-handlers-skills",
+ "matos-handlers-sources",
+ "matos-handlers-team",
+ "matos-handlers-transcriptions",
+ "matos-integrations",
+ "matos-runtime-rig",
+ "matos-telemetry",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "utoipa",
+ "utoipa-scalar",
+]
+
+[[package]]
+name = "matos-args"
+version = "0.1.0"
+dependencies = [
+ "clap",
+]
+
+[[package]]
+name = "matos-auth"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "clap",
+ "jsonwebtoken",
+ "matos-common",
+ "matos-core",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-bus-iggy"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "iggy",
+ "matos-common",
+ "matos-core",
+ "matos-events",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-common"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.21",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-core"
+version = "0.1.0"
+dependencies = [
+ "aws-lc-rs",
+ "base64 0.22.1",
+ "bytes",
+ "cedar-policy",
+ "chrono",
+ "chrono-tz",
+ "croner",
+ "matos-common",
+ "matos-events",
+ "matos-macros",
+ "matos-telemetry",
+ "mockall",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "matos-egress-proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-lc-rs",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "dotenvy",
+ "futures-util",
+ "matos-args",
+ "matos-common",
+ "matos-core",
+ "matos-github",
+ "matos-telemetry",
+ "reqwest 0.12.28",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-events"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "matos-exporter"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "dotenvy",
+ "matos-analytics",
+ "matos-args",
+ "matos-bus-iggy",
+ "matos-events",
+ "matos-telemetry",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-github"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "jsonwebtoken",
+ "matos-common",
+ "matos-core",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "matos-handlers"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "utoipa",
+]
+
+[[package]]
+name = "matos-handlers-analytics"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-analytics",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "serde",
+ "serde_json",
+ "tokio",
+ "utoipa",
+]
+
+[[package]]
+name = "matos-handlers-approvals"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-artifacts"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-audit"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-events",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-cards"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-github",
+ "matos-handlers",
+ "matos-handlers-runs",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-clients"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "matos-handlers-cards",
+ "matos-handlers-runs",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-conversations"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "futures-util",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-identity"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-inbox"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-integrations"
+version = "0.1.0"
+dependencies = [
+ "aws-lc-rs",
+ "axum",
+ "axum-extra",
+ "base64 0.22.1",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-github",
+ "matos-handlers",
+ "matos-integrations",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-mcp"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "matos-integrations",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-providers"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-realtime"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "matos-auth",
+ "matos-bus-iggy",
+ "matos-events",
+ "matos-handlers",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.29.0",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-routines"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "chrono-tz",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-runs"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-skills"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-sources"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-team"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "chrono",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-handlers-transcriptions"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-extra",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-handlers",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "matos-integrations"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "matos-common",
+ "matos-core",
+ "pdf-extract",
+ "reqwest 0.12.28",
+ "reqwest 0.13.5",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "matos-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "matos-mcp-kanban"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "clap",
+ "dotenvy",
+ "jsonwebtoken",
+ "matos-args",
+ "matos-auth",
+ "matos-common",
+ "matos-core",
+ "matos-telemetry",
+ "reqwest 0.12.28",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-runner-kube"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "k8s-openapi",
+ "kube",
+ "matos-common",
+ "matos-core",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-runtime-rig"
+version = "0.1.0"
+dependencies = [
+ "aws-lc-rs",
+ "axum",
+ "chrono",
+ "clap",
+ "http",
+ "matos-common",
+ "matos-core",
+ "rig-agent",
+ "rig-core",
+ "rig-reqwest",
+ "rmcp",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-telemetry"
+version = "0.1.0"
+dependencies = [
+ "matos-args",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "matos-vector-lancedb"
+version = "0.1.0"
+dependencies = [
+ "arrow-array",
+ "arrow-schema",
+ "futures-util",
+ "lancedb",
+ "matos-common",
+ "matos-core",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "matos-worker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-lc-rs",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "dotenvy",
+ "matos-args",
+ "matos-auth",
+ "matos-bus-iggy",
+ "matos-common",
+ "matos-core",
+ "matos-events",
+ "matos-github",
+ "matos-integrations",
+ "matos-runner-kube",
+ "matos-runtime-rig",
+ "matos-telemetry",
+ "matos-vector-lancedb",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "matrixmultiply"

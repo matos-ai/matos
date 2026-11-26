@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-handlers"
+name = "matos-handlers"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,9 +7,9 @@ license.workspace = true
 
 [dependencies]
 axum.workspace = true
-capitainerie-auth.workspace = true
-capitainerie-common.workspace = true
-capitainerie-core.workspace = true
+matos-auth.workspace = true
+matos-common.workspace = true
+matos-core.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

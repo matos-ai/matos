@@ -3,7 +3,7 @@ use aws_lc_rs::{
     rand::{SecureRandom, SystemRandom},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 const VERIFIER_BYTES: usize = 32;
 const STATE_BYTES: usize = 32;

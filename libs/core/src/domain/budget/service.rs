@@ -1,5 +1,5 @@
-use capitainerie_common::CoreError;
 use chrono::{DateTime, Utc};
+use matos_common::CoreError;
 
 use super::{BudgetOverview, BudgetSettings, BudgetStatus, month_of, ports::BudgetRepository};
 use crate::domain::authorization::{
@@ -55,7 +55,7 @@ impl<'a, R: BudgetRepository, A: Authorizer> BudgetService<'a, R, A> {
 
     async fn assemble(
         &mut self,
-        organization_id: capitainerie_common::OrganizationId,
+        organization_id: matos_common::OrganizationId,
         now: DateTime<Utc>,
     ) -> Result<BudgetOverview, CoreError> {
         let (month_start, month_end) = month_of(now);
@@ -89,7 +89,7 @@ impl<'a, R: BudgetRepository, A: Authorizer> BudgetService<'a, R, A> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{AgentId, OrganizationId};
+    use matos_common::{AgentId, OrganizationId};
 
     use super::*;
     use crate::domain::{

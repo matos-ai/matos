@@ -9,8 +9,8 @@ pub mod redact;
 pub mod revert;
 pub mod service;
 
-use capitainerie_common::{ClientId, CoreError, IntegrationInstanceId, OrganizationId};
 use chrono::{DateTime, SubsecRound, Utc};
+use matos_common::{ClientId, CoreError, IntegrationInstanceId, OrganizationId};
 
 use crate::domain::{agent::SecretToken, label::clean_label};
 

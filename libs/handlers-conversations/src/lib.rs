@@ -9,7 +9,7 @@ pub mod update_conversation;
 
 use axum::Router;
 use axum_extra::routing::RouterExt;
-use capitainerie_core::domain::{
+use matos_core::domain::{
     conversation::turn::CaptainRuntime, delegation::ports::TokenExchanger,
     execution::ports::CodeHost,
 };

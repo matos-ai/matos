@@ -19,7 +19,7 @@ pub async fn delegate_to_mcp<X: ports::TokenExchanger>(
     issuer: &str,
     user_token: &SecretToken,
     agent_client_id: &str,
-) -> Result<DelegatedToken, capitainerie_common::CoreError> {
+) -> Result<DelegatedToken, matos_common::CoreError> {
     let for_agent = exchanger
         .for_agent(issuer, user_token, agent_client_id)
         .await?;

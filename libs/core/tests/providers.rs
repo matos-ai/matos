@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -61,8 +61,8 @@ fn subject(organization_id: OrganizationId, is_admin: bool) -> Subject {
     }
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
 }
 
@@ -126,7 +126,7 @@ fn assignments(chat: ModelRef) -> ModelAssignments {
     }
 }
 
-async fn configure_local_endpoint(usecase: &CapitainerieUseCase, organization_id: OrganizationId) {
+async fn configure_local_endpoint(usecase: &MatosUseCase, organization_id: OrganizationId) {
     usecase
         .put_provider(PutProvider {
             subject: subject(organization_id, true),
@@ -272,7 +272,7 @@ async fn invalid_providers_are_refused() {
 async fn without_a_secrets_key_nothing_can_be_stored() {
     let Some(pool) = pool().await else { return };
     let organization_id = organization(&pool).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
 
     let put = usecase
         .put_provider(anthropic(subject(organization_id, true)))

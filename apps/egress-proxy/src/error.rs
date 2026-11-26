@@ -2,7 +2,7 @@ use axum::{
     http::{Method, StatusCode, header::WWW_AUTHENTICATE},
     response::{IntoResponse, Response},
 };
-use capitainerie_common::RunId;
+use matos_common::RunId;
 
 use crate::credentials::CredentialsError;
 
@@ -59,7 +59,7 @@ impl IntoResponse for ProxyError {
             // git sends credentials only after a Basic challenge.
             Self::Unauthorized { .. } => (
                 StatusCode::UNAUTHORIZED,
-                [(WWW_AUTHENTICATE, r#"Basic realm="capitainerie""#)],
+                [(WWW_AUTHENTICATE, r#"Basic realm="matos""#)],
                 "unauthorized",
             )
                 .into_response(),

@@ -1,7 +1,7 @@
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_macros::transactional;
+use matos_common::{CoreError, OrganizationId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::Subject,
@@ -25,7 +25,7 @@ fn scrubbed(message: &str, secret: &str) -> String {
     cleaned.chars().take(FAILURE_MAX_CHARS).collect()
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(authz)]
     pub async fn list_user_providers(
         &self,

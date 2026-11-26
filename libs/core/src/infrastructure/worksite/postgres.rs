@@ -1,5 +1,5 @@
-use capitainerie_common::{CardId, CoreError, OrganizationId, ProjectId, RunId};
-use capitainerie_macros::repository;
+use matos_common::{CardId, CoreError, OrganizationId, ProjectId, RunId};
+use matos_macros::repository;
 
 use crate::{
     domain::{

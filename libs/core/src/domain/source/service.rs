@@ -1,8 +1,8 @@
-use capitainerie_common::{
+use chrono::{DateTime, Duration, Utc};
+use matos_common::{
     AgentId, CardId, CoreError, OrganizationId, ProjectId, RunId, SourceEventId, SourceId,
 };
-use capitainerie_events::source::{SourceEventProcessed, SourceEventReceived};
-use chrono::{DateTime, Duration, Utc};
+use matos_events::source::{SourceEventProcessed, SourceEventReceived};
 use serde_json::Value;
 
 use super::{
@@ -444,7 +444,7 @@ fn description(value: String) -> Result<String, CoreError> {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use capitainerie_events::DomainEvent;
+    use matos_events::DomainEvent;
     use serde_json::json;
 
     use super::*;

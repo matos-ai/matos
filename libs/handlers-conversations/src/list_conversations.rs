@@ -1,5 +1,5 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 
 use crate::{
     create_conversation::ConversationsPath,
@@ -14,8 +14,8 @@ use crate::{
     tag = super::TAG,
     responses(
         (status = 200, description = "The caller's conversations that are not archived, the most recent first", body = ConversationListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Agents may not read conversations", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Agents may not read conversations", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

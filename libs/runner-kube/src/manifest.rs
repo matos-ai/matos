@@ -1,9 +1,5 @@
 use std::{collections::BTreeMap, net::IpAddr};
 
-use capitainerie_common::RunId;
-use capitainerie_core::domain::execution::{
-    PLAN_PATH, REPORT_PATH, TaskSpec, contribution::CONTRIBUTION_PATH, harness::Harness,
-};
 use k8s_openapi::{
     api::{
         batch::v1::{Job, JobSpec},
@@ -18,11 +14,15 @@ use k8s_openapi::{
         apis::meta::v1::{ObjectMeta, OwnerReference},
     },
 };
+use matos_common::RunId;
+use matos_core::domain::execution::{
+    PLAN_PATH, REPORT_PATH, TaskSpec, contribution::CONTRIBUTION_PATH, harness::Harness,
+};
 
 use crate::{config::KubeRunnerConfig, error::RunnerError};
 
 pub const PART_OF_LABEL: &str = "app.kubernetes.io/part-of";
-pub const RUN_ID_LABEL: &str = "capitainerie.dev/run-id";
+pub const RUN_ID_LABEL: &str = "matos.dev/run-id";
 pub const TOKEN_KEY: &str = "task-token";
 const EXECUTOR_UID: i64 = 1000;
 const CODEX_HOME: &str = "/home/executor/.codex";
@@ -50,7 +50,7 @@ pub fn run_selector(run_id: RunId) -> String {
 
 fn labels(run_id: RunId) -> BTreeMap<String, String> {
     BTreeMap::from([
-        (PART_OF_LABEL.to_owned(), "capitainerie".to_owned()),
+        (PART_OF_LABEL.to_owned(), "matos".to_owned()),
         (RUN_ID_LABEL.to_owned(), run_id.0.to_string()),
     ])
 }
@@ -81,7 +81,7 @@ fn from_secret(name: &str, secret: &str) -> EnvVar {
 fn environment(config: &KubeRunnerConfig, spec: &TaskSpec, secret: &str) -> Vec<EnvVar> {
     let proxy = &config.proxy_base_url;
     let mut variables = vec![
-        from_secret("CAPITAINERIE_TASK_TOKEN", secret),
+        from_secret("MATOS_TASK_TOKEN", secret),
         plain(
             "GIT_REMOTE",
             format!(
@@ -94,7 +94,7 @@ fn environment(config: &KubeRunnerConfig, spec: &TaskSpec, secret: &str) -> Vec<
         plain("BASE_BRANCH", &spec.base_branch),
         plain("BRANCH", &spec.branch),
         plain("MODEL", cli_model(spec)),
-        plain("CAPITAINERIE_MODE", spec.mode.as_str()),
+        plain("MATOS_MODE", spec.mode.as_str()),
         plain("REPORT_PATH", REPORT_PATH),
         plain("PLAN_PATH", PLAN_PATH),
         plain("CONTRIBUTION_PATH", CONTRIBUTION_PATH),
@@ -122,7 +122,7 @@ fn harness_environment(config: &KubeRunnerConfig, spec: &TaskSpec, secret: &str)
     let proxy = &config.proxy_base_url;
     let model = spec.model.as_str();
     let harness = spec.model.harness();
-    let mut variables = vec![plain("CAPITAINERIE_HARNESS", harness.as_str())];
+    let mut variables = vec![plain("MATOS_HARNESS", harness.as_str())];
     match harness {
         Harness::ClaudeCode => variables.extend([
             plain("ANTHROPIC_BASE_URL", format!("{proxy}/anthropic")),
@@ -134,12 +134,12 @@ fn harness_environment(config: &KubeRunnerConfig, spec: &TaskSpec, secret: &str)
             plain("CLAUDE_CODE_SUBAGENT_MODEL", model),
         ]),
         Harness::Codex => variables.extend([
-            plain("CAPITAINERIE_OPENAI_BASE_URL", format!("{proxy}/openai/v1")),
+            plain("MATOS_OPENAI_BASE_URL", format!("{proxy}/openai/v1")),
             from_secret("CODEX_API_KEY", secret),
             plain("CODEX_HOME", CODEX_HOME),
         ]),
         Harness::MistralVibe => variables.extend([
-            plain("CAPITAINERIE_MISTRAL_BASE_URL", format!("{proxy}/mistral")),
+            plain("MATOS_MISTRAL_BASE_URL", format!("{proxy}/mistral")),
             from_secret("MISTRAL_API_KEY", secret),
             plain("VIBE_HOME", VIBE_HOME),
         ]),
@@ -294,7 +294,7 @@ pub fn build_secret(config: &KubeRunnerConfig, spec: &TaskSpec, owner: OwnerRefe
 mod tests {
     use std::time::Duration;
 
-    use capitainerie_core::domain::{
+    use matos_core::domain::{
         agent::SecretToken,
         execution::{CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, RepositoryRef},
     };
@@ -320,7 +320,7 @@ mod tests {
                     name: "Ada Lovelace".into(),
                     email: "ada@example.test".into(),
                 },
-                leak_terms: "claude-opus-5-5\ncapitainerie".into(),
+                leak_terms: "claude-opus-5-5\nmatos".into(),
                 fallback_message: "Fix the bug".into(),
             },
         }
@@ -328,13 +328,13 @@ mod tests {
 
     fn config() -> KubeRunnerConfig {
         KubeRunnerConfig::new(
-            "capitainerie-executor:1",
-            "http://capitainerie-egress-proxy.capitainerie.svc:4130",
+            "matos-executor:1",
+            "http://matos-egress-proxy.matos.svc:4130",
         )
     }
 
     fn codex_config() -> KubeRunnerConfig {
-        config().with_codex_image(Some("capitainerie-executor-codex:1".into()))
+        config().with_codex_image(Some("matos-executor-codex:1".into()))
     }
 
     fn codex_spec() -> TaskSpec {
@@ -345,7 +345,7 @@ mod tests {
     }
 
     fn antigravity_config() -> KubeRunnerConfig {
-        config().with_antigravity_image(Some("capitainerie-executor-antigravity:1".into()))
+        config().with_antigravity_image(Some("matos-executor-antigravity:1".into()))
     }
 
     fn antigravity_spec() -> TaskSpec {
@@ -357,7 +357,7 @@ mod tests {
     }
 
     fn vibe_config() -> KubeRunnerConfig {
-        config().with_mistral_vibe_image(Some("capitainerie-executor-mistral-vibe:1".into()))
+        config().with_mistral_vibe_image(Some("matos-executor-mistral-vibe:1".into()))
     }
 
     fn vibe_spec() -> TaskSpec {
@@ -369,7 +369,7 @@ mod tests {
 
     fn proxy() -> ProxyHost {
         ProxyHost {
-            name: "capitainerie-egress-proxy.capitainerie.svc".into(),
+            name: "matos-egress-proxy.matos.svc".into(),
             ip: "10.96.0.12".parse().unwrap(),
         }
     }
@@ -398,10 +398,7 @@ mod tests {
             job.metadata.name.as_deref(),
             Some("run-0a1b2c3d-0000-7000-8000-000000000000")
         );
-        assert_eq!(
-            job.metadata.namespace.as_deref(),
-            Some("capitainerie-tasks")
-        );
+        assert_eq!(job.metadata.namespace.as_deref(), Some("matos-tasks"));
         let job_spec = job.spec.as_ref().unwrap();
         assert_eq!(job_spec.backoff_limit, Some(0));
         assert_eq!(job_spec.active_deadline_seconds, Some(1800));
@@ -419,7 +416,7 @@ mod tests {
             .and_then(|meta| meta.labels.as_ref())
             .unwrap();
         for labels in [job.metadata.labels.as_ref().unwrap(), template_labels] {
-            assert_eq!(labels[PART_OF_LABEL], "capitainerie");
+            assert_eq!(labels[PART_OF_LABEL], "matos");
             assert_eq!(labels[RUN_ID_LABEL], "0a1b2c3d-0000-7000-8000-000000000000");
         }
     }
@@ -463,9 +460,7 @@ mod tests {
         assert_eq!(aliases[0].ip, "10.96.0.12");
         assert_eq!(
             aliases[0].hostnames,
-            Some(vec![
-                "capitainerie-egress-proxy.capitainerie.svc".to_owned()
-            ])
+            Some(vec!["matos-egress-proxy.matos.svc".to_owned()])
         );
         let literal = build_job(&config(), &spec(), None).unwrap();
         assert_eq!(pod(&literal).host_aliases, None);
@@ -549,7 +544,7 @@ mod tests {
             }
         }
         referenced.sort_unstable();
-        assert_eq!(referenced, ["ANTHROPIC_API_KEY", "CAPITAINERIE_TASK_TOKEN"]);
+        assert_eq!(referenced, ["ANTHROPIC_API_KEY", "MATOS_TASK_TOKEN"]);
         let rendered = serde_json::to_string(&job).unwrap();
         assert!(!rendered.contains(TOKEN));
     }
@@ -557,7 +552,7 @@ mod tests {
     #[test]
     fn the_environment_points_at_the_proxy() {
         let job = build_job(&config(), &spec(), Some(&proxy())).unwrap();
-        let proxy = "http://capitainerie-egress-proxy.capitainerie.svc:4130";
+        let proxy = "http://matos-egress-proxy.matos.svc:4130";
         assert_eq!(
             env(&job, "ANTHROPIC_BASE_URL").value.as_deref(),
             Some(format!("{proxy}/anthropic").as_str())
@@ -582,26 +577,20 @@ mod tests {
     #[test]
     fn the_mode_and_the_report_path_reach_the_container() {
         let change = build_job(&config(), &spec(), Some(&proxy())).unwrap();
-        assert_eq!(
-            env(&change, "CAPITAINERIE_MODE").value.as_deref(),
-            Some("change")
-        );
+        assert_eq!(env(&change, "MATOS_MODE").value.as_deref(), Some("change"));
         let audit = TaskSpec {
             mode: ExecutionMode::Audit,
             ..spec()
         };
         let job = build_job(&config(), &audit, Some(&proxy())).unwrap();
-        assert_eq!(
-            env(&job, "CAPITAINERIE_MODE").value.as_deref(),
-            Some("audit")
-        );
+        assert_eq!(env(&job, "MATOS_MODE").value.as_deref(), Some("audit"));
         let report = env(&job, "REPORT_PATH").value.clone().unwrap();
-        assert_eq!(report, "/workspace/.capitainerie/report.md");
+        assert_eq!(report, "/workspace/.matos/report.md");
         assert!(report.starts_with("/workspace/"));
         assert!(!report.starts_with("/workspace/repo/"));
         assert_eq!(
             env(&job, "PLAN_PATH").value.as_deref(),
-            Some("/workspace/.capitainerie/plan.md")
+            Some("/workspace/.matos/plan.md")
         );
     }
 
@@ -612,10 +601,10 @@ mod tests {
         assert_eq!(value("COMMIT_AUTHOR_NAME"), "Ada Lovelace");
         assert_eq!(value("COMMIT_AUTHOR_EMAIL"), "ada@example.test");
         assert_eq!(value("COMMIT_FALLBACK_MESSAGE"), "Fix the bug");
-        assert_eq!(value("LEAK_TERMS"), "claude-opus-5-5\ncapitainerie");
+        assert_eq!(value("LEAK_TERMS"), "claude-opus-5-5\nmatos");
         assert_eq!(
             value("CONTRIBUTION_PATH"),
-            "/workspace/.capitainerie/contribution.md"
+            "/workspace/.matos/contribution.md"
         );
     }
 
@@ -685,7 +674,7 @@ mod tests {
             let job = build_job(&config, &spec, Some(&proxy())).unwrap();
             assert_no_inline_secret(&job);
             assert_eq!(
-                env(&job, "CAPITAINERIE_HARNESS").value.as_deref(),
+                env(&job, "MATOS_HARNESS").value.as_deref(),
                 Some(spec.model.harness().as_str())
             );
         }
@@ -695,8 +684,8 @@ mod tests {
     fn a_codex_pod_talks_to_the_openai_route_of_the_proxy() {
         let job = build_job(&codex_config(), &codex_spec(), Some(&proxy())).unwrap();
         assert_eq!(
-            env(&job, "CAPITAINERIE_OPENAI_BASE_URL").value.as_deref(),
-            Some("http://capitainerie-egress-proxy.capitainerie.svc:4130/openai/v1")
+            env(&job, "MATOS_OPENAI_BASE_URL").value.as_deref(),
+            Some("http://matos-egress-proxy.matos.svc:4130/openai/v1")
         );
         assert_eq!(
             env(&job, "CODEX_HOME").value.as_deref(),
@@ -727,7 +716,7 @@ mod tests {
         let job = build_job(&antigravity_config(), &antigravity_spec(), Some(&proxy())).unwrap();
         assert_eq!(
             env(&job, "GOOGLE_GEMINI_BASE_URL").value.as_deref(),
-            Some("http://capitainerie-egress-proxy.capitainerie.svc:4130/google")
+            Some("http://matos-egress-proxy.matos.svc:4130/google")
         );
         assert_eq!(
             env(&job, "AGY_CLI_DISABLE_AUTO_UPDATE").value.as_deref(),
@@ -757,8 +746,8 @@ mod tests {
     fn a_vibe_pod_talks_to_the_mistral_route_of_the_proxy_with_the_wire_model() {
         let job = build_job(&vibe_config(), &vibe_spec(), Some(&proxy())).unwrap();
         assert_eq!(
-            env(&job, "CAPITAINERIE_MISTRAL_BASE_URL").value.as_deref(),
-            Some("http://capitainerie-egress-proxy.capitainerie.svc:4130/mistral")
+            env(&job, "MATOS_MISTRAL_BASE_URL").value.as_deref(),
+            Some("http://matos-egress-proxy.matos.svc:4130/mistral")
         );
         assert_eq!(
             env(&job, "VIBE_HOME").value.as_deref(),
@@ -794,26 +783,26 @@ mod tests {
         let codex = build_job(&codex_config(), &codex_spec(), Some(&proxy())).unwrap();
         assert_eq!(
             pod(&codex).containers[0].image.as_deref(),
-            Some("capitainerie-executor-codex:1")
+            Some("matos-executor-codex:1")
         );
         let antigravity =
             build_job(&antigravity_config(), &antigravity_spec(), Some(&proxy())).unwrap();
         assert_eq!(
             pod(&antigravity).containers[0].image.as_deref(),
-            Some("capitainerie-executor-antigravity:1")
+            Some("matos-executor-antigravity:1")
         );
         let vibe = build_job(&vibe_config(), &vibe_spec(), Some(&proxy())).unwrap();
         assert_eq!(
             pod(&vibe).containers[0].image.as_deref(),
-            Some("capitainerie-executor-mistral-vibe:1")
+            Some("matos-executor-mistral-vibe:1")
         );
         let claude = build_job(&codex_config(), &spec(), Some(&proxy())).unwrap();
         assert_eq!(
             pod(&claude).containers[0].image.as_deref(),
-            Some("capitainerie-executor:1")
+            Some("matos-executor:1")
         );
         assert_eq!(
-            env(&claude, "CAPITAINERIE_HARNESS").value.as_deref(),
+            env(&claude, "MATOS_HARNESS").value.as_deref(),
             Some("claude-code")
         );
     }

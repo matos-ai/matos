@@ -6,11 +6,11 @@ use std::{
 };
 
 use axum::{Json, Router, extract::State, http::request::Parts, routing::post};
-use capitainerie_core::domain::{
+use matos_core::domain::{
     agent::SecretToken,
     provider::{ModelRef, ModelTarget, ProviderAccess, ProviderKind},
 };
-use capitainerie_runtime_rig::LlmArgs;
+use matos_runtime_rig::LlmArgs;
 use rmcp::{
     ErrorData, ServerHandler,
     handler::server::{router::tool::ToolRouter, tool::Extension, wrapper::Parameters},

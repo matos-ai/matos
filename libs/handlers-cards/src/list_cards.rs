@@ -3,12 +3,12 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{AgentId, ClientId, CoreError, ProjectId};
-use capitainerie_core::domain::card::{
+use matos_common::{AgentId, ClientId, CoreError, ProjectId};
+use matos_core::domain::card::{
     Column,
     attributes::{CardFilter, Priority},
 };
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -50,8 +50,8 @@ pub struct CardListResponse {
     params(ListCardsQuery),
     responses(
         (status = 200, description = "The organization's board, most recently changed first; every filter given must match", body = CardListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An unknown priority or column, or a status that contradicts the column", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An unknown priority or column, or a status that contradicts the column", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

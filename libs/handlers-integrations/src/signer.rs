@@ -3,11 +3,11 @@ use aws_lc_rs::{
     hmac,
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use capitainerie_common::OrganizationId;
 use chrono::{DateTime, Duration, Utc};
+use matos_common::OrganizationId;
 use thiserror::Error;
 
-const INFO: &[u8] = b"capitainerie github state";
+const INFO: &[u8] = b"matos github state";
 const VALIDITY_MINUTES: i64 = 10;
 
 #[derive(Debug, Error)]

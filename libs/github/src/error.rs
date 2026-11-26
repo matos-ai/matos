@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use reqwest::StatusCode;
 
 #[derive(Debug, thiserror::Error)]

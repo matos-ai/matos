@@ -1,9 +1,9 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::authorization::{Action, ResourceKind};
-use capitainerie_handlers::Caller;
 use chrono::Utc;
+use matos_common::CoreError;
+use matos_core::domain::authorization::{Action, ResourceKind};
+use matos_handlers::Caller;
 use serde::Deserialize;
 
 use crate::{
@@ -23,12 +23,12 @@ pub struct AppPath;
     request_body = CreateGithubAppRequest,
     responses(
         (status = 201, description = "GitHub created the App; its secrets are stored sealed and never returned", body = GithubAppResponse),
-        (status = 400, description = "The state is forged, expired, or was issued to someone else or for something else", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "github_app_exists: the organization already has an App", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "GitHub refused the code (expired or already used)", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 503, description = "secrets_key_not_configured", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 400, description = "The state is forged, expired, or was issued to someone else or for something else", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "github_app_exists: the organization already has an App", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "GitHub refused the code (expired or already used)", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 503, description = "secrets_key_not_configured", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

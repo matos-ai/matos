@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_core::domain::{agent::SecretToken, provider::service::PutProvider};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::{agent::SecretToken, provider::service::PutProvider};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -28,9 +28,9 @@ pub struct PutProviderRequest {
     request_body = PutProviderRequest,
     responses(
         (status = 200, description = "The provider as stored; the key is not returned", body = ProviderResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Invalid key or base URL", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Invalid key or base URL", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -3,10 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use axum::{Extension, Router};
-use capitainerie_auth::Identity;
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use matos_auth::Identity;
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         document::{
@@ -25,7 +25,7 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_handlers::Caller;
+use matos_handlers::Caller;
 use reqwest::multipart::{Form, Part};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -256,24 +256,24 @@ fn caller(organization: &Organization, actor: Option<&str>) -> Caller {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
-            actor: actor.map(|client_id| capitainerie_auth::Actor {
+            actor: actor.map(|client_id| matos_auth::Actor {
                 sub: "agent".into(),
                 client_id: Some(client_id.to_owned()),
                 act: None,
             }),
-            roles: vec!["capitainerie-admin".into()],
+            roles: vec!["matos-admin".into()],
         },
         organization: organization.clone(),
         token: SecretToken::new("token"),
     }
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap())
 }
 
@@ -344,7 +344,7 @@ async fn serve_all(
     readers: FakeReaders,
 ) -> String {
     let app: Router =
-        capitainerie_handlers_transcriptions::router::<(), _, _>(usecase(pool), factory, readers)
+        matos_handlers_transcriptions::router::<(), _, _>(usecase(pool), factory, readers)
             .layer(Extension(caller));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -535,7 +535,7 @@ async fn an_agent_is_refused_and_the_denial_is_audited() {
     let factory = FakeFactory::answering("never");
     let url = serve(
         &pool,
-        caller(&organization, Some("capitainerie-agent-writer")),
+        caller(&organization, Some("matos-agent-writer")),
         factory.clone(),
     )
     .await;
@@ -768,7 +768,7 @@ async fn an_agent_is_refused_and_the_denial_is_audited_before_the_body_is_read()
     let readers = FakeReaders::answering("never", 1);
     let url = serve_documents(
         &pool,
-        caller(&organization, Some("capitainerie-agent-writer")),
+        caller(&organization, Some("matos-agent-writer")),
         readers.clone(),
     )
     .await;

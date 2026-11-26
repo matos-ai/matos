@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, OrganizationId, RunId};
-use capitainerie_macros::repository;
+use matos_common::{CoreError, OrganizationId, RunId};
+use matos_macros::repository;
 
 use crate::{
     domain::authorization::{DecisionRecord, READ_ACTIONS, ports::DecisionLogRepository},

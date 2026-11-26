@@ -1,11 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
-use capitainerie_core::CapitainerieUseCase;
+use matos_core::MatosUseCase;
 
 pub const TURN_DEADLINE: Duration = Duration::from_secs(8 * 60);
 
 pub struct ConversationsState<R, H, X> {
-    pub usecase: CapitainerieUseCase,
+    pub usecase: MatosUseCase,
     pub runtime: Arc<R>,
     pub code_host: Arc<H>,
     /// `None` when the API has no exchange credentials: the Captain then
@@ -17,12 +17,7 @@ pub struct ConversationsState<R, H, X> {
 }
 
 impl<R, H, X> ConversationsState<R, H, X> {
-    pub fn new(
-        usecase: CapitainerieUseCase,
-        runtime: R,
-        code_host: Arc<H>,
-        exchanger: Option<X>,
-    ) -> Self {
+    pub fn new(usecase: MatosUseCase, runtime: R, code_host: Arc<H>, exchanger: Option<X>) -> Self {
         Self {
             usecase,
             runtime: Arc::new(runtime),

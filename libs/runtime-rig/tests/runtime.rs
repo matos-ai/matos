@@ -2,16 +2,16 @@
 
 mod common;
 
-use capitainerie_common::{CardId, CoreError, RunId, TranscriptId};
-use capitainerie_core::domain::{
+use common::{FakeLlm, FakeMcp, MODEL, args, local, text_response, tool_call_response};
+use matos_common::{CardId, CoreError, RunId, TranscriptId};
+use matos_core::domain::{
     agent::{
         DuplicateAction, ExtractedAction, LocatedAction, SecretToken, WriteRequest,
         ports::AgentRuntime,
     },
     similarity::{Embedding, SimilarCard, ports::Embedder},
 };
-use capitainerie_runtime_rig::{RigAgentRuntime, RigEmbedder};
-use common::{FakeLlm, FakeMcp, MODEL, args, local, text_response, tool_call_response};
+use matos_runtime_rig::{RigAgentRuntime, RigEmbedder};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -652,9 +652,9 @@ fn embedder(base: &str) -> RigEmbedder {
     RigEmbedder::new(&args(base, "http://127.0.0.1:1/mcp")).unwrap()
 }
 
-fn bge() -> capitainerie_core::domain::provider::ModelTarget {
+fn bge() -> matos_core::domain::provider::ModelTarget {
     common::target(
-        capitainerie_core::domain::provider::ProviderKind::OpenAiCompatible,
+        matos_core::domain::provider::ProviderKind::OpenAiCompatible,
         "bge-test",
         None,
     )

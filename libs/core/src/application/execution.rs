@@ -1,9 +1,9 @@
-use capitainerie_common::{CardCommentId, CardId, CoreError, OrganizationId, RunId};
-use capitainerie_macros::transactional;
 use chrono::{SubsecRound, Utc};
+use matos_common::{CardCommentId, CardId, CoreError, OrganizationId, RunId};
+use matos_macros::transactional;
 use uuid::Uuid;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::{AccessRequest, Action, ResourceKind, Subject, require},
@@ -41,7 +41,7 @@ pub struct StartedExecution {
     pub card: Card,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     /// The read-only half of `execute_card`: the policy, the card, its state
     /// and its executions, so a handler can refuse before it calls GitHub.
     /// `execute_card` checks everything again inside its writing transaction.
