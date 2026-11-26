@@ -1,8 +1,8 @@
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::{AgentId, ArtifactId, CardId, CoreError, OrganizationId, RunId};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, ArtifactId, CardId, CoreError, OrganizationId, RunId};
 
 pub const CONTENT_MAX_BYTES: usize = 1024 * 1024;
 pub const TITLE_MAX_CHARS: usize = 300;

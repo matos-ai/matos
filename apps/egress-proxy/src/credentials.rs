@@ -1,15 +1,15 @@
 use std::future::Future;
 
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         execution::{ExecutionMode, RepositoryRef, TaskGrant},
         provider::ProviderKind,
     },
 };
-use capitainerie_github::GithubApps;
+use matos_github::GithubApps;
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -47,12 +47,12 @@ pub trait Credentials: Send + Sync + 'static {
 }
 
 pub struct Live {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     github: GithubApps,
 }
 
 impl Live {
-    pub fn new(usecase: CapitainerieUseCase, github: GithubApps) -> Self {
+    pub fn new(usecase: MatosUseCase, github: GithubApps) -> Self {
         Self { usecase, github }
     }
 }

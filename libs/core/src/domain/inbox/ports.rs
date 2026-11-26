@@ -1,6 +1,6 @@
-use capitainerie_common::{CoreError, InboxItemId, OrganizationId};
-use capitainerie_events::EventEnvelope;
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, InboxItemId, OrganizationId};
+use matos_events::EventEnvelope;
 use uuid::Uuid;
 
 use super::{InboxItem, ReadSelection};

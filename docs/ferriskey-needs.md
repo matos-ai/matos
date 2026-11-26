@@ -1,12 +1,12 @@
-# Besoins de Capitainerie côté FerrisKey
+# Besoins de Matos côté FerrisKey
 
 Briefing autonome à donner à un agent qui travaille sur le repo `ferriskey`.
-Auteur du besoin : projet Capitainerie, plateforme d'orchestration d'agents IA.
+Auteur du besoin : projet Matos, plateforme d'orchestration d'agents IA.
 Constat établi le 2026-10-16 sur `ferriskey/ferriskey` `main` (a4848755) et `origin/main` (ab8a2b85). Les 7 commits d'écart sont des montées de version de dépendances et ne changent rien aux points ci-dessous.
 
 ## Contexte
 
-Capitainerie fait travailler des agents IA **pour le compte d'un utilisateur**. Exemple : un utilisateur dépose le transcript d'une réunion, puis une chaîne d'agents crée des cartes Kanban via un serveur MCP.
+Matos fait travailler des agents IA **pour le compte d'un utilisateur**. Exemple : un utilisateur dépose le transcript d'une réunion, puis une chaîne d'agents crée des cartes Kanban via un serveur MCP.
 
 - Un realm FerrisKey par organisation. Les humains se connectent en OIDC (Authorization Code + PKCE).
 - Chaque agent est un client FerrisKey confidentiel (`client_credentials`).
@@ -36,7 +36,7 @@ Capitainerie fait travailler des agents IA **pour le compte d'un utilisateur**. 
 5. Réponse : `{ "decision": bool, "context": { "reason": ... } }`, avec une raison exploitable dans les logs et dans une timeline d'audit.
 6. Chaque décision est auditée : sujet, acteur, action, ressource, décision.
 
-**Ressources et actions Capitainerie (exemples pour les tests)** :
+**Ressources et actions Matos (exemples pour les tests)** :
 - `transcript` : `create`, `read`.
 - `run` : `read`, `cancel`.
 - `card` : `create`, `update`, `comment`, `move`.
@@ -52,11 +52,11 @@ Capitainerie fait travailler des agents IA **pour le compte d'un utilisateur**. 
 
 **Constat.** `exchanged_claims` (`token_exchange/services.rs`) dit : « The new token never outlives the subject token ». Avec des jetons utilisateur de 5 minutes, un run qui dure plus longtemps ne peut plus obtenir de jeton délégué valide. Ré-échanger en chaîne n'aide pas : chaque jeton est borné par l'`exp` du jeton d'origine. Stocker le refresh token de la console n'est pas acceptable : FerrisKey fait tourner les refresh tokens et révoque toute la famille en cas de rejeu, ce qui casserait la session du navigateur.
 
-Deuxième contrainte. `verify_subject` exige que le client demandeur soit partie au jeton sujet (`azp`, `aud` ou audience possédée). Le client d'un agent n'est pas partie au jeton de la console. Il faut donc un flux documenté pour qu'un agent obtienne un jeton délégué à partir d'un consentement donné par l'utilisateur via la console ou l'API Capitainerie.
+Deuxième contrainte. `verify_subject` exige que le client demandeur soit partie au jeton sujet (`azp`, `aud` ou audience possédée). Le client d'un agent n'est pas partie au jeton de la console. Il faut donc un flux documenté pour qu'un agent obtienne un jeton délégué à partir d'un consentement donné par l'utilisateur via la console ou l'API Matos.
 
 **Attendu (le choix du mécanisme revient à FerrisKey).** Un **grant de délégation** :
-1. Créé pendant que l'utilisateur est présent, à partir de son jeton (par exemple par le client `capitainerie-api`, partie au jeton).
-2. Lié à : utilisateur, client agent autorisé (ou liste de clients), audience cible (`capitainerie-mcp`), scopes, durée maximale (exemple : 1 h), et un identifiant de contexte libre (`run_id`).
+1. Créé pendant que l'utilisateur est présent, à partir de son jeton (par exemple par le client `matos-api`, partie au jeton).
+2. Lié à : utilisateur, client agent autorisé (ou liste de clients), audience cible (`matos-mcp`), scopes, durée maximale (exemple : 1 h), et un identifiant de contexte libre (`run_id`).
 3. Échangeable plusieurs fois par le client agent, via token exchange avec son `actor_token` `client_credentials`, contre un access token court : `sub` = utilisateur, `act` = agent, `aud` = cible.
 4. Révocable par l'utilisateur, par un admin du realm, et par le client qui l'a créé (annulation du run).
 5. Invalidé si l'utilisateur est désactivé ou retiré du realm.
@@ -75,10 +75,10 @@ Pistes possibles, à évaluer par l'agent FerrisKey :
 
 ## Besoin 3 : audience des access tokens — résolu sur `main`, pas encore publié
 
-Les resource indicators (RFC 8707) existent sur `main` : la console demande `resource=http://localhost:4100` au login, et le token porte `aud = ["http://localhost:4100"]`. Avec la propriété de la ressource (#1611, `PUT /realms/{realm}/resource-owners`), `capitainerie-api` devient partie au token et peut l'échanger. Vérifié contre l'image `ghcr.io/ferriskey/ferriskey-api:sha-ab8a2b8`.
+Les resource indicators (RFC 8707) existent sur `main` : la console demande `resource=http://localhost:4100` au login, et le token porte `aud = ["http://localhost:4100"]`. Avec la propriété de la ressource (#1611, `PUT /realms/{realm}/resource-owners`), `matos-api` devient partie au token et peut l'échanger. Vérifié contre l'image `ghcr.io/ferriskey/ferriskey-api:sha-ab8a2b8`.
 
 **Reste à faire côté FerrisKey :**
-1. Publier une release qui contient `resource-owners` : la 0.9.0 ne l'a pas, ce qui oblige Capitainerie à figer un build de `main`.
+1. Publier une release qui contient `resource-owners` : la 0.9.0 ne l'a pas, ce qui oblige Matos à figer un build de `main`.
 2. Le password grant ignore `resource` (seuls le code d'autorisation et le refresh l'appliquent). Les tests automatisés ne peuvent donc pas obtenir un token avec audience sans passer par un navigateur.
 
 ## Besoin 4 : outillage de provisioning
@@ -100,9 +100,9 @@ Constatés en écrivant `deploy/ferriskey/terraform` et `scripts/bootstrap-ferri
 
 Dans les deux cas, un token émis doit être échangeable pendant toute sa durée de vie. Le message d'erreur de l'échange gagnerait aussi à dire « session expirée ».
 
-**Contournement Capitainerie (local seulement).** `refresh_token_lifetime` = 8 h dans `deploy/ferriskey/terraform`.
+**Contournement Matos (local seulement).** `refresh_token_lifetime` = 8 h dans `deploy/ferriskey/terraform`.
 
 ## Hors périmètre
 
-- Provisioning des realms et des clients : l'API admin existante suffit pour le MVP Capitainerie.
+- Provisioning des realms et des clients : l'API admin existante suffit pour le MVP Matos.
 - Introspection des jetons : le serveur MCP vérifie les JWT localement via JWKS.

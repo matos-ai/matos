@@ -1,8 +1,8 @@
 use std::{collections::HashMap, fmt, time::Duration};
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         execution::{
@@ -97,7 +97,7 @@ struct Cached {
 }
 
 pub struct GithubApps {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     bases: GithubBases,
     http: reqwest::Client,
     ttl: Duration,
@@ -105,7 +105,7 @@ pub struct GithubApps {
 }
 
 impl GithubApps {
-    pub fn new(usecase: CapitainerieUseCase, bases: GithubBases) -> Result<Self, GithubError> {
+    pub fn new(usecase: MatosUseCase, bases: GithubBases) -> Result<Self, GithubError> {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
@@ -306,12 +306,12 @@ mod tests {
             StatusCode::CREATED,
             Json(json!({
                 "id": 4242,
-                "slug": "capitainerie-acme-1a2b3c",
+                "slug": "matos-acme-1a2b3c",
                 "client_id": "Iv1.client",
                 "client_secret": "oauth-secret-leak",
                 "pem": "-----BEGIN RSA PRIVATE KEY-----\nleak\n-----END RSA PRIVATE KEY-----\n",
                 "webhook_secret": null,
-                "html_url": "https://github.com/apps/capitainerie-acme-1a2b3c",
+                "html_url": "https://github.com/apps/matos-acme-1a2b3c",
                 "owner": {"login": "acme", "type": "Organization"},
             })),
         )
@@ -324,7 +324,7 @@ mod tests {
         tokio::spawn(async move { axum::serve(listener, app).await });
         let pool = sqlx::PgPool::connect_lazy("postgres://nobody@127.0.0.1:1/none").unwrap();
         GithubApps::new(
-            CapitainerieUseCase::with_local_policies(pool),
+            MatosUseCase::with_local_policies(pool),
             GithubBases {
                 api_base: base.clone(),
                 web_base: base,
@@ -338,7 +338,7 @@ mod tests {
         let apps = apps_against_fake().await;
         let conversion = apps.convert_manifest("abc-123_x").await.unwrap();
         assert_eq!(conversion.app_id, 4242);
-        assert_eq!(conversion.slug, "capitainerie-acme-1a2b3c");
+        assert_eq!(conversion.slug, "matos-acme-1a2b3c");
         assert_eq!(conversion.client_id, "Iv1.client");
         assert_eq!(conversion.client_secret.expose(), "oauth-secret-leak");
         assert!(conversion.private_key_pem.expose().contains("PRIVATE KEY"));

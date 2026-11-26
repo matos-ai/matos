@@ -1,7 +1,7 @@
-use capitainerie_common::{ArtifactId, CoreError};
-use capitainerie_macros::transactional;
+use matos_common::{ArtifactId, CoreError};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::domain::{
     artifact::{
         Artifact, ArtifactFilter, ArtifactView,
@@ -10,7 +10,7 @@ use crate::domain::{
     authorization::Subject,
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(artifact, authz)]
     pub async fn list_artifacts(
         &self,

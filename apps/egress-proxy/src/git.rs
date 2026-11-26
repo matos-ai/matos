@@ -6,8 +6,8 @@ use axum::{
     http::{HeaderMap, HeaderName, HeaderValue, Method, Uri, header},
     response::{IntoResponse, Response},
 };
-use capitainerie_common::RunId;
 use futures_util::{StreamExt, stream};
+use matos_common::RunId;
 
 use crate::{
     auth,
@@ -169,7 +169,7 @@ async fn run<C: Credentials>(
 
 async fn installation_token<C: Credentials>(
     proxy: &Proxy<C>,
-    grant: &capitainerie_core::domain::execution::TaskGrant,
+    grant: &matos_core::domain::execution::TaskGrant,
     headers: &mut HeaderMap,
 ) -> Result<(), ProxyError> {
     let token = proxy

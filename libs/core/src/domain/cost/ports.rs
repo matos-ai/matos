@@ -1,4 +1,4 @@
-use capitainerie_common::{AgentId, CardId, CoreError, OrganizationId, ProjectId};
+use matos_common::{AgentId, CardId, CoreError, OrganizationId, ProjectId};
 
 use super::{AgentRow, CostFilter, DaySpend, Period, ProjectAgentRow, TaskAgentRow, UserModelRow};
 

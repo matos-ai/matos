@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use capitainerie_core::domain::integration::{ConnectorFailure, action::ActionRequest};
+use matos_core::domain::integration::{ConnectorFailure, action::ActionRequest};
 use serde::Serialize;
 use serde::ser::{SerializeMap, SerializeSeq, Serializer};
 use serde_json::{Map, Value, json};

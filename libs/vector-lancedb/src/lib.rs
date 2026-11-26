@@ -8,15 +8,15 @@ use arrow_array::{
     types::Float32Type,
 };
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
-use capitainerie_common::{CardId, CoreError, OrganizationId};
-use capitainerie_core::domain::{
-    card::Column,
-    similarity::{CardVector, Embedding, SimilarCard, ports::VectorStore},
-};
 use futures_util::TryStreamExt;
 use lancedb::{
     Connection, DistanceType, Table, connect,
     query::{ExecutableQuery, QueryBase},
+};
+use matos_common::{CardId, CoreError, OrganizationId};
+use matos_core::domain::{
+    card::Column,
+    similarity::{CardVector, Embedding, SimilarCard, ports::VectorStore},
 };
 
 const TABLE_PREFIX: &str = "cards__";
@@ -337,7 +337,7 @@ mod tests {
 
     impl TempDir {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!("capitainerie-lance-{}", Uuid::now_v7()));
+            let path = std::env::temp_dir().join(format!("matos-lance-{}", Uuid::now_v7()));
             Self(path)
         }
 

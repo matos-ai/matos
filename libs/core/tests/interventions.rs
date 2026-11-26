@@ -1,10 +1,9 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{
-    CardId, ClientId, CoreError, IntegrationInstanceId, OrganizationId, RunId,
-};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::Utc;
+use matos_common::{CardId, ClientId, CoreError, IntegrationInstanceId, OrganizationId, RunId};
+use matos_core::{
+    MatosUseCase,
     application::StartedIntervention,
     domain::{
         agent::SecretToken,
@@ -33,7 +32,6 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -63,7 +61,7 @@ async fn organization(pool: &PgPool) -> OrganizationId {
     OrganizationId(id)
 }
 
-async fn setup() -> Option<(PgPool, CapitainerieUseCase, OrganizationId)> {
+async fn setup() -> Option<(PgPool, MatosUseCase, OrganizationId)> {
     let pool = postgres::connect(
         &database_url().or_else(|| {
             eprintln!("skipped: DATABASE_URL is unset");
@@ -74,7 +72,7 @@ async fn setup() -> Option<(PgPool, CapitainerieUseCase, OrganizationId)> {
     .await
     .unwrap();
     let organization_id = organization(&pool).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap());
     Some((pool, usecase, organization_id))
@@ -118,11 +116,7 @@ impl IntegrationConnector for Healthy {
     }
 }
 
-async fn client(
-    usecase: &CapitainerieUseCase,
-    organization_id: OrganizationId,
-    name: &str,
-) -> Client {
+async fn client(usecase: &MatosUseCase, organization_id: OrganizationId, name: &str) -> Client {
     usecase
         .create_client(
             human(organization_id, false),
@@ -137,7 +131,7 @@ async fn client(
 }
 
 async fn instance(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     client: &Client,
     name: &str,
@@ -163,7 +157,7 @@ async fn instance(
 }
 
 async fn todo_card(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     client: Option<&Client>,
 ) -> Card {
@@ -216,7 +210,7 @@ fn confide(card: &Card, grants: Vec<(IntegrationInstanceId, Access)>) -> Confide
 }
 
 async fn hand_over(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     subject: Subject,
     card: &Card,
     command: ConfideCard,
@@ -267,7 +261,7 @@ async fn grants_in(pool: &PgPool, organization_id: OrganizationId) -> i64 {
 }
 
 async fn column_of(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     card_id: CardId,
 ) -> Column {
@@ -281,7 +275,7 @@ async fn column_of(
 
 async fn nothing_was_written(
     pool: &PgPool,
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     card: &Card,
 ) {
@@ -935,7 +929,7 @@ async fn an_intervention_is_unknown_to_another_organization() {
 }
 
 async fn running_intervene_step(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     started: &StartedIntervention,
 ) {
@@ -944,7 +938,7 @@ async fn running_intervene_step(
         .await
         .unwrap();
     let step = Step {
-        id: capitainerie_common::StepId::new(),
+        id: matos_common::StepId::new(),
         run_id: started.run_id,
         organization_id,
         seq: 0,

@@ -1,4 +1,4 @@
-use capitainerie_args::{LogArgs, ObservabilityArgs};
+use matos_args::{LogArgs, ObservabilityArgs};
 use std::collections::HashMap;
 
 use opentelemetry::{

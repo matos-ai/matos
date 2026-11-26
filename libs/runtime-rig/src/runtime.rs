@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::{Extraction, Judgement, LocatedAction, WriteReport, WriteRequest, ports::AgentRuntime},
     provider::ModelTarget,
     similarity::SimilarCard,

@@ -1,5 +1,5 @@
-use capitainerie_common::{ConversationId, CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{ConversationId, CoreError, OrganizationId};
 
 use super::{Conversation, Message, MessageContent, MessageRole, MessageStatus};
 

@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, IntegrationInstanceId};
+use matos_common::{CoreError, IntegrationInstanceId};
 use serde_json::{Map, Value};
 
 use super::{IntegrationKind, catalog as parse};

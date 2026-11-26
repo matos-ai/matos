@@ -1,10 +1,10 @@
-use capitainerie_args::{
+use clap::Parser;
+use matos_args::{
     DatabaseArgs, EgressProxyArgs, GithubArgs, LogArgs, ObservabilityArgs, SecretsArgs,
 };
-use clap::Parser;
 
 #[derive(Debug, Clone, Parser)]
-#[command(name = "capitainerie-egress-proxy", version)]
+#[command(name = "matos-egress-proxy", version)]
 pub struct Args {
     #[command(flatten)]
     pub proxy: EgressProxyArgs,

@@ -8,9 +8,10 @@ use std::{
     time::Duration,
 };
 
-use capitainerie_common::{CardId, CoreError, OrganizationId};
-use capitainerie_core::{
-    AgentDelegation, CapitainerieUseCase, MeetingPipeline, PipelineConfig,
+use chrono::Utc;
+use matos_common::{CardId, CoreError, OrganizationId};
+use matos_core::{
+    AgentDelegation, MatosUseCase, MeetingPipeline, PipelineConfig,
     domain::{
         agent::{
             ExtractedAction, Extraction, Judgement, LocatedAction, SecretToken, ToolCall, Usage,
@@ -39,12 +40,11 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 const BODY: &str = "Claire : il faut migrer la CI vers les runners ARM avant fin octobre.\nMalik : je m’en charge.";
-const WRITER: &str = "capitainerie-agent-writer";
+const WRITER: &str = "matos-agent-writer";
 
 fn database_url() -> Option<String> {
     match std::env::var("DATABASE_URL") {
@@ -67,7 +67,7 @@ struct FakeRuntime {
     echo_model: bool,
     prompts: Arc<std::sync::Mutex<Vec<String>>>,
     refs: Option<(Option<String>, Option<String>)>,
-    cards_for: Option<(CapitainerieUseCase, OrganizationId)>,
+    cards_for: Option<(MatosUseCase, OrganizationId)>,
     late_client: bool,
 }
 
@@ -82,7 +82,7 @@ impl FakeRuntime {
     fn detecting(
         client_ref: Option<&str>,
         project_ref: Option<&str>,
-        usecase: &CapitainerieUseCase,
+        usecase: &MatosUseCase,
         organization_id: OrganizationId,
     ) -> Self {
         Self {
@@ -380,7 +380,7 @@ impl VectorStore for FakeVectors {
 }
 
 fn pipeline_for(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     runtime: &FakeRuntime,
     vectors: &FakeVectors,
 ) -> MeetingPipeline<FakeRuntime, FakeExchanger, FakeEmbedder, FakeVectors> {
@@ -423,7 +423,7 @@ impl TokenExchanger for FakeExchanger {
     }
 }
 
-async fn setup() -> Option<(PgPool, CapitainerieUseCase, OrganizationId)> {
+async fn setup() -> Option<(PgPool, MatosUseCase, OrganizationId)> {
     let pool = postgres::connect(&database_url()?, 3).await.unwrap();
     let id = Uuid::now_v7();
     sqlx::query(
@@ -435,7 +435,7 @@ async fn setup() -> Option<(PgPool, CapitainerieUseCase, OrganizationId)> {
     .execute(&pool)
     .await
     .unwrap();
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
     Some((pool, usecase, OrganizationId(id)))
 }
@@ -456,26 +456,26 @@ fn config() -> PipelineConfig {
 }
 
 async fn submit(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
-) -> capitainerie_core::SubmittedTranscript {
+) -> matos_core::SubmittedTranscript {
     submit_with(usecase, organization_id, MeetingMetadata::default()).await
 }
 
 async fn submit_with(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     metadata: MeetingMetadata,
-) -> capitainerie_core::SubmittedTranscript {
+) -> matos_core::SubmittedTranscript {
     submit_choosing(usecase, organization_id, metadata, LinkChoice::default()).await
 }
 
 async fn submit_choosing(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     metadata: MeetingMetadata,
     choice: LinkChoice,
-) -> capitainerie_core::SubmittedTranscript {
+) -> matos_core::SubmittedTranscript {
     usecase
         .submit_transcript_delegated(
             SubmitTranscript {
@@ -558,10 +558,7 @@ async fn a_run_goes_through_every_step_and_forgets_its_delegation() {
     );
     let writes = runtime.writes.lock().unwrap().clone();
     assert_eq!(writes.len(), 1);
-    assert_eq!(
-        writes[0].mcp_token.expose(),
-        "user>capitainerie-agent-writer>mcp"
-    );
+    assert_eq!(writes[0].mcp_token.expose(), "user>matos-agent-writer>mcp");
     assert_eq!(writes[0].actions.len(), 1, "the invented quote is dropped");
     let located = &writes[0].actions[0];
     let cited: String = BODY
@@ -1024,7 +1021,7 @@ async fn freeze_models(pool: &PgPool, run_id: Uuid, assignments: &ModelAssignmen
 }
 
 fn run_with(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     runtime: &FakeRuntime,
     embedder: &FakeEmbedder,
     vectors: &FakeVectors,
@@ -1193,11 +1190,7 @@ fn subject(organization_id: OrganizationId) -> Subject {
     }
 }
 
-async fn client(
-    usecase: &CapitainerieUseCase,
-    organization_id: OrganizationId,
-    name: &str,
-) -> Client {
+async fn client(usecase: &MatosUseCase, organization_id: OrganizationId, name: &str) -> Client {
     usecase
         .create_client(
             subject(organization_id),
@@ -1212,7 +1205,7 @@ async fn client(
 }
 
 async fn project_of(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     organization_id: OrganizationId,
     name: &str,
     client: &Client,
@@ -1241,11 +1234,11 @@ async fn linked(pool: &PgPool, run_id: Uuid) -> Vec<(Option<Uuid>, Option<Uuid>)
 }
 
 async fn execute_choosing(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     runtime: &FakeRuntime,
     organization_id: OrganizationId,
     choice: LinkChoice,
-) -> capitainerie_core::SubmittedTranscript {
+) -> matos_core::SubmittedTranscript {
     let submitted = submit_choosing(usecase, organization_id, Default::default(), choice).await;
     pipeline_for(usecase, runtime, &FakeVectors::knowing(CardId::new(), 0.5))
         .execute(submitted.run_id, None)

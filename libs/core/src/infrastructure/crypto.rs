@@ -2,7 +2,7 @@ use aws_lc_rs::{
     aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey},
     rand::{SecureRandom, SystemRandom},
 };
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 /// AES-256-GCM: the tag makes a tampered or swapped ciphertext fail instead of
 /// decrypting to garbage. The associated data binds a ciphertext to the row it

@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use capitainerie_core::domain::{
+use matos_core::domain::{
     conversation::turn::{ToolSpec, TurnEvent, TurnSink},
     integration::intervention::IntegratorTools,
 };

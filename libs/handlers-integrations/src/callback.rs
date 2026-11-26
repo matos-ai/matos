@@ -1,10 +1,10 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::authorization::{Action, ResourceKind};
-use capitainerie_github::GithubError;
-use capitainerie_handlers::Caller;
 use chrono::Utc;
+use matos_common::CoreError;
+use matos_core::domain::authorization::{Action, ResourceKind};
+use matos_github::GithubError;
+use matos_handlers::Caller;
 use serde::Deserialize;
 
 use crate::{
@@ -24,12 +24,12 @@ pub struct CallbackPath;
     request_body = ConnectGithubRequest,
     responses(
         (status = 200, description = "Connected", body = GithubIntegrationResponse),
-        (status = 400, description = "The state is forged, expired, or was issued to someone else", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin, or cannot access the installation (installation_not_accessible)", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an admin of the account the App is installed on (installation_not_owned)", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "github_app_missing, or installation_already_connected: the installation belongs to another organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 503, description = "secrets_key_not_configured", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 400, description = "The state is forged, expired, or was issued to someone else", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin, or cannot access the installation (installation_not_accessible)", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an admin of the account the App is installed on (installation_not_owned)", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "github_app_missing, or installation_already_connected: the installation belongs to another organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 503, description = "secrets_key_not_configured", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

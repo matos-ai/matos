@@ -8,7 +8,7 @@ pub mod update_agent;
 
 use axum::Router;
 use axum_extra::routing::RouterExt;
-use capitainerie_handlers::AppState;
+use matos_handlers::AppState;
 
 pub const TAG: &str = "team";
 

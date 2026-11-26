@@ -5,9 +5,10 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use capitainerie_common::{CoreError, OrganizationId, RunId};
-use capitainerie_core::{
-    AgentTaskConfig, AgentTaskPipeline, CapitainerieUseCase,
+use chrono::{Duration, Utc};
+use matos_common::{CoreError, OrganizationId, RunId};
+use matos_core::{
+    AgentTaskConfig, AgentTaskPipeline, MatosUseCase,
     domain::{
         agent::{SecretToken, Usage},
         agent_task::{AgentRunError, AgentRunRefusal, ports::TaskRuntime},
@@ -35,11 +36,10 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_core::{
+use matos_core::{
     domain::agent_identity::{AgentIdentity, ProvisionedClient, ports::AgentIdentityRepository},
     infrastructure::agent_identity::postgres::PgAgentIdentityRepository,
 };
-use chrono::{Duration, Utc};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -248,7 +248,7 @@ impl TaskRuntime for Script {
 
 struct World {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization_id: OrganizationId,
     card: Card,
     run_id: RunId,
@@ -297,7 +297,7 @@ async fn world(options: Options, oauth: &OAuth) -> Option<World> {
     .await
     .unwrap();
     let organization_id = OrganizationId(id);
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
     let connector = usecase
@@ -324,7 +324,7 @@ async fn world(options: Options, oauth: &OAuth) -> Option<World> {
     let agent = usecase
         .create_crew_agent(
             human(organization_id),
-            capitainerie_core::domain::crew::service::CreateAgent {
+            matos_core::domain::crew::service::CreateAgent {
                 slug: "darnold".into(),
                 name: "Darnold".into(),
                 role: "Comptable".into(),
@@ -411,7 +411,7 @@ async fn world(options: Options, oauth: &OAuth) -> Option<World> {
         .start_agent_run(
             human(organization_id),
             card.id,
-            capitainerie_core::domain::agent_task::StartAgentRun {
+            matos_core::domain::agent_task::StartAgentRun {
                 expected_version: card.version,
                 allow_writes: options.allow_writes,
             },
@@ -1350,7 +1350,7 @@ async fn an_approved_write_resumes_the_agent_which_makes_exactly_that_call_once(
         .usecase
         .decide_approval(
             decider(world.organization_id),
-            capitainerie_common::ApprovalId(approval_id),
+            matos_common::ApprovalId(approval_id),
             Verdict::Approve,
             Some("ok, une seule fois".into()),
         )
@@ -1460,7 +1460,7 @@ async fn a_rejected_write_is_noted_on_the_card_and_resumes_nothing() {
         .usecase
         .decide_approval(
             decider(world.organization_id),
-            capitainerie_common::ApprovalId(approval_id),
+            matos_common::ApprovalId(approval_id),
             Verdict::Reject,
             Some("pas ce client".into()),
         )
@@ -1477,7 +1477,7 @@ async fn a_rejected_write_is_noted_on_the_card_and_resumes_nothing() {
     assert_eq!(runs, 1);
     let last = comments(&world).await.pop().unwrap();
     assert_eq!(last.0, "user-2");
-    assert_eq!(last.1.as_deref(), Some("Capitainerie"));
+    assert_eq!(last.1.as_deref(), Some("Matos"));
     assert!(
         last.2.starts_with(
             "**Demande refusée** : un membre a refusé l'appel `mestier__create_order`"
@@ -1515,7 +1515,7 @@ async fn an_approval_that_cannot_resume_still_stands_and_says_why() {
         .usecase
         .decide_approval(
             decider(world.organization_id),
-            capitainerie_common::ApprovalId(approval_id),
+            matos_common::ApprovalId(approval_id),
             Verdict::Approve,
             None,
         )
@@ -1524,7 +1524,7 @@ async fn an_approval_that_cannot_resume_still_stands_and_says_why() {
 
     assert_eq!(
         decided.approval.status,
-        capitainerie_core::domain::approval::ApprovalStatus::Approved
+        matos_core::domain::approval::ApprovalStatus::Approved
     );
     assert_eq!(decided.approval.resumed_run_id, None);
     assert_eq!(
@@ -1569,7 +1569,7 @@ async fn a_paused_agent_is_not_started() {
         .start_agent_run(
             human(world.organization_id),
             world.card.id,
-            capitainerie_core::domain::agent_task::StartAgentRun {
+            matos_core::domain::agent_task::StartAgentRun {
                 expected_version: version,
                 allow_writes: false,
             },
@@ -1643,7 +1643,7 @@ async fn without_a_reply_the_agents_own_comment_starts_nothing() {
 async fn activate_identity(
     pool: &PgPool,
     secrets: &SecretCipher,
-    agent: &capitainerie_core::domain::crew::CrewAgent,
+    agent: &matos_core::domain::crew::CrewAgent,
 ) {
     let now = chrono::Utc::now();
     let identity = AgentIdentity::pending(agent.organization_id, agent.id, now).activated(

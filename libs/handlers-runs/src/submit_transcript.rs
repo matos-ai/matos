@@ -1,14 +1,14 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{ClientId, ProjectId, RunId, TranscriptId};
-use capitainerie_core::{
+use chrono::NaiveDate;
+use matos_common::{ClientId, ProjectId, RunId, TranscriptId};
+use matos_core::{
     AgentDelegation,
     domain::{
         client::links::LinkChoice, run::service::SubmitTranscript, transcript::MeetingMetadata,
     },
 };
-use capitainerie_handlers::{ApiError, AppState, Caller};
-use chrono::NaiveDate;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -41,9 +41,9 @@ pub struct SubmitTranscriptResponse {
     request_body = SubmitTranscriptRequest,
     responses(
         (status = 202, description = "Stored; a run is queued on it", body = SubmitTranscriptResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Not allowed", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Empty or oversized title or transcript, invalid participants or repository, unknown or archived client or project, or a client that is not the project's", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Not allowed", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Empty or oversized title or transcript, invalid participants or repository, unknown or archived client or project, or a client that is not the project's", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

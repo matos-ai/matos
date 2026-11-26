@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, OrganizationId};
+use matos_common::{CoreError, OrganizationId};
 
 use super::{CardVector, Embedding, SimilarCard};
 use crate::domain::{agent::Usage, provider::ModelTarget};

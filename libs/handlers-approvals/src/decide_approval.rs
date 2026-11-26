@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::ApprovalId;
-use capitainerie_core::domain::approval::Verdict;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::ApprovalId;
+use matos_core::domain::approval::Verdict;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -37,11 +37,11 @@ pub struct DecideApprovalRequest {
     request_body = DecideApprovalRequest,
     responses(
         (status = 200, description = "The decided approval. An approved tool call on a card starts a new run of the card's agent, for the initiator of the run that asked, allowed to make exactly that call once (`resumed_run_id`), or says why it could not (`resume_error`); a rejected one is noted on the card", body = DecideApprovalResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the decision; agents never decide", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such approval in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "The approval is no longer pending", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "A note over 2000 characters", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the decision; agents never decide", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such approval in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "The approval is no longer pending", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "A note over 2000 characters", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

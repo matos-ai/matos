@@ -1,9 +1,9 @@
-use capitainerie_common::{CoreError, SourceId};
-use capitainerie_macros::transactional;
 use chrono::{SubsecRound, Utc};
+use matos_common::{CoreError, SourceId};
+use matos_macros::transactional;
 use serde_json::{Value, json};
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::domain::{
     agent_task::{AgentRunError, StartAgentRun},
     authorization::Subject,
@@ -21,7 +21,7 @@ use crate::domain::{
 
 type Received = Result<Result<(Source, SourceEvent), HookRefusal>, CoreError>;
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(source, authz)]
     pub async fn list_sources(
         &self,

@@ -1,4 +1,4 @@
-use capitainerie_common::{ArtifactId, CoreError};
+use matos_common::{ArtifactId, CoreError};
 
 use super::{Artifact, ArtifactFilter, ArtifactView, ports::ArtifactRepository};
 use crate::domain::authorization::{
@@ -78,7 +78,7 @@ impl<'a, R: ArtifactRepository, A: Authorizer> ArtifactService<'a, R, A> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{

@@ -9,9 +9,10 @@ use std::{
 };
 
 use axum::{Json, Router, routing::post};
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::Utc;
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -19,14 +20,13 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use chrono::Utc;
+use matos_github::{GithubApps, GithubBases};
 use serde_json::json;
 use sqlx::types::Uuid;
 
 const PEM: &str = include_str!("fixtures/test-only-app-key.pem");
 
-async fn usecase() -> Option<CapitainerieUseCase> {
+async fn usecase() -> Option<MatosUseCase> {
     let url = match std::env::var("DATABASE_URL") {
         Ok(url) => url,
         Err(_) if std::env::var("REQUIRE_DATABASE_URL").as_deref() == Ok("1") => {
@@ -39,7 +39,7 @@ async fn usecase() -> Option<CapitainerieUseCase> {
     };
     let pool = postgres::connect(&url, 2).await.unwrap();
     Some(
-        CapitainerieUseCase::with_local_policies(pool)
+        MatosUseCase::with_local_policies(pool)
             .with_secrets_cipher(SecretCipher::new(&[8u8; 32]).unwrap()),
     )
 }
@@ -70,12 +70,12 @@ fn credentials(subject: &Subject) -> GithubAppCredentials {
     GithubAppCredentials {
         organization_id: subject.organization_id,
         app_id: (Uuid::now_v7().as_u128() & 0x3FFF_FFFF_FFFF_FFFF) as i64,
-        slug: "capitainerie-test".into(),
+        slug: "matos-test".into(),
         client_id: "Iv1.test".into(),
         client_secret: SecretToken::new("oauth-secret"),
         private_key_pem: SecretToken::new(PEM),
         webhook_secret: SecretToken::new("hook"),
-        html_url: "https://github.com/apps/capitainerie-test".into(),
+        html_url: "https://github.com/apps/matos-test".into(),
         owner_login: "acme".into(),
         owner_type: "Organization".into(),
         created_by: "admin".into(),
@@ -103,7 +103,7 @@ async fn fake_github(issued: Arc<AtomicUsize>) -> String {
     base
 }
 
-fn apps(usecase: &CapitainerieUseCase, base: &str, ttl: Duration) -> GithubApps {
+fn apps(usecase: &MatosUseCase, base: &str, ttl: Duration) -> GithubApps {
     GithubApps::new(
         usecase.clone(),
         GithubBases {

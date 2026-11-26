@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 
 use crate::{
     dto::{CreateConversationRequest, CreatedConversationResponse},
@@ -19,9 +19,9 @@ pub struct ConversationsPath;
     request_body = CreateConversationRequest,
     responses(
         (status = 201, description = "The conversation exists with the member's first message; open the stream of the first turn with sendConversationMessage", body = CreatedConversationResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Agents may not open conversations", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Empty or oversized message", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Agents may not open conversations", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Empty or oversized message", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

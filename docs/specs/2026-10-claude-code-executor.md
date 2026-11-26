@@ -24,13 +24,13 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
 | X5 | Suivi et résultat | **Lecture des logs du pod** (`--output-format stream-json`) | Rappel HTTP depuis le conteneur |
 | X6 | Exécuteur en local | **Kubernetes partout** : un cluster kind à côté du compose | Docker en local, Kubernetes en prod |
 | X7 | Pull request | **Ouverte par le worker, en brouillon**, avec la GitHub App | Branche seulement |
-| X8 | Écriture sur la carte | **Le worker écrit lui-même le commentaire final**, au nom de l'humain qui a confié la carte avec l'Exécutant comme acteur (`actor`), par un use case du cœur ; aucun jeton délégué, aucun passage par le serveur MCP | Jeton de l'utilisateur échangé pour un client `capitainerie-agent-executor`, appel du MCP |
+| X8 | Écriture sur la carte | **Le worker écrit lui-même le commentaire final**, au nom de l'humain qui a confié la carte avec l'Exécutant comme acteur (`actor`), par un use case du cœur ; aucun jeton délégué, aucun passage par le serveur MCP | Jeton de l'utilisateur échangé pour un client `matos-agent-executor`, appel du MCP |
 
 ## Glossaire
 
 | Terme | Définition | Synonyme écarté |
 |---|---|---|
-| Exécutant | Agent qui traite une carte validée sur un dépôt (Claude Code). Il n'a ni client FerrisKey ni jeton : `capitainerie-agent-executor` n'est que l'`actor` des décisions PDP et des commentaires que le worker écrit pour lui. | « agent de code », « worker » |
+| Exécutant | Agent qui traite une carte validée sur un dépôt (Claude Code). Il n'a ni client FerrisKey ni jeton : `matos-agent-executor` n'est que l'`actor` des décisions PDP et des commentaires que le worker écrit pour lui. | « agent de code », « worker » |
 | Exécution | Run d'un seul step `Execute`, rattaché à une carte et à un dépôt. | « tâche », « job » (le Job est l'objet Kubernetes) |
 | Proxy d'identifiants | Service `apps/egress-proxy`, seul point de sortie réseau du conteneur. | « gateway » |
 | Jeton de tâche | Jeton aléatoire propre à une exécution, que seul le proxy accepte. | « clé » |
@@ -39,10 +39,10 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
 
 1. Seule une carte en « À faire » peut être confiée, et seulement par un humain. [type : `ExecutableCard::try_from(Card)` ; test PDP : `card.execute` refusé à un acteur agent]
 2. Une carte a au plus une exécution active. [index unique partiel en base + test]
-3. Le conteneur ne reçoit jamais la clé Anthropic de l'organisation, un jeton GitHub ni un jeton de l'utilisateur. [test : la spec du Job ne contient que `CAPITAINERIE_TASK_TOKEN` comme secret ; aucune ligne `run_delegations` pour une exécution]
+3. Le conteneur ne reçoit jamais la clé Anthropic de l'organisation, un jeton GitHub ni un jeton de l'utilisateur. [test : la spec du Job ne contient que `MATOS_TASK_TOKEN` comme secret ; aucune ligne `run_delegations` pour une exécution]
 4. Le proxy n'accepte un jeton de tâche que pour une exécution `running` et non expirée ; il est révoqué à la fin de l'exécution, quel que soit le résultat. [test]
 5. Côté Anthropic, le proxy ne laisse passer que `POST /v1/messages` et `POST /v1/messages/count_tokens`, avec le modèle de l'exécution (`task_grants.model`), `max_tokens` ≤ 128 000, un corps JSON ≤ 10 MiB, sans `mcp_servers` ni `container`, avec des outils côté client seulement (aucun `web_search_*`, `web_fetch_*`, `code_execution_*`, `bash_*`, `computer_*`, `text_editor_*`, `mcp_toolset`), les seuls en-têtes `anthropic-beta` de la liste fermée (`prompt-caching-*`, `interleaved-thinking-*`, `fine-grained-tool-streaming-*`, `context-management-*`, `token-efficient-tools-*`) et la seule requête `beta=true`. Les octets d'origine sont transmis tels quels après validation. [tests]
-6. Côté GitHub, le proxy ne laisse passer que la lecture du dépôt de l'exécution et un push sur sa branche `capitainerie/<12 derniers hex de l'id de l'exécution>` (la queue aléatoire d'un UUIDv7 : ses 8 premiers hex sont un horodatage, deux exécutions rapprochées partageraient la branche) : ni autre dépôt, ni autre branche, ni suppression de ref. [test sur les commandes `git-receive-pack`]
+6. Côté GitHub, le proxy ne laisse passer que la lecture du dépôt de l'exécution et un push sur sa branche `matos/<12 derniers hex de l'id de l'exécution>` (la queue aléatoire d'un UUIDv7 : ses 8 premiers hex sont un horodatage, deux exécutions rapprochées partageraient la branche) : ni autre dépôt, ni autre branche, ni suppression de ref. [test sur les commandes `git-receive-pack`]
 7. L'agent ne déplace jamais la carte. C'est le clic humain qui la passe en « En cours », dans la même transaction que la création de l'exécution. [test]
 8. Le modèle de l'Exécutant est un modèle Anthropic. [type : `ExecutorModel(String)`, dont le constructeur refuse tout nom qui ne commence pas par `claude-` (la désérialisation aussi) ; le PUT des assignations répond 422]
 9. Une exécution est bornée : durée (`activeDeadlineSeconds`, 30 min par défaut) et nombre de tours (`--max-turns`, 50 par défaut). [test sur la spec du Job]
@@ -74,7 +74,7 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
 - `ExecutorModel(String)` dans `ModelAssignments`, champ `executor`, défaut `claude-sonnet-5-5` (invariant 8). Les assignations stockées sans ce champ prennent le défaut.
 - `GithubInstallation { organization_id, installation_id, account_login, created_by, created_at }`.
 - `GithubAppCredentials { organization_id, app_id, slug, client_id, client_secret, private_key_pem, webhook_secret, html_url, owner_login, owner_type, created_by, created_at }` (les trois secrets sont des `SecretToken`) et `GithubAppSummary` (sans secret). Une App par organisation (table `github_apps`, clé primaire `organization_id`, `app_id` unique).
-- Actions PDP : `CardExecute` (humain, membre, carte en « À faire »), `GithubManage` (admin). L'acteur `capitainerie-agent-executor` garde les droits des agents sur les cartes (commenter), rien de plus.
+- Actions PDP : `CardExecute` (humain, membre, carte en « À faire »), `GithubManage` (admin). L'acteur `matos-agent-executor` garde les droits des agents sur les cartes (commenter), rien de plus.
 - Use cases :
   - `check_card_executable(subject, card_id)` : lecture seule (PDP `card.execute`, carte, état, exécution active), pour qu'un handler refuse avant tout appel à GitHub.
   - `execute_card(subject, card_id, repository, base_branch, expected_version)` : revérifie tout (invariant 1, PDP), puis dans une transaction : carte → « En cours », `Run(Queued, [Execute], Card{..})`, événement `RunQueued`. Aucun échange de jeton, aucune délégation.
@@ -95,7 +95,7 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
 
 ### Adapters
 
-- `libs/runner-kube` : `TaskRunner` avec `kube` + `k8s-openapi` (création du Job, suivi des logs du pod, statut). Namespace dédié `capitainerie-tasks`, `ttlSecondsAfterFinished: 1800` (au-delà des 15 min après lesquelles un run abandonné est repris), `backoffLimit: 0`, pod non root, système de fichiers racine en lecture seule sauf `/workspace` (4 Gi), `/tmp` (1 Gi) et `/home/executor` (1 Gi) en emptyDir bornés, limite `ephemeral-storage` de 6 Gi, aucun ServiceAccount monté. Le pod ne résout aucun nom : le worker résout l'hôte du proxy à la création du Job (`hostAliases`), `dnsPolicy: None` avec `127.0.0.1` pour seul serveur. Les lignes de log dépassant 1 MiB sont ignorées (avertissement) et un step garde au plus 500 appels d'outils (le nombre d'appels écartés est conservé dans `dropped_tool_calls`).
+- `libs/runner-kube` : `TaskRunner` avec `kube` + `k8s-openapi` (création du Job, suivi des logs du pod, statut). Namespace dédié `matos-tasks`, `ttlSecondsAfterFinished: 1800` (au-delà des 15 min après lesquelles un run abandonné est repris), `backoffLimit: 0`, pod non root, système de fichiers racine en lecture seule sauf `/workspace` (4 Gi), `/tmp` (1 Gi) et `/home/executor` (1 Gi) en emptyDir bornés, limite `ephemeral-storage` de 6 Gi, aucun ServiceAccount monté. Le pod ne résout aucun nom : le worker résout l'hôte du proxy à la création du Job (`hostAliases`), `dnsPolicy: None` avec `127.0.0.1` pour seul serveur. Les lignes de log dépassant 1 MiB sont ignorées (avertissement) et un step garde au plus 500 appels d'outils (le nombre d'appels écartés est conservé dans `dropped_tool_calls`).
 - `libs/github` : `CodeHost` en HTTP (`reqwest`), liens `Link` suivis seulement vers le même schéma, hôte et port que l'API ; JWT de la GitHub App en RS256 (`jsonwebtoken`, déjà présent), résolveur `GithubApps` (organisation → `GithubClient`, caches de jetons conservés par App, entrée valable 5 min : une App supprimée est constatée au prochain échec de cache), jetons d'installation limités à un dépôt (`repositories: [name]`, permissions `contents: write`, `pull_requests: write`).
 - `libs/core/infrastructure` : repositories Postgres (`github_installations`, `task_grants` avec `token_sha256`, `run_id`, `model`, `expires_at`, `revoked_at`).
 - `apps/egress-proxy` : axum.
@@ -103,13 +103,13 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
   - `/git/<owner>/<repo>.git/*` : vérifie le mot de passe Basic = jeton de tâche et le dépôt de l'exécution, lit les commandes `pkt-line` d'un `git-receive-pack` pour l'invariant 6, puis transmet à `github.com` avec un jeton d'installation.
   - Tout le reste : 403.
   - Une grant lue est gardée 10 s en cache : une révocation peut mettre jusqu'à 10 s à s'appliquer. Un jeton inconnu ou révoqué est refusé 10 s sans relire la base. Au plus 16 requêtes simultanées par exécution (429 au-delà).
-  - Moindre privilège : le proxy ne lit que `task_grants`, `provider_credentials`, `github_installations` et `github_apps` (méthodes système du cœur, aucune décision auditée, aucune écriture). `deploy/postgres/egress-proxy-role.sql` crée le rôle `capitainerie_egress_proxy` en `SELECT` seul ; le chart accepte sa `DATABASE_URL` via `egressProxy.databaseUrlSecretKey`.
+  - Moindre privilège : le proxy ne lit que `task_grants`, `provider_credentials`, `github_installations` et `github_apps` (méthodes système du cœur, aucune décision auditée, aucune écriture). `deploy/postgres/egress-proxy-role.sql` crée le rôle `matos_egress_proxy` en `SELECT` seul ; le chart accepte sa `DATABASE_URL` via `egressProxy.databaseUrlSecretKey`.
 - `NetworkPolicy` du namespace des tâches : sortie autorisée vers le proxy seulement (plus de DNS : voir `hostAliases`). L'IP du Service du proxy doit rester stable (Service `ClusterIP`).
 
-### Image `capitainerie-executor`
+### Image `matos-executor`
 
 - Base `node:22-slim`, `git`, Claude Code en version figée (paquet npm `@anthropic-ai/claude-code@<version>`), script d'entrée `deploy/executor/entrypoint.sh`.
-- Le script : clone par le proxy, crée la branche, lance `claude -p "$PROMPT" --output-format stream-json --verbose --model "$MODEL" --max-turns "$MAX_TURNS" --allowedTools "Read,Edit,Write,Glob,Grep,Bash"`, puis commite et pousse s'il y a des changements. Il émet des lignes `{"type":"capitainerie",...}` (cloné, poussé avec le SHA, aucun changement) que le worker distingue des lignes de Claude Code.
+- Le script : clone par le proxy, crée la branche, lance `claude -p "$PROMPT" --output-format stream-json --verbose --model "$MODEL" --max-turns "$MAX_TURNS" --allowedTools "Read,Edit,Write,Glob,Grep,Bash"`, puis commite et pousse s'il y a des changements. Il émet des lignes `{"type":"matos",...}` (cloné, poussé avec le SHA, aucun changement) que le worker distingue des lignes de Claude Code.
 - Variables : `ANTHROPIC_BASE_URL` (le proxy), `ANTHROPIC_API_KEY` et le mot de passe git = jeton de tâche, `PROMPT`, `MODEL`, `MAX_TURNS`, `REPOSITORY`, `BRANCH`.
 
 ### Worker
@@ -138,7 +138,7 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
 | `DELETE` | `/api/v1/integrations/github` (l'installation seulement) | admin |
 | `GET` | `/api/v1/integrations/github/repositories` | membre |
 
-- Création de l'App (manifeste GitHub) : l'API prépare le manifeste (nom `Capitainerie <organisation> <6 hex>` borné à 34 caractères, permissions `contents: write`, `pull_requests: write`, `metadata: read`, aucun événement ni webhook (GitHub refuse une adresse de webhook injoignable depuis Internet, même inactive), URLs sur `CONSOLE_URL`) et un `state` signé (HMAC dérivé de `SECRETS_KEY`, organisation, sujet, 10 min, usage « manifest »). La console POSTe le formulaire à `action_url` (GitHub exige un POST du navigateur) ; GitHub redirige vers `/settings/integrations/github/app-callback?code=…&state=…` ; la console envoie `{ code, state }`, l'API vérifie le `state` puis appelle `POST <api>/app-manifests/{code}/conversions`. Sans `CONSOLE_URL` l'API répond 503 `console_url_not_configured`. Le code ne servant qu'une fois, l'existence d'une App est vérifiée avant l'échange.
+- Création de l'App (manifeste GitHub) : l'API prépare le manifeste (nom `Matos <organisation> <6 hex>` borné à 34 caractères, permissions `contents: write`, `pull_requests: write`, `metadata: read`, aucun événement ni webhook (GitHub refuse une adresse de webhook injoignable depuis Internet, même inactive), URLs sur `CONSOLE_URL`) et un `state` signé (HMAC dérivé de `SECRETS_KEY`, organisation, sujet, 10 min, usage « manifest »). La console POSTe le formulaire à `action_url` (GitHub exige un POST du navigateur) ; GitHub redirige vers `/settings/integrations/github/app-callback?code=…&state=…` ; la console envoie `{ code, state }`, l'API vérifie le `state` puis appelle `POST <api>/app-manifests/{code}/conversions`. Sans `CONSOLE_URL` l'API répond 503 `console_url_not_configured`. Le code ne servant qu'une fois, l'existence d'une App est vérifiée avant l'échange.
 - Console : bouton « Confier à Claude Code » sur une carte « À faire » (dialogue : choix du dépôt, coût estimé non affiché, avertissement « l'agent pousse une branche et ouvre une PR en brouillon ») ; page Paramètres › Intégrations › GitHub ; la timeline d'un run `Execute` montre les appels d'outils et le lien de la PR.
 
 ### Erreurs
@@ -172,10 +172,10 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
   And sa seule sortie réseau autorisée est le proxy
 
 @spec-exec-5  Scenario: le proxy borne l'accès GitHub
-  Given le jeton d'une exécution sur "acme/web", branche "capitainerie/0a1b2c3d4e5f"
+  Given le jeton d'une exécution sur "acme/web", branche "matos/0a1b2c3d4e5f"
   When le conteneur pousse sur "main", ou lit "acme/autre"
   Then le proxy répond 403
-  And un push sur "capitainerie/0a1b2c3d4e5f" passe
+  And un push sur "matos/0a1b2c3d4e5f" passe
 
 @spec-exec-6  Scenario: le jeton est révoqué à la fin
   Given une exécution terminée, réussie ou non
@@ -185,7 +185,7 @@ Sur une carte validée par un humain, un membre clique « Confier à Claude Code
 @spec-exec-7  Scenario: exécution réussie de bout en bout (cluster kind)
   Given une carte « Ajouter un fichier CHANGELOG.md » confiée sur un dépôt de test
   When l'exécution se termine
-  Then une branche capitainerie/… existe avec un commit
+  Then une branche matos/… existe avec un commit
   And une PR en brouillon pointe vers la carte
   And la carte a un commentaire de l'Exécutant avec le lien de la PR
   And la timeline montre les appels d'outils, les tokens et le coût
@@ -276,11 +276,11 @@ Aucune autre : `reqwest`, `jsonwebtoken`, `axum`, `aws-lc-rs` sont déjà dans l
 | kind n'applique pas les `NetworkPolicy` avec son CNI par défaut : en local, l'isolation réseau n'est pas vérifiée. À vérifier en CI sur un cluster avec Calico, ou documenter la limite. | W4 |
 | Le format `stream-json` de Claude Code peut évoluer : la version est figée dans l'image, et un test de parsing tourne sur un enregistrement réel. | W5 |
 | Le prompt de l'Exécutant (titre, description, citation de la carte) est une entrée utilisateur : injection possible. Atténuation : isolation, proxy (modèle, outils et en-têtes bornés), aucun secret, PR en brouillon relue par un humain. | W5 |
-| GitHub Actions : une branche `capitainerie/*` poussée par l'Exécutant peut déclencher des workflows qui disposent de secrets. Risque résiduel, non traité par Capitainerie : restreindre les workflows à secrets aux branches protégées ou aux environnements à relecteurs. L'avertissement de la console le mentionne (W6) ; voir le README « Exécutant ». | exploitant du dépôt |
+| GitHub Actions : une branche `matos/*` poussée par l'Exécutant peut déclencher des workflows qui disposent de secrets. Risque résiduel, non traité par Matos : restreindre les workflows à secrets aux branches protégées ou aux environnements à relecteurs. L'avertissement de la console le mentionne (W6) ; voir le README « Exécutant ». | exploitant du dépôt |
 | La révocation d'un jeton de tâche peut mettre jusqu'à 10 s à s'appliquer (cache de grant du proxy). | W3 |
 | Coût d'une exécution difficile à prévoir : affiché après coup dans la timeline et la page Agents ; un plafond par organisation viendra si le besoin apparaît. | produit |
-| ~~Le jeton délégué de l'utilisateur est borné par sa session~~ : sans objet depuis X8. L'Exécutant ne tient aucun jeton ; il n'écrit que par le code du worker, qui commente sous l'identité de l'humain avec l'acteur `capitainerie-agent-executor`, et la règle PDP « les agents peuvent commenter » reste la seule permission qu'il a. | W5 |
-| Une App créée sur GitHub puis oubliée côté Capitainerie (suppression, ou échec du stockage après l'échange du code) reste sur GitHub : l'interface renvoie vers sa page pour la supprimer. | W6 |
+| ~~Le jeton délégué de l'utilisateur est borné par sa session~~ : sans objet depuis X8. L'Exécutant ne tient aucun jeton ; il n'écrit que par le code du worker, qui commente sous l'identité de l'humain avec l'acteur `matos-agent-executor`, et la règle PDP « les agents peuvent commenter » reste la seule permission qu'il a. | W5 |
+| Une App créée sur GitHub puis oubliée côté Matos (suppression, ou échec du stockage après l'échange du code) reste sur GitHub : l'interface renvoie vers sa page pour la supprimer. | W6 |
 | La suppression de l'App oublie aussi l'installation ; les exécutions en cours gardent leur jeton de tâche, mais le proxy n'obtient plus de jeton GitHub (cache d'au plus 5 min). | W3 |
 
 ## Vérification (sortie)
@@ -288,10 +288,10 @@ Aucune autre : `reqwest`, `jsonwebtoken`, `axum`, `aws-lc-rs` sont déjà dans l
 ```bash
 cargo fmt --all --check
 SQLX_OFFLINE=true cargo clippy --workspace --all-targets -- -D warnings
-DATABASE_URL=postgres://capitainerie:capitainerie@localhost:5442/capitainerie_test \
+DATABASE_URL=postgres://matos:matos@localhost:5442/matos_test \
   REQUIRE_DATABASE_URL=1 cargo test --workspace -- --test-threads=1
-kind export kubeconfig --name capitainerie
-REQUIRE_KUBE=1 cargo test -p capitainerie-runner-kube -p capitainerie-worker --test execute -- --test-threads=1
+kind export kubeconfig --name matos
+REQUIRE_KUBE=1 cargo test -p matos-runner-kube -p matos-worker --test execute -- --test-threads=1
 cd apps/console && corepack pnpm check && corepack pnpm test && corepack pnpm build
 ```
 
@@ -299,11 +299,11 @@ Plus un run réel (`@spec-exec-7`) sur un dépôt de test de l'organisation, ave
 
 Amended: 2026-10-18 contrats figés dans le code ; suivi par canal mpsc ; erreurs sur CoreError existant.
 Amended: 2026-10-19 l'installation GitHub est liée par OAuth (invariant 11), unique par organisation ; MCP_ACCEPTED_AGENTS inclut l'Exécutant du chart.
-Amended: 2026-10-20 la branche est `capitainerie/<12 derniers hex>` (queue aléatoire de l'UUIDv7) ; `TaskRunner::attach` : une reprise sans Job échoue au lieu d'en relancer un ; vérification de la branche avant la PR ; coût par nature de token (cache) ; `ExecutorModel` refuse un modèle non `claude-`.
-Amended: 2026-10-20 X8 : le worker écrit le commentaire final lui-même (`comment_card_as_executor`, idempotent) ; plus de délégation ni de client `capitainerie-agent-executor` (MCP, FerrisKey, chart) ; `execute_card` ne prend plus de jeton ; contrôle `check_card_executable` avant tout appel GitHub.
+Amended: 2026-10-20 la branche est `matos/<12 derniers hex>` (queue aléatoire de l'UUIDv7) ; `TaskRunner::attach` : une reprise sans Job échoue au lieu d'en relancer un ; vérification de la branche avant la PR ; coût par nature de token (cache) ; `ExecutorModel` refuse un modèle non `claude-`.
+Amended: 2026-10-20 X8 : le worker écrit le commentaire final lui-même (`comment_card_as_executor`, idempotent) ; plus de délégation ni de client `matos-agent-executor` (MCP, FerrisKey, chart) ; `execute_card` ne prend plus de jeton ; contrôle `check_card_executable` avant tout appel GitHub.
 Amended: 2026-10-20 le proxy valide le corps Anthropic (modèle de la grant, `max_tokens`, outils, en-têtes `anthropic-beta`, requête), cache négatif de 10 s, 16 requêtes simultanées par grant, rôle Postgres en lecture seule ; le pod ne résout aucun nom (`hostAliases`, `dnsPolicy: None`) ; la propriété de l'installation GitHub est vérifiée (invariant 11) ; décalage de révocation de 10 s documenté ; risque GitHub Actions ajouté.
 Amended: 2026-10-21 X3 : chaque organisation crée sa GitHub App depuis la console (manifeste GitHub) ; plus de variable `GITHUB_APP_*` côté opérateur, seulement `GITHUB_API_BASE`, `GITHUB_WEB_BASE` et `CONSOLE_URL` ; table `github_apps` aux secrets scellés (invariant 12) ; `CodeHost` prend l'organisation ; le proxy lit aussi `github_apps`.
 Amended: 2026-10-19 le manifest ne déclare plus de webhook : GitHub refusait `localhost`.
 Amended: 2026-10-19 l'App demande `members: read` (organisation) : sans elle, GitHub refuse de dire si l'admin qui connecte administre l'organisation (403 `github_app_members_permission_missing`).
 Amended: 2026-10-19 plafond `max_tokens` du proxy porté à 128 000 : Claude Code en demande davantage que 32 000 ; le run reste borné par ses tours et sa durée.
-Amended: 2026-11-26 #100 : la branche est `change/<slug du titre de la carte>-<6 derniers hex de l'id>`, fixée dans la grant (une reprise relit celle de la grant) ; le commit est au nom du membre qui a lancé l'exécution (nom et email de `members`), sinon du bot de la GitHub App ; titre et corps viennent de `/workspace/.capitainerie/contribution.md` écrit par l'agent, contrôlés contre les termes internes (modèles, nom et adresse de la plateforme, identifiants, marques d'IA ou du prompt) dans le pod puis dans le worker, sinon le titre de la carte ; la PR ne porte plus ni lien console, ni modèle, ni tokens, ni coût.
+Amended: 2026-11-26 #100 : la branche est `change/<slug du titre de la carte>-<6 derniers hex de l'id>`, fixée dans la grant (une reprise relit celle de la grant) ; le commit est au nom du membre qui a lancé l'exécution (nom et email de `members`), sinon du bot de la GitHub App ; titre et corps viennent de `/workspace/.matos/contribution.md` écrit par l'agent, contrôlés contre les termes internes (modèles, nom et adresse de la plateforme, identifiants, marques d'IA ou du prompt) dans le pod puis dans le worker, sinon le titre de la carte ; la PR ne porte plus ni lien console, ni modèle, ni tokens, ni coût.

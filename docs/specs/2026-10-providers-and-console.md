@@ -11,7 +11,7 @@ Une organisation branche ses propres fournisseurs de modèles (Claude, Mistral, 
 | # | Décision |
 |---|---|
 | P1 | Les clés sont rattachées à l'**organisation** : une clé par fournisseur et par organisation, utilisée par tous ses runs. |
-| P2 | Seuls les **admins de l'organisation** gèrent les clés et les choix de modèles. Un admin porte le rôle FerrisKey `capitainerie-admin` dans le realm de l'organisation. Les autres membres voient quels fournisseurs sont configurés et quels modèles sont choisis, jamais les clés. |
+| P2 | Seuls les **admins de l'organisation** gèrent les clés et les choix de modèles. Un admin porte le rôle FerrisKey `matos-admin` dans le realm de l'organisation. Les autres membres voient quels fournisseurs sont configurés et quels modèles sont choisis, jamais les clés. |
 | P3 | La page Modèles affiche le **catalogue** des modèles disponibles avec les clés configurées, et permet de choisir un modèle **par rôle** : `extractor`, `judge`, `writer`, `embeddings`. |
 | P4 | Le choix de modèles est **figé dans le run** au moment du dépôt : un changement de configuration n'affecte pas un run déjà en file. |
 | P5 | Nouvelle identité visuelle, inspirée des principes de la console Qovery (navigation latérale à deux niveaux, pages denses, en-têtes de page, états vides soignés). La console Qovery est sous GPL-3.0 : **rien n'est copié** (ni code, ni composant, ni ressource) ; tout est réimplémenté avec shadcn et Tailwind. |
@@ -62,7 +62,7 @@ Actions du PDP : `provider.read`, `provider.manage`, `models.assign`. Les agents
 ### Identité
 
 - `Identity` porte `roles: Vec<String>` (claim `realm_access.roles` des tokens FerrisKey) ; `Subject` porte `is_admin: bool`.
-- `deploy/ferriskey/terraform` déclare le rôle `capitainerie-admin` ; `scripts/bootstrap-ferriskey.sh` l'attribue à un utilisateur nommé (`ADMIN_USERNAME`, `demo` par défaut) s'il existe.
+- `deploy/ferriskey/terraform` déclare le rôle `matos-admin` ; `scripts/bootstrap-ferriskey.sh` l'attribue à un utilisateur nommé (`ADMIN_USERNAME`, `demo` par défaut) s'il existe.
 
 ### Exécution
 

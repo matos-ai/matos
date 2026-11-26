@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, OrganizationId, SkillId};
+use matos_common::{CoreError, OrganizationId, SkillId};
 
 use super::{CatalogSkill, Skill};
 

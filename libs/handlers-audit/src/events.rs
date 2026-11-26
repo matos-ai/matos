@@ -3,10 +3,10 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{AgentId, CardId};
-use capitainerie_core::domain::audit::{ActorKind, AuditEntry, AuditFilter, Severity};
-use capitainerie_handlers::{ApiError, AppState, Caller};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CardId};
+use matos_core::domain::audit::{ActorKind, AuditEntry, AuditFilter, Severity};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::{IntoParams, ToSchema};
@@ -144,10 +144,10 @@ impl From<AuditEntry> for AuditEventResponse {
     params(AuditEventsQuery),
     responses(
         (status = 200, description = "The organization's events, newest first, with the actor's name and a summary", body = AuditEventListResponse),
-        (status = 400, description = "A malformed parameter", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to the audit log", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "A limit out of bounds, or `from` not before `to`", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 400, description = "A malformed parameter", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to the audit log", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "A limit out of bounds, or `from` not before `to`", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -1,8 +1,8 @@
-use capitainerie_common::{CoreError, IntegrationActionId, OrganizationId};
-use capitainerie_macros::transactional;
+use matos_common::{CoreError, IntegrationActionId, OrganizationId};
+use matos_macros::transactional;
 use serde_json::Value;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::{AccessRequest, Action, ResourceKind, Subject, require},
@@ -34,7 +34,7 @@ struct Prepared {
 
 type Stored<T> = Result<Result<T, RevertRefusal>, CoreError>;
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     pub async fn revert_integration_action<C: IntegrationConnector>(
         &self,
         subject: Subject,

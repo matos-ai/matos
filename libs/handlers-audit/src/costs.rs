@@ -3,13 +3,13 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{AgentId, CardId, CoreError, ProjectId};
-use capitainerie_core::domain::cost::{
+use chrono::{DateTime, NaiveDate, Utc};
+use matos_common::{AgentId, CardId, CoreError, ProjectId};
+use matos_core::domain::cost::{
     AgentSpend, CostFilter, CostReport, DaySpend, ModelSpend, Period, ProjectSpend, Spent,
     TaskSpend, UserSpend,
 };
-use capitainerie_handlers::{ApiError, AppState, Caller};
-use chrono::{DateTime, NaiveDate, Utc};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -290,10 +290,10 @@ fn period(from: Option<DateTime<Utc>>, to: Option<DateTime<Utc>>) -> Result<Peri
     params(CostsQuery),
     responses(
         (status = 200, description = "Spend per project over the window, each with its agents; work outside any project comes under a null project", body = ProjectCostsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to costs", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "`from` is not before `to`", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to costs", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "`from` is not before `to`", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -323,10 +323,10 @@ pub async fn projects_handler(
     params(CostsQuery),
     responses(
         (status = 200, description = "Spend and runs per agent over the window", body = AgentCostsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to costs", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "`from` is not before `to`", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to costs", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "`from` is not before `to`", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -356,10 +356,10 @@ pub async fn agents_handler(
     params(TaskCostsQuery),
     responses(
         (status = 200, description = "Spend per task over the window, each with its agents", body = TaskCostsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to costs", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "`project_id`, `agent_id` or `card_id` is not one of the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "`from` is not before `to`", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to costs", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "`project_id`, `agent_id` or `card_id` is not one of the organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "`from` is not before `to`", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -390,10 +390,10 @@ pub async fn tasks_handler(
     params(CostsQuery),
     responses(
         (status = 200, description = "Spend per user over the window, each with its models", body = UserCostsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to costs", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "`from` is not before `to`", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to costs", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "`from` is not before `to`", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -423,10 +423,10 @@ pub async fn users_handler(
     params(CostsQuery),
     responses(
         (status = 200, description = "Spend per UTC day over the window", body = DayCostsResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to costs", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "`from` is not before `to`", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to costs", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "`agent_id` or `card_id` is not one of the organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "`from` is not before `to`", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use capitainerie_common::{CoreError, RunId, TranscriptId};
-use capitainerie_macros::transactional;
+use matos_common::{CoreError, RunId, TranscriptId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         agent::SecretToken,
@@ -44,7 +44,7 @@ pub struct AgentDelegation<'a, X> {
     pub agents: &'a [String],
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     /// Exchanges the user's token for each agent of the pipeline first, so an
     /// identity provider outage refuses the submission instead of queueing a
     /// run that could never write anything; then stores everything at once.

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use capitainerie_common::IntegrationInstanceId;
-use capitainerie_core::domain::integration::{
+use matos_common::IntegrationInstanceId;
+use matos_core::domain::integration::{
     ConnectorFailure, InstanceConnection, ProbeReport, action::ActionRequest,
 };
 use reqwest::Client;

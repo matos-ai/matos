@@ -1,16 +1,16 @@
 use anyhow::Context;
 use axum::{Json, Router, http::HeaderValue, middleware, routing::get};
-use capitainerie_analytics::Analytics;
-use capitainerie_core::domain::{
+use matos_analytics::Analytics;
+use matos_core::domain::{
     conversation::turn::CaptainRuntime, delegation::ports::TokenExchanger,
     document::ports::DocumentReaderFactory, provider::ports::ModelCatalog,
     transcription::ports::TranscriberFactory,
 };
-use capitainerie_handlers::{AppState, auth::authenticate, health};
-use capitainerie_handlers_conversations::ConversationsState;
-use capitainerie_handlers_integrations::GithubIntegration;
-use capitainerie_handlers_realtime::Gateway;
-use capitainerie_integrations::{HttpConnector, McpHttp};
+use matos_handlers::{AppState, auth::authenticate, health};
+use matos_handlers_conversations::ConversationsState;
+use matos_handlers_integrations::GithubIntegration;
+use matos_handlers_realtime::Gateway;
+use matos_integrations::{HttpConnector, McpHttp};
 use tower_http::{
     cors::{AllowHeaders, AllowMethods, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
@@ -78,33 +78,33 @@ pub fn router<
         .collect::<anyhow::Result<Vec<_>>>()?;
 
     let protected = Router::new()
-        .merge(capitainerie_handlers_identity::router())
-        .merge(capitainerie_handlers_runs::router())
-        .merge(capitainerie_handlers_cards::router(github.apps.clone()))
-        .merge(capitainerie_handlers_clients::router())
-        .merge(capitainerie_handlers_team::router())
-        .merge(capitainerie_handlers_skills::router())
-        .merge(capitainerie_handlers_approvals::router())
-        .merge(capitainerie_handlers_audit::router())
-        .merge(capitainerie_handlers_inbox::router())
-        .merge(capitainerie_handlers_artifacts::router())
-        .merge(capitainerie_handlers_sources::router(
+        .merge(matos_handlers_identity::router())
+        .merge(matos_handlers_runs::router())
+        .merge(matos_handlers_cards::router(github.apps.clone()))
+        .merge(matos_handlers_clients::router())
+        .merge(matos_handlers_team::router())
+        .merge(matos_handlers_skills::router())
+        .merge(matos_handlers_approvals::router())
+        .merge(matos_handlers_audit::router())
+        .merge(matos_handlers_inbox::router())
+        .merge(matos_handlers_artifacts::router())
+        .merge(matos_handlers_sources::router(
             adapters.sources.public_api_url.clone(),
         ))
-        .merge(capitainerie_handlers_routines::router(
+        .merge(matos_handlers_routines::router(
             adapters.sources.public_api_url,
         ))
-        .merge(capitainerie_handlers_analytics::router(analytics))
-        .merge(capitainerie_handlers_providers::router(
+        .merge(matos_handlers_analytics::router(analytics))
+        .merge(matos_handlers_providers::router(
             state.usecase.clone(),
             catalog,
         ))
-        .merge(capitainerie_handlers_transcriptions::router(
+        .merge(matos_handlers_transcriptions::router(
             state.usecase.clone(),
             adapters.intake.transcribers,
             adapters.intake.document_readers,
         ))
-        .merge(capitainerie_handlers_conversations::router(
+        .merge(matos_handlers_conversations::router(
             ConversationsState::new(
                 state.usecase.clone(),
                 adapters.captain.runtime,
@@ -112,12 +112,12 @@ pub fn router<
                 adapters.captain.exchanger,
             ),
         ))
-        .merge(capitainerie_handlers_integrations::router(
+        .merge(matos_handlers_integrations::router(
             state.usecase.clone(),
             github,
             adapters.integrations.connector,
         ))
-        .merge(capitainerie_handlers_mcp::router(
+        .merge(matos_handlers_mcp::router(
             state.usecase.clone(),
             adapters.mcp.http,
             adapters.mcp.console_url,
@@ -127,9 +127,9 @@ pub fn router<
     Ok(Router::new()
         .merge(protected)
         .merge(health::router())
-        .merge(capitainerie_handlers_sources::hooks_router())
-        .merge(capitainerie_handlers_routines::hooks_router())
-        .merge(capitainerie_handlers_realtime::router(realtime))
+        .merge(matos_handlers_sources::hooks_router())
+        .merge(matos_handlers_routines::hooks_router())
+        .merge(matos_handlers_realtime::router(realtime))
         .route(
             "/api-docs/openapi.json",
             get(|| async { Json(ApiDoc::openapi()) }),
@@ -154,7 +154,7 @@ const SOURCE_HOOK_PREFIX: &str = "/hooks/sources/";
 fn redacted_path(path: &str) -> &str {
     if path.starts_with(SOURCE_HOOK_PREFIX) {
         "/hooks/sources/[redacted]"
-    } else if path.starts_with(capitainerie_handlers_routines::HOOK_PREFIX) {
+    } else if path.starts_with(matos_handlers_routines::HOOK_PREFIX) {
         "/hooks/routines/[redacted]"
     } else {
         path

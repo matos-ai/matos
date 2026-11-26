@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunnerError {

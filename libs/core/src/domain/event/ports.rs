@@ -1,5 +1,5 @@
-use capitainerie_common::CoreError;
-use capitainerie_events::{DomainEvent, EventEnvelope};
+use matos_common::CoreError;
+use matos_events::{DomainEvent, EventEnvelope};
 
 /// Collects the events of one transaction. They are written to the outbox in
 /// that transaction, so an event exists if and only if its transaction committed.

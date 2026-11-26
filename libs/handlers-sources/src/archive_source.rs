@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::SourceId;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::SourceId;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 
 use crate::response::SourceResponse;
@@ -20,9 +20,9 @@ pub struct ArchiveSourcePath {
     params(("source_id" = SourceId, Path, description = "Source identifier")),
     responses(
         (status = 200, description = "The archived source; its hook answers 404 from now on. Archiving twice changes nothing", body = SourceResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage sources", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such source in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage sources", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such source in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

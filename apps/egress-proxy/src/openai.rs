@@ -6,7 +6,7 @@ use axum::{
     http::{HeaderMap, HeaderName, HeaderValue, Method, header},
     response::{IntoResponse, Response},
 };
-use capitainerie_core::domain::provider::ProviderKind;
+use matos_core::domain::provider::ProviderKind;
 use serde_json::Value;
 
 use crate::{

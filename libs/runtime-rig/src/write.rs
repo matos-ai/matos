@@ -4,14 +4,12 @@ use std::{
     sync::{Arc, Mutex, PoisonError},
 };
 
-use capitainerie_common::{CoreError, RunId, TranscriptId};
-use capitainerie_core::domain::agent::{
+use chrono::NaiveDate;
+use matos_common::{CoreError, RunId, TranscriptId};
+use matos_core::domain::agent::{
     DuplicateAction, ExtractedAction, LocatedAction, ToolCall, Usage, WriteReport, WriteRequest,
 };
-use capitainerie_core::domain::card::attributes::{
-    Estimate, Priority, agent_due_date, parse_due_date,
-};
-use chrono::NaiveDate;
+use matos_core::domain::card::attributes::{Estimate, Priority, agent_due_date, parse_due_date};
 use rig_agent::{agent::AgentBuilder, run::PromptError};
 use rig_core::{
     DynModel,

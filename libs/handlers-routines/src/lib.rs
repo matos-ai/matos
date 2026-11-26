@@ -6,7 +6,7 @@ pub mod triggers;
 
 use axum::{Extension, Router, extract::DefaultBodyLimit};
 use axum_extra::routing::RouterExt;
-use capitainerie_handlers::{AppState, PublicBaseUrl};
+use matos_handlers::{AppState, PublicBaseUrl};
 
 pub const TAG: &str = "routines";
 /// Where a webhook trigger's URL starts, before its token.

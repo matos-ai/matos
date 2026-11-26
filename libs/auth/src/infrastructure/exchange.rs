@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::agent::SecretToken;
-use capitainerie_core::domain::delegation::DelegatedToken;
-use capitainerie_core::domain::delegation::ports::TokenExchanger;
 use chrono::Utc;
+use matos_common::CoreError;
+use matos_core::domain::agent::SecretToken;
+use matos_core::domain::delegation::DelegatedToken;
+use matos_core::domain::delegation::ports::TokenExchanger;
 use serde::Deserialize;
 use tokio::sync::RwLock;
 
@@ -243,7 +243,7 @@ pub struct ExchangeArgs {
     #[arg(
         long = "mcp-audience",
         env = "MCP_AUDIENCE",
-        default_value = "capitainerie-mcp"
+        default_value = "matos-mcp"
     )]
     pub mcp_audience: String,
 }

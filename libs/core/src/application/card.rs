@@ -1,7 +1,7 @@
-use capitainerie_common::{CardId, CoreError, RunId};
-use capitainerie_macros::transactional;
+use matos_common::{CardId, CoreError, RunId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::Subject,
@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(card, card_comment, transcript, emitter, authz)]
     pub async fn create_card(
         &self,
@@ -126,7 +126,7 @@ impl CapitainerieUseCase {
     }
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(card, client, project, member, crew_agent, emitter, authz)]
     pub async fn edit_card(
         &self,

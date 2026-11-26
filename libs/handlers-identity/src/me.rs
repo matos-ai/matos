@@ -1,9 +1,9 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::OrganizationId;
-use capitainerie_core::domain::member::Member;
-use capitainerie_handlers::{ApiError, AppState, Caller};
 use chrono::Utc;
+use matos_common::OrganizationId;
+use matos_core::domain::member::Member;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -56,7 +56,7 @@ impl From<Caller> for MeResponse {
     tag = super::TAG,
     responses(
         (status = 200, description = "The caller and their organization; a human caller is also recorded as a member of the organization, whom cards can be assigned to", body = MeResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -6,8 +6,8 @@ pub mod tools;
 use std::sync::Arc;
 
 use axum::{Json, Router, http::StatusCode, middleware, routing::get};
-use capitainerie_auth::TokenVerifier;
-use capitainerie_core::CapitainerieUseCase;
+use matos_auth::TokenVerifier;
+use matos_core::MatosUseCase;
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::never::NeverSessionManager,
 };
@@ -21,7 +21,7 @@ use crate::{
 const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 
 pub fn router<V: TokenVerifier + 'static>(
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     verifier: V,
     public_url: String,
 ) -> Router {

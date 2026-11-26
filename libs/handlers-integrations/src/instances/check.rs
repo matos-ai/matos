@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::IntegrationInstanceId;
-use capitainerie_handlers::Caller;
+use matos_common::IntegrationInstanceId;
+use matos_handlers::Caller;
 use serde::Deserialize;
 
 use super::dto::CheckIntegrationInstanceResponse;
@@ -21,10 +21,10 @@ pub struct CheckIntegrationInstancePath {
     params(("id" = IntegrationInstanceId, Path, description = "Integration instance identifier")),
     responses(
         (status = 200, description = "The outcome of the connection test, failed or not; the date of the test is recorded, and the known server version kept when it failed", body = CheckIntegrationInstanceResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such instance in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "The instance is archived", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such instance in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "The instance is archived", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

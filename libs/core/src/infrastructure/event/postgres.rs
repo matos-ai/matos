@@ -1,5 +1,5 @@
-use capitainerie_common::CoreError;
-use capitainerie_events::EventEnvelope;
+use matos_common::CoreError;
+use matos_events::EventEnvelope;
 use sqlx::PgPool;
 use uuid::Uuid;
 

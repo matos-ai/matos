@@ -1,4 +1,4 @@
-namespace Capitainerie {
+namespace Matos {
   type BaseContext = {
     organization: String,
     is_admin: Bool,
@@ -45,33 +45,33 @@ namespace Capitainerie {
     organization: String,
   };
 
-  action "capitainerie.any";
+  action "matos.any";
 
-  action "transcript.create", "transcription.create", "document.read", "run.read", "card.create", "card.read", "card.comment", "provider.read", "provider.manage", "user_provider.manage", "models.assign", "card.execute", "github.manage", "client.read", "client.manage", "member.read", "github.read", "conversation.read", "conversation.write", "integration.read", "integration.manage", "card.intervene", "integration.revert", "agent.read", "agent.manage", "mcp_connector.manage", "mcp_connector.connect", "agent.run", "skill.read", "skill.manage", "approval.read", "approval.decide", "source.read", "source.manage", "routine.read", "routine.manage", "audit.read", "budget.manage", "inbox.read", "artifact.read" in ["capitainerie.any"] appliesTo {
+  action "transcript.create", "transcription.create", "document.read", "run.read", "card.create", "card.read", "card.comment", "provider.read", "provider.manage", "user_provider.manage", "models.assign", "card.execute", "github.manage", "client.read", "client.manage", "member.read", "github.read", "conversation.read", "conversation.write", "integration.read", "integration.manage", "card.intervene", "integration.revert", "agent.read", "agent.manage", "mcp_connector.manage", "mcp_connector.connect", "agent.run", "skill.read", "skill.manage", "approval.read", "approval.decide", "source.read", "source.manage", "routine.read", "routine.manage", "audit.read", "budget.manage", "inbox.read", "artifact.read" in ["matos.any"] appliesTo {
     principal: [FerrisKey::User],
     resource: [Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact],
     context: BaseContext,
   };
 
-  action "card.update" in ["capitainerie.any"] appliesTo {
+  action "card.update" in ["matos.any"] appliesTo {
     principal: [FerrisKey::User],
     resource: [Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact],
     context: CardUpdateContext,
   };
 
-  action "card.move" in ["capitainerie.any"] appliesTo {
+  action "card.move" in ["matos.any"] appliesTo {
     principal: [FerrisKey::User],
     resource: [Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact],
     context: CardMoveContext,
   };
 
-  action "integration.call" in ["capitainerie.any"] appliesTo {
+  action "integration.call" in ["matos.any"] appliesTo {
     principal: [FerrisKey::User],
     resource: [Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact],
     context: IntegrationCallContext,
   };
 
-  action "mcp.call" in ["capitainerie.any"] appliesTo {
+  action "mcp.call" in ["matos.any"] appliesTo {
     principal: [FerrisKey::User],
     resource: [Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact],
     context: McpCallContext,

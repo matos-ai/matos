@@ -1,6 +1,6 @@
-use capitainerie_common::McpConnectorId;
-use capitainerie_core::domain::mcp::{ConnectorView, ToolInfo};
 use chrono::{DateTime, Utc};
+use matos_common::McpConnectorId;
+use matos_core::domain::mcp::{ConnectorView, ToolInfo};
 use serde::Serialize;
 use utoipa::ToSchema;
 

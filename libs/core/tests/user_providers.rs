@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -60,8 +60,8 @@ fn subject(organization_id: OrganizationId, id: &str, actor: Option<&str>) -> Su
     }
 }
 
-fn usecase(pool: &PgPool, key: u8) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool, key: u8) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[key; 32]).unwrap())
 }
 
@@ -263,7 +263,7 @@ async fn exactly_one_connection_is_the_default_and_a_delete_promotes_another() {
             .await
             .unwrap();
     }
-    let defaults = |listed: &[capitainerie_core::domain::user_provider::UserProviderSummary]| {
+    let defaults = |listed: &[matos_core::domain::user_provider::UserProviderSummary]| {
         listed
             .iter()
             .filter(|summary| summary.is_default)

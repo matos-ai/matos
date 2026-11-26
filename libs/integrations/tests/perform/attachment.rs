@@ -1,6 +1,6 @@
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use capitainerie_core::domain::integration::{ConnectorFailure, action::ActionRequest};
+use matos_core::domain::integration::{ConnectorFailure, action::ActionRequest};
 use serde_json::{Value, json};
 
 use crate::support::{Fake, Reply, json2, jsonrpc, perform, serve};

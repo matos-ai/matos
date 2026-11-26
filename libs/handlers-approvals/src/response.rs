@@ -1,6 +1,6 @@
-use capitainerie_common::{AgentId, ApprovalId, CardId, RunId};
-use capitainerie_core::domain::approval::{Approval, ApprovalKind, ApprovalStatus};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, ApprovalId, CardId, RunId};
+use matos_core::domain::approval::{Approval, ApprovalKind, ApprovalStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;

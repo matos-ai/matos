@@ -1,4 +1,4 @@
-use capitainerie_core::domain::client::links::Change;
+use matos_core::domain::client::links::Change;
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

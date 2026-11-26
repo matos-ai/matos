@@ -1,19 +1,19 @@
-name: capitainerie
+name: matos
 
 services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_USER: capitainerie
-      POSTGRES_PASSWORD: capitainerie
-      POSTGRES_DB: capitainerie
+      POSTGRES_USER: matos
+      POSTGRES_PASSWORD: matos
+      POSTGRES_DB: matos
     ports:
       - "${POSTGRES_PORT:-5442}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./deploy/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U capitainerie -d capitainerie"]
+      test: ["CMD-SHELL", "pg_isready -U matos -d matos"]
       interval: 5s
       retries: 10
       timeout: 5s
@@ -47,7 +47,7 @@ services:
     entrypoint: ["sqlx"]
     command: ["migrate", "run", "--source", "/usr/local/src/ferriskey/migrations"]
     environment:
-      DATABASE_URL: postgresql://capitainerie:capitainerie@postgres/ferriskey
+      DATABASE_URL: postgresql://matos:matos@postgres/ferriskey
     restart: "no"
     depends_on:
       postgres:
@@ -61,8 +61,8 @@ services:
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: ferriskey
-      DATABASE_USER: capitainerie
-      DATABASE_PASSWORD: capitainerie
+      DATABASE_USER: matos
+      DATABASE_PASSWORD: matos
     ports:
       - "${FERRISKEY_API_PORT:-4110}:3333"
     depends_on:

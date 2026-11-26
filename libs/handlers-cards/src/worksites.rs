@@ -1,13 +1,13 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{CardId, CoreError, ProjectId, RunId};
-use capitainerie_core::domain::{
+use chrono::{DateTime, Utc};
+use matos_common::{CardId, CoreError, ProjectId, RunId};
+use matos_core::domain::{
     card::DESCRIPTION_MAX_CHARS,
     execution::ports::CodeHost,
     worksite::{MAX_WORKSITES_PER_LAUNCH, WorksiteDraft, WorksiteSummary},
 };
-use capitainerie_handlers::{ApiError, AppState, Caller};
-use chrono::{DateTime, Utc};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -85,8 +85,8 @@ impl From<WorksiteSummary> for WorksiteResponse {
     params(("project_id" = ProjectId, Path, description = "Project identifier")),
     responses(
         (status = 200, description = "The cards of the project that left Proposed, newest first, with their latest execution", body = WorksiteListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such project in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such project in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -113,11 +113,11 @@ pub async fn list_handler(
     request_body = LaunchWorksitesRequest,
     responses(
         (status = 202, description = "Every worksite is a card of the project, In progress, with an Execute run queued", body = LaunchWorksitesResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused, or repository_not_allowed: the installation does not reach that repository", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such project in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "github_not_connected, or issue_already_imported: an issue already has a card", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to open, too many worksites, an empty or oversized prompt, a closed issue, or the GitHub App lacks the issues permission", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused, or repository_not_allowed: the installation does not reach that repository", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such project in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "github_not_connected, or issue_already_imported: an issue already has a card", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to open, too many worksites, an empty or oversized prompt, a closed issue, or the GitHub App lacks the issues permission", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -1,13 +1,13 @@
 [package]
-name = "capitainerie-runner-kube"
+name = "matos-runner-kube"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-capitainerie-common.workspace = true
-capitainerie-core.workspace = true
+matos-common.workspace = true
+matos-core.workspace = true
 futures-util = { workspace = true, features = ["io"] }
 k8s-openapi.workspace = true
 kube.workspace = true

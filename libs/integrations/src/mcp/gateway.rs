@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::SecretToken,
     mcp::{TOOL_TEXT_MAX_CHARS, ToolInfo, ToolOutput, cap_text, ports::McpGateway},
 };

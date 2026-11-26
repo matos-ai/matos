@@ -1,5 +1,5 @@
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::provider::{
+use matos_common::CoreError;
+use matos_core::domain::provider::{
     ProviderAccess, ProviderKind,
     ports::{CatalogModel, ModelCatalog},
 };

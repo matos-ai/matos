@@ -1,8 +1,8 @@
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::OrganizationId;
 use chrono::{DateTime, Utc};
+use matos_common::OrganizationId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Member {

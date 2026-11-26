@@ -4,8 +4,9 @@
 //! minting its event ids is not skipped. Replaying is harmless: a member gets
 //! at most one item per event.
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId};
-use capitainerie_events::{
+use chrono::{DateTime, Utc};
+use matos_common::{CardId, CoreError, OrganizationId, RunId};
+use matos_events::{
     DomainEvent, EventEnvelope,
     approval::ApprovalRequested,
     card::{CardCommented, CardUpdated},
@@ -14,7 +15,6 @@ use capitainerie_events::{
     run::RunFinished,
     source::SourceEventProcessed,
 };
-use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 
 use super::{
@@ -325,7 +325,7 @@ impl<'a, F: InboxFeed, E: EventEmitter> InboxProjection<'a, F, E> {
 mod tests {
     use std::sync::Mutex;
 
-    use capitainerie_events::card::CardAuthor;
+    use matos_events::card::CardAuthor;
     use uuid::Uuid;
 
     use super::*;
@@ -420,7 +420,7 @@ mod tests {
         };
         assert!(agent_commented(&human, &card(), "Iris", None).is_none());
         let captain = CardCommented {
-            author: author("user-9", Some("capitainerie-captain")),
+            author: author("user-9", Some("matos-captain")),
             ..event
         };
         assert!(agent_commented(&captain, &card(), "Iris", None).is_none());

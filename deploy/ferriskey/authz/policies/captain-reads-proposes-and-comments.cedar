@@ -2,11 +2,11 @@
 permit (
   principal,
   action in [
-    Capitainerie::Action::"card.create",
-    Capitainerie::Action::"card.read",
-    Capitainerie::Action::"card.comment",
-    Capitainerie::Action::"client.read",
-    Capitainerie::Action::"github.read"
+    Matos::Action::"card.create",
+    Matos::Action::"card.read",
+    Matos::Action::"card.comment",
+    Matos::Action::"client.read",
+    Matos::Action::"github.read"
   ],
   resource
 )

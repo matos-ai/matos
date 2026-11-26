@@ -1,18 +1,18 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
-use capitainerie_common::{AgentId, CardId, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::Utc;
+use matos_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
+use matos_common::{AgentId, CardId, OrganizationId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken, authorization::Subject, card::service::CreateCard,
         crew::service::CreateAgent,
     },
     infrastructure::postgres,
 };
-use capitainerie_handlers::{AppState, Caller};
-use chrono::Utc;
+use matos_handlers::{AppState, Caller};
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -40,7 +40,7 @@ enum Who {
 
 struct Fixture {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization: Organization,
     base: String,
 }
@@ -82,17 +82,17 @@ async fn fixture(who: Who) -> Option<Fixture> {
     };
     let pool = postgres::connect(&url, 3).await.unwrap();
     let organization = organization(&pool).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     let state = AppState {
         usecase: usecase.clone(),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     let caller = Caller {
         identity: Identity {
             subject: USER.into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -103,13 +103,13 @@ async fn fixture(who: Who) -> Option<Fixture> {
             }),
             roles: match who {
                 Who::Member => vec![],
-                Who::Admin | Who::Agent => vec!["capitainerie-admin".into()],
+                Who::Admin | Who::Agent => vec!["matos-admin".into()],
             },
         },
         organization: organization.clone(),
         token: SecretToken::new("user-token"),
     };
-    let app: Router = capitainerie_handlers_audit::router()
+    let app: Router = matos_handlers_audit::router()
         .layer(Extension(caller))
         .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -235,7 +235,7 @@ impl Fixture {
         .unwrap();
         self.usecase
             .comment_card_as_agent(
-                capitainerie_common::RunId(run_id),
+                matos_common::RunId(run_id),
                 card.id,
                 "iris",
                 "Trois factures en retard.".into(),

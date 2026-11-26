@@ -8,10 +8,10 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Form, Router};
-use capitainerie_auth::{ClientCredentials, ExchangeArgs, FerrisKeyTokenExchange};
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::agent::SecretToken;
-use capitainerie_core::domain::delegation::ports::TokenExchanger;
+use matos_auth::{ClientCredentials, ExchangeArgs, FerrisKeyTokenExchange};
+use matos_common::CoreError;
+use matos_core::domain::agent::SecretToken;
+use matos_core::domain::delegation::ports::TokenExchanger;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -102,9 +102,9 @@ fn creds(id: &str, secret: &str) -> ClientCredentials {
 
 fn exchanger() -> FerrisKeyTokenExchange {
     FerrisKeyTokenExchange::new(
-        Some(creds("capitainerie-api", "api-secret")),
+        Some(creds("matos-api", "api-secret")),
         vec![creds("agent-1", "agent-secret")],
-        "capitainerie-mcp",
+        "matos-mcp",
     )
 }
 
@@ -126,7 +126,7 @@ async fn for_agent_sends_the_exchange_form() {
         f["grant_type"],
         "urn:ietf:params:oauth:grant-type:token-exchange"
     );
-    assert_eq!(f["client_id"], "capitainerie-api");
+    assert_eq!(f["client_id"], "matos-api");
     assert_eq!(f["client_secret"], "api-secret");
     assert_eq!(f["subject_token"], "user-jwt");
     assert_eq!(
@@ -159,7 +159,7 @@ async fn for_mcp_gets_actor_token_then_exchanges() {
         f["actor_token_type"],
         "urn:ietf:params:oauth:token-type:access_token"
     );
-    assert_eq!(f["audience"], "capitainerie-mcp");
+    assert_eq!(f["audience"], "matos-mcp");
 }
 
 #[tokio::test]
@@ -193,7 +193,7 @@ async fn unknown_agent_makes_no_http_call() {
 #[tokio::test]
 async fn missing_requester_is_internal() {
     let server = start(false).await;
-    let err = FerrisKeyTokenExchange::new(None, vec![], "capitainerie-mcp")
+    let err = FerrisKeyTokenExchange::new(None, vec![], "matos-mcp")
         .for_agent(&server.issuer, &SecretToken::new("u"), "agent-1")
         .await
         .unwrap_err();
@@ -217,10 +217,10 @@ async fn discovery_is_fetched_once() {
 
 fn args(agents: &[&str]) -> ExchangeArgs {
     ExchangeArgs {
-        client_id: Some("capitainerie-api".to_owned()),
+        client_id: Some("matos-api".to_owned()),
         client_secret: Some("s".to_owned()),
         agent_credentials: agents.iter().map(|s| (*s).to_owned()).collect(),
-        mcp_audience: "capitainerie-mcp".to_owned(),
+        mcp_audience: "matos-mcp".to_owned(),
     }
 }
 

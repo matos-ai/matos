@@ -3,8 +3,8 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_core::domain::mcp::ports::{McpGateway, McpOAuth};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::mcp::ports::{McpGateway, McpOAuth};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -28,8 +28,8 @@ pub struct ListMcpConnectorsQuery {
     params(ListMcpConnectorsQuery),
     responses(
         (status = 200, description = "The organization's MCP connectors by name, each with the caller's connection state; without archived, the active ones only", body = McpConnectorListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to connectors", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to connectors", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

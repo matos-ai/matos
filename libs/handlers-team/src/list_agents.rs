@@ -3,7 +3,7 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -27,8 +27,8 @@ pub struct ListTeamAgentsQuery {
     params(ListTeamAgentsQuery),
     responses(
         (status = 200, description = "The team's agents by name; without archived, the active ones only", body = TeamAgentListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to the registry", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to the registry", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

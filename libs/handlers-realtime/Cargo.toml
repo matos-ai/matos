@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-handlers-realtime"
+name = "matos-handlers-realtime"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,10 +8,10 @@ license.workspace = true
 [dependencies]
 axum = { workspace = true, features = ["ws"] }
 base64.workspace = true
-capitainerie-auth.workspace = true
-capitainerie-bus-iggy.workspace = true
-capitainerie-events.workspace = true
-capitainerie-handlers.workspace = true
+matos-auth.workspace = true
+matos-bus-iggy.workspace = true
+matos-events.workspace = true
+matos-handlers.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true

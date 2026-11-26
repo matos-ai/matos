@@ -1,8 +1,8 @@
-use capitainerie_common::{AgentId, CoreError};
-use capitainerie_macros::transactional;
 use chrono::Utc;
+use matos_common::{AgentId, CoreError};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         agent_identity::{AgentIdentity, ports::AgentIdentityRepository},
@@ -15,7 +15,7 @@ use crate::{
     infrastructure::agent_identity::postgres::PgAgentIdentityRepository,
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(crew_agent, authz)]
     pub async fn list_crew(
         &self,

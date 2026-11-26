@@ -1,6 +1,7 @@
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CoreError;
-use capitainerie_core::{
+use chrono::{DateTime, Utc};
+use matos_common::CoreError;
+use matos_core::{
     application::ModelListing,
     domain::execution::ExecutorModel,
     domain::execution::harness::Harness,
@@ -9,7 +10,6 @@ use capitainerie_core::{
     },
     domain::user_provider::UserProviderSummary,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -401,7 +401,7 @@ pub struct HarnessListResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use capitainerie_core::domain::execution::harness::Harness;
+    use matos_core::domain::execution::harness::Harness;
 
     #[test]
     fn kinds_use_the_wire_names_of_the_domain() {
@@ -622,7 +622,7 @@ mod tests {
     fn an_absent_captain_keeps_the_current_one_and_null_clears_it() {
         let mut current = ModelAssignments::defaults("chat", "embed");
         current.captain = Some(ModelRef {
-            provider: capitainerie_core::domain::provider::ProviderKind::Anthropic,
+            provider: matos_core::domain::provider::ProviderKind::Anthropic,
             model: "claude-sonnet-5-5".into(),
         });
         let kept = wire_captain(None).into_assignments(Some(&current)).unwrap();
@@ -640,7 +640,7 @@ mod tests {
         assert_eq!(
             replaced.captain.map(|m| (m.provider, m.model)),
             Some((
-                capitainerie_core::domain::provider::ProviderKind::Mistral,
+                matos_core::domain::provider::ProviderKind::Mistral,
                 "mistral-large".to_owned()
             ))
         );

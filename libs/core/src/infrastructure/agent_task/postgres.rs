@@ -1,4 +1,4 @@
-use capitainerie_common::{AgentId, CardId, CoreError, OrganizationId, RunId};
+use matos_common::{AgentId, CardId, CoreError, OrganizationId, RunId};
 
 use crate::{
     domain::{

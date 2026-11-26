@@ -1,5 +1,5 @@
-use capitainerie_common::{ClientId, CoreError};
 use chrono::Utc;
+use matos_common::{ClientId, CoreError};
 
 use super::{
     Client, ClientDetail, ClientListing, ColumnCount, ListFilter, ports::ClientRepository,
@@ -155,7 +155,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{

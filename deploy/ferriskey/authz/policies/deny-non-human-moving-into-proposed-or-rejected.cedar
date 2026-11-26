@@ -1,7 +1,7 @@
 @id("deny-non-human-moving-into-proposed-or-rejected")
 forbid (
   principal,
-  action == Capitainerie::Action::"card.move",
+  action == Matos::Action::"card.move",
   resource
 )
 when {

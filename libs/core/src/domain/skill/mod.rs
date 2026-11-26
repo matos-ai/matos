@@ -1,8 +1,8 @@
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::{CoreError, OrganizationId, SkillId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, OrganizationId, SkillId};
 
 use crate::domain::crew::Slug;
 

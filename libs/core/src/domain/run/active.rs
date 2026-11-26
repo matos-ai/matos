@@ -41,8 +41,8 @@ impl ActiveRun {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{OrganizationId, StepId, TranscriptId};
     use chrono::Utc;
+    use matos_common::{OrganizationId, StepId, TranscriptId};
 
     use super::*;
     use crate::domain::{

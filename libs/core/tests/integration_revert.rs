@@ -5,9 +5,9 @@ use std::{
     sync::Mutex,
 };
 
-use capitainerie_common::{CardId, CoreError, IntegrationActionId, OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CardId, CoreError, IntegrationActionId, OrganizationId, RunId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -162,7 +162,7 @@ impl IntegrationConnector for Scripted {
 
 struct World {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization_id: OrganizationId,
     acme: Client,
     run_id: RunId,
@@ -190,7 +190,7 @@ async fn world() -> Option<World> {
     })?;
     let pool = postgres::connect(&url, 4).await.unwrap();
     let organization_id = organization(&pool).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap());
     let acme = usecase
         .create_client(
@@ -1098,7 +1098,7 @@ async fn an_agent_cannot_restore_an_action() {
     } = updated_workflow(&world, &n8n).await;
     world.end_run("succeeded").await;
 
-    for actor in [INTEGRATOR_AGENT, "capitainerie-agent-writer"] {
+    for actor in [INTEGRATOR_AGENT, "matos-agent-writer"] {
         let subject = Subject {
             actor: Some(actor.into()),
             ..human(world.organization_id)

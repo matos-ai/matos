@@ -3,9 +3,9 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{CardId, CoreError};
-use capitainerie_core::domain::execution::{RepositoryIssue, ports::CodeHost};
-use capitainerie_handlers::Caller;
+use matos_common::{CardId, CoreError};
+use matos_core::domain::execution::{RepositoryIssue, ports::CodeHost};
+use matos_handlers::Caller;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -45,10 +45,10 @@ pub struct IssueListResponse {
     params(IssuesQuery),
     responses(
         (status = 200, description = "The open issues of the repository, pull requests excluded", body = IssueListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "repository_not_allowed: the installation does not reach that repository", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "github_not_connected: the organization has no installation", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Not an owner/name repository, or the GitHub App lacks the issues permission", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "repository_not_allowed: the installation does not reach that repository", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "github_not_connected: the organization has no installation", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Not an owner/name repository, or the GitHub App lacks the issues permission", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -100,7 +100,7 @@ pub async fn handler(
 
 fn response(
     issue: RepositoryIssue,
-    imported: &[capitainerie_core::domain::worksite::WorksiteIssue],
+    imported: &[matos_core::domain::worksite::WorksiteIssue],
 ) -> IssueResponse {
     IssueResponse {
         card_id: imported

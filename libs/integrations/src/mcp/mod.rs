@@ -3,8 +3,8 @@ mod oauth;
 
 use std::time::Duration;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::integration::ConnectorFailure;
+use matos_common::CoreError;
+use matos_core::domain::integration::ConnectorFailure;
 
 use crate::{NetworkPolicy, guard};
 

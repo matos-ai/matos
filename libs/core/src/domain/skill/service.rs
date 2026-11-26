@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, SkillId};
 use chrono::Utc;
+use matos_common::{CoreError, SkillId};
 
 use super::{
     CONTENT_MAX_CHARS, CatalogSkill, DESCRIPTION_MAX_CHARS, Skill, SkillSource,
@@ -202,7 +202,7 @@ fn content(value: String) -> Result<String, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{

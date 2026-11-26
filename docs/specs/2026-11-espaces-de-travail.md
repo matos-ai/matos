@@ -21,7 +21,7 @@ Statut : réalisée le 2026-11-03, d'un seul tenant. Taille L, une seule PR (4 c
 
 | # | Décision | Option retenue | Option écartée |
 |---|---|---|---|
-| E1 | Espace de travail | **Un projet courant**, choisi en haut de la page Chantiers et mémorisé en local (`capitainerie.current-project`). Pas de nouvelle table. Le Kanban garde son filtre `project` | Sélecteur dans le rail ; table `workspaces` côté serveur |
+| E1 | Espace de travail | **Un projet courant**, choisi en haut de la page Chantiers et mémorisé en local (`matos.current-project`). Pas de nouvelle table. Le Kanban garde son filtre `project` | Sélecteur dans le rail ; table `workspaces` côté serveur |
 | E2 | Chantier | **Une carte plus son exécution**. Un prompt libre crée une carte dans le projet, une issue crée une carte liée à l'issue par la table `worksite_issues` | Colonne `source_issue` sur la carte ; nouvelle entité distincte |
 | E3 | Lancement multiple | **Un dialogue « Nouveau chantier »**, un seul clic de confiance qui couvre le dépôt choisi et la liste affichée | Un clic par carte |
 | E4 | Parallélisme | **Inchangé** : au-delà de `EXECUTOR_CONCURRENCY`, les runs restent `queued`, affichés « en file » | Limite par projet |
@@ -56,7 +56,7 @@ Statut : réalisée le 2026-11-03, d'un seul tenant. Taille L, une seule PR (4 c
 
 ## PR 2 : projet courant (M)
 
-- Console seulement : sélecteur de projet dans le rail, paramètre `project` commun à `/kanban`, `/runs`, `/live`, `/chat`, mémorisé sous `capitainerie.current-project`.
+- Console seulement : sélecteur de projet dans le rail, paramètre `project` commun à `/kanban`, `/runs`, `/live`, `/chat`, mémorisé sous `matos.current-project`.
 - Le filtre `project` de Kanban devient le même mécanisme.
 - Runs et En cours acceptent `project_id` côté API (à confirmer : le filtre existe-t-il déjà ?).
 - Tests : sélecteur, persistance, projet inconnu ou archivé retombe sur « Tous les projets ».

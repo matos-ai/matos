@@ -1,5 +1,5 @@
 use axum::{Extension, extract::State, http::StatusCode};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 
 use crate::{dto::ProviderPath, state::ProvidersState};
 
@@ -11,9 +11,9 @@ use crate::{dto::ProviderPath, state::ProvidersState};
     params(("kind" = crate::dto::ProviderKindDto, Path, description = "Provider")),
     responses(
         (status = 204, description = "The provider and its key are gone"),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "The provider is not configured", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "The provider is not configured", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

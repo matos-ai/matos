@@ -8,8 +8,8 @@ mod odoo_jsonrpc;
 
 use std::sync::Arc;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::integration::{
+use matos_common::CoreError;
+use matos_core::domain::integration::{
     ConnectorFailure, InstanceConnection, IntegrationKind, ProbeReport, action::ActionRequest,
     ports::IntegrationConnector,
 };

@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, OrganizationId, ProjectId};
+use matos_common::{CoreError, OrganizationId, ProjectId};
 
 use super::{WorksiteIssue, WorksiteSummary};
 use crate::domain::execution::RepositoryRef;

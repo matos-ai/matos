@@ -1,7 +1,7 @@
 pub mod ports;
 
-use capitainerie_common::{CoreError, OrganizationId, RunId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, OrganizationId, RunId};
 use uuid::Uuid;
 
 use self::ports::Authorizer;
@@ -25,7 +25,7 @@ pub struct Subject {
     pub organization_id: OrganizationId,
     /// Client id of the agent acting for that human, when one is.
     pub actor: Option<String>,
-    /// Holds the organization's `capitainerie-admin` realm role.
+    /// Holds the organization's `matos-admin` realm role.
     pub is_admin: bool,
 }
 

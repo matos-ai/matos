@@ -1,7 +1,7 @@
 @id("deny-non-human-without-actor")
 forbid (
   principal,
-  action in Capitainerie::Action::"capitainerie.any",
+  action in Matos::Action::"matos.any",
   resource
 )
 when {

@@ -1,5 +1,5 @@
-use capitainerie_common::{CoreError, OrganizationId};
 use chrono::Utc;
+use matos_common::{CoreError, OrganizationId};
 
 use super::{
     AgentRole, ModelAssignments, ModelTarget, ProviderAccess, ProviderCredential, ProviderKind,

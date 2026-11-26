@@ -1,10 +1,10 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
-use capitainerie_core::domain::mcp::{
+use matos_core::domain::mcp::{
     ConnectorView,
     ports::{McpGateway, McpOAuth},
     service::CreateConnector,
 };
-use capitainerie_handlers::{ApiError, Caller};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -28,11 +28,11 @@ pub struct CreateMcpConnectorRequest {
     request_body = CreateMcpConnectorRequest,
     responses(
         (status = 201, description = "The connector: the server's OAuth metadata was discovered and a public client registered", body = McpConnectorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage connectors", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A connector of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An invalid field, or a server that cannot be discovered or registered with", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 503, description = "CONSOLE_URL is not configured", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage connectors", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A connector of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An invalid field, or a server that cannot be discovered or registered with", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 503, description = "CONSOLE_URL is not configured", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

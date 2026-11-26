@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use super::claims::{Actor, Claims};
 use super::errors::AuthError;
-use capitainerie_core::domain::agent_identity::AgentClientId;
+use matos_core::domain::agent_identity::AgentClientId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
@@ -126,10 +126,10 @@ mod tests {
     fn roles_come_from_the_realm_access_claim() {
         let mut with_roles = claims();
         with_roles.realm_access = Some(RealmAccess {
-            roles: vec!["capitainerie-admin".into(), "offline_access".into()],
+            roles: vec!["matos-admin".into(), "offline_access".into()],
         });
         let identity = Identity::try_from(with_roles).unwrap();
-        assert_eq!(identity.roles, ["capitainerie-admin", "offline_access"]);
+        assert_eq!(identity.roles, ["matos-admin", "offline_access"]);
     }
 
     #[test]
@@ -169,11 +169,11 @@ mod tests {
 
     #[test]
     fn agent_clients_are_accepted_only_when_asked() {
-        let agent = AgentClientId::of(capitainerie_common::AgentId(uuid::Uuid::now_v7()));
+        let agent = AgentClientId::of(matos_common::AgentId(uuid::Uuid::now_v7()));
         assert!(!AcceptedClients::new(["web"]).accepts(agent.as_str()));
         let accepted = AcceptedClients::new(["web"]).with_agent_clients();
         assert!(accepted.accepts(agent.as_str()));
         assert!(accepted.accepts("web"));
-        assert!(!accepted.accepts("capitainerie-agent-writer"));
+        assert!(!accepted.accepts("matos-agent-writer"));
     }
 }

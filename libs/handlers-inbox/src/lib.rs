@@ -3,10 +3,10 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::{RouterExt, TypedPath};
-use capitainerie_common::{CardId, InboxItemId, RunId};
-use capitainerie_core::domain::inbox::{self, InboxItem, InboxKind, ReadSelection};
-use capitainerie_handlers::{ApiError, AppState, Caller};
 use chrono::{DateTime, Utc};
+use matos_common::{CardId, InboxItemId, RunId};
+use matos_core::domain::inbox::{self, InboxItem, InboxKind, ReadSelection};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -120,10 +120,10 @@ pub struct MarkReadResponse {
     params(InboxQuery),
     responses(
         (status = 200, description = "The caller's notifications, newest first, with their counts", body = InboxResponse),
-        (status = 400, description = "A malformed parameter", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Agents have no inbox", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "A limit out of bounds", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 400, description = "A malformed parameter", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Agents have no inbox", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "A limit out of bounds", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -154,9 +154,9 @@ pub async fn list_handler(
     request_body = MarkReadRequest,
     responses(
         (status = 200, description = "The caller's items are read; ids of other members' items change nothing", body = MarkReadResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Agents have no inbox", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Neither or both of `ids` and `all`, or too many ids", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Agents have no inbox", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Neither or both of `ids` and `all`, or too many ids", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

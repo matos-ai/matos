@@ -2,8 +2,8 @@ pub mod pkce;
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::{CoreError, McpConnectorId, OrganizationId};
 use chrono::{DateTime, Duration, Utc};
+use matos_common::{CoreError, McpConnectorId, OrganizationId};
 use serde_json::Value;
 use url::Url;
 

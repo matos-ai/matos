@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, OrganizationId};
+use matos_common::{CoreError, OrganizationId};
 
 use super::{UserProviderCredential, UserProviderSummary};
 use crate::domain::provider::ProviderKind;

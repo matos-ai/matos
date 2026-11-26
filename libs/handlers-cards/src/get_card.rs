@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CardId;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::CardId;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 
 use crate::response::CardDetailResponse;
@@ -20,8 +20,8 @@ pub struct GetCardPath {
     params(("card_id" = CardId, Path, description = "Card identifier")),
     responses(
         (status = 200, description = "The card with its comments and runs", body = CardDetailResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such card in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

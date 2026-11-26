@@ -3,8 +3,8 @@ pub mod links;
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::{ClientId, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{ClientId, OrganizationId};
 
 use crate::domain::{
     card::Column,

@@ -1,7 +1,7 @@
 @id("deny-mcp-call-without-initiator-and-grant")
 forbid (
   principal,
-  action == Capitainerie::Action::"mcp.call",
+  action == Matos::Action::"mcp.call",
   resource
 )
 unless {

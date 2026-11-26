@@ -1,7 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
-use capitainerie_core::{
+use chrono::{Duration, DurationRound, Utc};
+use matos_common::{AgentId, CoreError, OrganizationId};
+use matos_core::{
     domain::{
         agent::SecretToken,
         agent_identity::{
@@ -13,7 +14,6 @@ use capitainerie_core::{
         agent_identity::postgres::PgAgentIdentityRepository, crypto::SecretCipher, postgres,
     },
 };
-use chrono::{Duration, DurationRound, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 

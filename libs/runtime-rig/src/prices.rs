@@ -1,4 +1,4 @@
-use capitainerie_core::domain::{provider::ProviderKind, run::step::Pricing};
+use matos_core::domain::{provider::ProviderKind, run::step::Pricing};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Price {
@@ -107,7 +107,7 @@ pub fn executor_prices() -> Vec<(String, Pricing)> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_core::domain::execution::harness::{
+    use matos_core::domain::execution::harness::{
         ANTIGRAVITY_MODELS, CODEX_MODELS, MISTRAL_VIBE_MODELS,
     };
 

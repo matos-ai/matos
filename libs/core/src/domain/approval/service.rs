@@ -1,6 +1,6 @@
-use capitainerie_common::{ApprovalId, CoreError, OrganizationId, RunId};
-use capitainerie_events::approval::{ApprovalDecided, ApprovalRequested, ApprovalResumed};
 use chrono::{DateTime, Utc};
+use matos_common::{ApprovalId, CoreError, OrganizationId, RunId};
+use matos_events::approval::{ApprovalDecided, ApprovalRequested, ApprovalResumed};
 
 use super::{
     Approval, ApprovalKind, ApprovalStatus, ToolGrant, Verdict, ports::ApprovalRepository,
@@ -226,8 +226,8 @@ where
 mod tests {
     use std::sync::Mutex;
 
-    use capitainerie_common::{AgentId, CardId, OrganizationId, RunId};
-    use capitainerie_events::DomainEvent;
+    use matos_common::{AgentId, CardId, OrganizationId, RunId};
+    use matos_events::DomainEvent;
     use serde_json::json;
 
     use super::*;

@@ -2,18 +2,18 @@
 
 mod common;
 
-use capitainerie_common::{CardId, CoreError, RunId, TranscriptId};
-use capitainerie_core::domain::{
-    agent::{ExtractedAction, LocatedAction, SecretToken, WriteRequest, ports::AgentRuntime},
-    provider::{ModelTarget, ProviderAccess, ProviderKind, ports::ModelCatalog},
-    similarity::{SimilarCard, ports::Embedder},
-};
-use capitainerie_runtime_rig::{RigAgentRuntime, RigEmbedder, RigModelCatalog};
 use common::{
     FakeMcp, access, args,
     providers::{FakeProvider, error_body, message, refusal, text_message, tool_use},
     target, tool_call_response,
 };
+use matos_common::{CardId, CoreError, RunId, TranscriptId};
+use matos_core::domain::{
+    agent::{ExtractedAction, LocatedAction, SecretToken, WriteRequest, ports::AgentRuntime},
+    provider::{ModelTarget, ProviderAccess, ProviderKind, ports::ModelCatalog},
+    similarity::{SimilarCard, ports::Embedder},
+};
+use matos_runtime_rig::{RigAgentRuntime, RigEmbedder, RigModelCatalog};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -879,7 +879,7 @@ async fn voxtral_and_whisper_file_models_are_transcription_capable_and_nothing_e
         .await
         .unwrap();
 
-    let capable = |models: &[capitainerie_core::domain::provider::ports::CatalogModel]| {
+    let capable = |models: &[matos_core::domain::provider::ports::CatalogModel]| {
         models
             .iter()
             .filter(|model| model.transcription)

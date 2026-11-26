@@ -1,5 +1,5 @@
 //! The event envelope every component exchanges through the bus, and the
-//! catalogue of event kinds. Depends on nothing in `capitainerie-core`.
+//! catalogue of event kinds. Depends on nothing in `matos-core`.
 
 pub mod approval;
 pub mod card;

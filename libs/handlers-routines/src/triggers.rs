@@ -4,12 +4,12 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{RoutineId, RoutineTriggerId};
-use capitainerie_core::domain::routine::{
+use matos_common::{RoutineId, RoutineTriggerId};
+use matos_core::domain::routine::{
     IssuedTrigger,
     service::{AddTrigger, UpdateTrigger},
 };
-use capitainerie_handlers::{ApiError, AppState, Caller, PublicBaseUrl};
+use matos_handlers::{ApiError, AppState, Caller, PublicBaseUrl};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -79,10 +79,10 @@ fn issued(
     request_body = AddTriggerRequest,
     responses(
         (status = 201, description = "The routine with its new trigger; a webhook's token and URL are shown this once", body = IssuedTriggerResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "A missing, unexpected or invalid schedule", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "A missing, unexpected or invalid schedule", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -125,10 +125,10 @@ pub async fn add_trigger(
     request_body = UpdateTriggerRequest,
     responses(
         (status = 200, description = "The routine; the trigger's next passage is planned again from now", body = RoutineResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine or trigger in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to update, or an invalid schedule", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine or trigger in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to update, or an invalid schedule", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -167,9 +167,9 @@ pub async fn update_trigger(
     ),
     responses(
         (status = 200, description = "The routine without the trigger; a webhook's URL stops working at once", body = RoutineResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine or trigger in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine or trigger in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -199,10 +199,10 @@ pub async fn remove_trigger(
     ),
     responses(
         (status = 200, description = "The new token and webhook URL, shown this once; the previous URL stops working at once", body = IssuedTriggerResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine or trigger in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "The trigger is not a webhook", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine or trigger in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "The trigger is not a webhook", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -2,8 +2,8 @@ mod bounded;
 
 use std::{sync::Arc, time::Duration};
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::{
+use matos_common::CoreError;
+use matos_core::domain::{
     agent::Usage,
     agent_task::ports::TaskRuntime,
     conversation::turn::{ChatMessage, ChatRole, TurnLimits, TurnState},
@@ -34,7 +34,7 @@ const TASK_AGENT: &str = "agent_task";
 const BUDGET_SPENT: &str = "tool or token budget spent";
 
 const SYSTEM_PROMPT: &str = "\
-Tu es l'Intervenant de Capitainerie : un membre de l'équipe te confie une carte d'un client, et tu agis sur les instances Odoo et n8n de ce client pour la traiter. Tu réponds toujours en français, de façon brève et concrète.
+Tu es l'Intervenant de Matos : un membre de l'équipe te confie une carte d'un client, et tu agis sur les instances Odoo et n8n de ce client pour la traiter. Tu réponds toujours en français, de façon brève et concrète.
 Commence toujours par appeler list_instances : seules les instances listées existent pour toi, avec leur accès (lecture ou écriture). N'essaie jamais une autre instance, ni une écriture sur une instance en lecture seule.
 Lis avant d'écrire, et confirme tes hypothèses par des lectures. Suis la description de la carte, ses critères d'acceptation et les consignes du membre. Quand les consignes disent staging, n'écris jamais en production, même si l'écriture y est accordée. Préfère le plus petit changement qui répond à la carte.
 Les valeurs affichées « [masqué] » sont des secrets : ne les demande jamais, et renvoie « [masqué] » tel quel pour les conserver.
@@ -200,7 +200,7 @@ fn cost_micros(kind: ProviderKind, model: &str, usage: &Usage) -> i64 {
 mod tests {
     use std::{sync::Mutex, time::Duration};
 
-    use capitainerie_core::domain::{
+    use matos_core::domain::{
         conversation::turn::ToolSpec,
         integration::intervention::ToolAnswer,
         provider::{ModelRef, ModelTarget, ProviderKind},

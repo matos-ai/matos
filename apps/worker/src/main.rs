@@ -8,15 +8,16 @@ mod scheduler;
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
-use capitainerie_args::{
+use clap::Parser;
+use matos_args::{
     DatabaseArgs, DelegationArgs, ExecutorArgs, GithubArgs, IntegrationsArgs, LogArgs,
     ObservabilityArgs, SecretsArgs,
 };
-use capitainerie_auth::{ExchangeArgs, ProvisionerArgs};
-use capitainerie_bus_iggy::{IggyArgs, IggyEventBus};
-use capitainerie_core::{
-    AgentTaskConfig, AgentTaskPipeline, CapitainerieUseCase, ExecuteConfig, ExecutePipeline,
-    Executor, InterventionConfig, InterventionPipeline, MeetingPipeline, PipelineConfig,
+use matos_auth::{ExchangeArgs, ProvisionerArgs};
+use matos_bus_iggy::{IggyArgs, IggyEventBus};
+use matos_core::{
+    AgentTaskConfig, AgentTaskPipeline, ExecuteConfig, ExecutePipeline, Executor,
+    InterventionConfig, InterventionPipeline, MatosUseCase, MeetingPipeline, PipelineConfig,
     domain::{
         execution::ExecutorStatus,
         integration::intervention::INTERVENTION_DEADLINE,
@@ -30,14 +31,13 @@ use capitainerie_core::{
         postgres,
     },
 };
-use capitainerie_github::{GithubApps, GithubBases};
-use capitainerie_integrations::{HttpConnector, McpHttp, NetworkPolicy};
-use capitainerie_runner_kube::{KubeRunnerConfig, KubeTaskRunner};
-use capitainerie_runtime_rig::{
+use matos_github::{GithubApps, GithubBases};
+use matos_integrations::{HttpConnector, McpHttp, NetworkPolicy};
+use matos_runner_kube::{KubeRunnerConfig, KubeTaskRunner};
+use matos_runtime_rig::{
     EmbeddingArgs, LlmArgs, RigAgentRuntime, RigEmbedder, RigIntegrator, executor_prices,
 };
-use capitainerie_vector_lancedb::LanceVectorStore;
-use clap::Parser;
+use matos_vector_lancedb::LanceVectorStore;
 use tokio::sync::watch;
 
 use crate::{
@@ -46,7 +46,7 @@ use crate::{
 };
 
 #[derive(Debug, Parser)]
-#[command(name = "capitainerie-worker", version)]
+#[command(name = "matos-worker", version)]
 struct Args {
     #[command(flatten)]
     database: DatabaseArgs,
@@ -123,8 +123,7 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let args = Args::parse();
-    let _telemetry =
-        capitainerie_telemetry::init("capitainerie-worker", &args.log, &args.observability)?;
+    let _telemetry = matos_telemetry::init("matos-worker", &args.log, &args.observability)?;
 
     anyhow::ensure!(
         args.dedup_gray_floor <= args.dedup_threshold,
@@ -140,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
         args.delegation.key.as_deref().context(
             "DELEGATION_KEY is required: the worker reads the delegations the API sealed",
         )?;
-    let mut usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let mut usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::from_base64(key)?);
     match &args.secrets.key {
         Some(key) => {
@@ -285,7 +284,7 @@ async fn main() -> anyhow::Result<()> {
         },
         inbox.run(stopped),
         async move {
-            capitainerie_telemetry::shutdown_signal().await;
+            matos_telemetry::shutdown_signal().await;
             tracing::info!("worker stopping");
             let _ = stop.send(true);
         },
@@ -317,10 +316,7 @@ fn integrations_connector(args: &IntegrationsArgs) -> anyhow::Result<HttpConnect
     HttpConnector::new(network_policy(args)).context("building the integrations connector")
 }
 
-async fn executor_from(
-    args: &Args,
-    usecase: CapitainerieUseCase,
-) -> Executor<KubeTaskRunner, GithubApps> {
+async fn executor_from(args: &Args, usecase: MatosUseCase) -> Executor<KubeTaskRunner, GithubApps> {
     match build_executor(args, usecase).await {
         Ok(executor) => executor,
         Err(reason) => {
@@ -332,7 +328,7 @@ async fn executor_from(
 
 async fn build_executor(
     args: &Args,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
 ) -> Result<Executor<KubeTaskRunner, GithubApps>, String> {
     let namespace = args
         .executor

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use capitainerie_core::domain::agent::ExtractedAction;
+use matos_core::domain::agent::ExtractedAction;
 
 const STOP_WORDS: &[&str] = &[
     "le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "au", "aux", "en", "et", "ou",

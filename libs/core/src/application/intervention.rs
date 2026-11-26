@@ -1,10 +1,10 @@
-use capitainerie_common::{
+use chrono::{SubsecRound, Utc};
+use matos_common::{
     CardCommentId, CardId, CoreError, IntegrationInstanceId, OrganizationId, RunId,
 };
-use capitainerie_macros::transactional;
-use chrono::{SubsecRound, Utc};
+use matos_macros::transactional;
 
-use super::{CapitainerieUseCase, execution::COMMENT_ID_FIELD};
+use super::{MatosUseCase, execution::COMMENT_ID_FIELD};
 use crate::{
     domain::{
         authorization::{AccessRequest, Action, ResourceKind, Subject, require},
@@ -50,7 +50,7 @@ fn settled<T>(outcome: Result<T, InterventionError>) -> Stored<T> {
     }
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     pub async fn confide_card_to_integrator(
         &self,
         subject: Subject,

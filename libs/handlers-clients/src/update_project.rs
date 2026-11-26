@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_common::ClientId;
-use capitainerie_core::domain::project::service::UpdateProject;
-use capitainerie_handlers::{ApiError, AppState, Caller, Patch};
+use matos_common::ClientId;
+use matos_core::domain::project::service::UpdateProject;
+use matos_handlers::{ApiError, AppState, Caller, Patch};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -26,15 +26,15 @@ pub struct UpdateProjectRequest {
     path = "/api/v1/projects/{project_id}",
     operation_id = "updateProject",
     tag = super::TAG,
-    params(("project_id" = capitainerie_common::ProjectId, Path, description = "Project identifier")),
+    params(("project_id" = matos_common::ProjectId, Path, description = "Project identifier")),
     request_body = UpdateProjectRequest,
     responses(
         (status = 200, description = "The updated project; absent fields are unchanged, null clears client_id or repository", body = ProjectResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage projects", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such project in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A project of that name exists for this client, whatever the case", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to update, invalid input, or an unknown, archived or foreign client", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage projects", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such project in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A project of that name exists for this client, whatever the case", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to update, invalid input, or an unknown, archived or foreign client", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

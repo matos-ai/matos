@@ -322,7 +322,7 @@ export function LaunchWorksitesDialog({
 							<InlineAlert tone={tooMany ? 'danger' : 'info'}>
 								{tooMany
 									? `Au plus ${MAX_WORKSITES} chantiers à la fois : il y en a ${count}.`
-									: `Claude Code travaille dans un conteneur isolé, une branche capitainerie/… par chantier, et ouvre une pull request en brouillon. ${count} chantier${count > 1 ? 's' : ''} ${count > 1 ? 'partiront' : 'partira'} ; au-delà de la capacité des workers, ils attendent leur tour.`}
+									: `Claude Code travaille dans un conteneur isolé, une branche matos/… par chantier, et ouvre une pull request en brouillon. ${count} chantier${count > 1 ? 's' : ''} ${count > 1 ? 'partiront' : 'partira'} ; au-delà de la capacité des workers, ils attendent leur tour.`}
 							</InlineAlert>
 						</>
 					)}

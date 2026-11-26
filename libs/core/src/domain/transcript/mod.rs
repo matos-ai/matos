@@ -2,8 +2,8 @@ pub mod ports;
 
 use std::borrow::Cow;
 
-use capitainerie_common::{CoreError, OrganizationId, TranscriptId};
 use chrono::{DateTime, NaiveDate, Utc};
+use matos_common::{CoreError, OrganizationId, TranscriptId};
 
 use crate::domain::{
     client::{catalog::Catalog, links::Links},

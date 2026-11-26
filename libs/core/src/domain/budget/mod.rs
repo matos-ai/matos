@@ -3,8 +3,8 @@ pub mod service;
 
 use std::collections::{HashMap, HashSet};
 
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
 use chrono::{DateTime, Datelike, TimeZone, Utc};
+use matos_common::{AgentId, CoreError, OrganizationId};
 use uuid::Uuid;
 
 pub const MAX_LIMIT_CENTS: i64 = 100_000_000_000;

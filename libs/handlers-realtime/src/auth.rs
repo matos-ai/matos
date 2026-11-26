@@ -1,9 +1,9 @@
 use std::future::Future;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use capitainerie_auth::{TokenVerifier, unverified_issuer};
-use capitainerie_handlers::AppState;
 use chrono::{DateTime, Utc};
+use matos_auth::{TokenVerifier, unverified_issuer};
+use matos_handlers::AppState;
 use serde::Deserialize;
 use uuid::Uuid;
 

@@ -1,4 +1,4 @@
-use capitainerie_common::{CardId, CoreError};
+use matos_common::{CardId, CoreError};
 
 use super::{
     Card, CardComment,
@@ -76,8 +76,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{CardCommentId, OrganizationId, RunId, TranscriptId};
     use chrono::Utc;
+    use matos_common::{CardCommentId, OrganizationId, RunId, TranscriptId};
 
     use super::*;
     use crate::domain::{

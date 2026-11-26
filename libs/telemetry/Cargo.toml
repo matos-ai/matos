@@ -1,12 +1,12 @@
 [package]
-name = "capitainerie-telemetry"
+name = "matos-telemetry"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-capitainerie-args.workspace = true
+matos-args.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry_sdk.workspace = true

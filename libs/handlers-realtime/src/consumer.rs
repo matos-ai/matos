@@ -2,8 +2,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
-use capitainerie_bus_iggy::{BusError, IggyArgs, IggyEventBus, Subscription};
-use capitainerie_events::Topic;
+use matos_bus_iggy::{BusError, IggyArgs, IggyEventBus, Subscription};
+use matos_events::Topic;
 use tokio::task::JoinHandle;
 
 use crate::{hub::Hub, wire::Notice};

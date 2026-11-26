@@ -3,7 +3,7 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -28,8 +28,8 @@ pub struct ListSkillsQuery {
     params(ListSkillsQuery),
     responses(
         (status = 200, description = "The organization's skills by name, each with the number of active agents using it", body = SkillListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to the catalog", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to the catalog", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

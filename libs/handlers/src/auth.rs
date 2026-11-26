@@ -4,9 +4,9 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use capitainerie_auth::{Identity, TokenVerifier, unverified_issuer};
-use capitainerie_common::CoreError;
-use capitainerie_core::{
+use matos_auth::{Identity, TokenVerifier, unverified_issuer};
+use matos_common::CoreError;
+use matos_core::{
     Organization,
     domain::{agent::SecretToken, authorization::Subject},
 };
@@ -14,7 +14,7 @@ use capitainerie_core::{
 use crate::{ApiError, AppState};
 
 /// The realm role FerrisKey gives the admins of an organization.
-pub const ADMIN_ROLE: &str = "capitainerie-admin";
+pub const ADMIN_ROLE: &str = "matos-admin";
 
 /// Who is calling, inserted as a request extension by [`authenticate`].
 #[derive(Debug, Clone)]

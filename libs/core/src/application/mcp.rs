@@ -1,8 +1,8 @@
-use capitainerie_common::{CoreError, McpConnectorId, OrganizationId};
-use capitainerie_macros::transactional;
 use chrono::Utc;
+use matos_common::{CoreError, McpConnectorId, OrganizationId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         agent::SecretToken,
@@ -23,7 +23,7 @@ use crate::{
 
 const RECONNECT: &str = "la connexion a expiré, reconnectez-vous";
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     pub fn secrets_configured(&self) -> bool {
         self.secrets.is_some()
     }

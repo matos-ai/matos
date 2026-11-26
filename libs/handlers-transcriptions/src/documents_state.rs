@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
-use capitainerie_core::CapitainerieUseCase;
+use matos_core::MatosUseCase;
 use tokio::sync::Semaphore;
 
 use crate::MAX_CONCURRENT_UPLOADS;
 
 pub struct DocumentsState<R> {
-    pub usecase: CapitainerieUseCase,
+    pub usecase: MatosUseCase,
     pub readers: Arc<R>,
     pub permits: Arc<Semaphore>,
 }
 
 impl<R> DocumentsState<R> {
-    pub fn new(usecase: CapitainerieUseCase, readers: R) -> Self {
+    pub fn new(usecase: MatosUseCase, readers: R) -> Self {
         Self {
             usecase,
             readers: Arc::new(readers),

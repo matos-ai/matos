@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
-use capitainerie_core::{CapitainerieUseCase, domain::mcp::callback_url};
-use capitainerie_handlers::ApiError;
+use matos_core::{MatosUseCase, domain::mcp::callback_url};
+use matos_handlers::ApiError;
 
 pub struct McpState<A> {
-    pub usecase: CapitainerieUseCase,
+    pub usecase: MatosUseCase,
     pub adapter: Arc<A>,
     console_url: Option<Arc<str>>,
 }
 
 impl<A> McpState<A> {
-    pub fn new(usecase: CapitainerieUseCase, adapter: A, console_url: Option<String>) -> Self {
+    pub fn new(usecase: MatosUseCase, adapter: A, console_url: Option<String>) -> Self {
         Self {
             usecase,
             adapter: Arc::new(adapter),

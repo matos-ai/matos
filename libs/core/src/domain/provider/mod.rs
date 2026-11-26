@@ -1,8 +1,8 @@
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::{CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{CoreError, OrganizationId};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{agent::SecretToken, execution::ExecutorModel};

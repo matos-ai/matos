@@ -1,4 +1,4 @@
-use capitainerie_runtime_rig::{RigDocumentReaders, RigModelCatalog, RigTranscribers};
+use matos_runtime_rig::{RigDocumentReaders, RigModelCatalog, RigTranscribers};
 
 /// The single place that names the catalog adapter the API serves `/models` with.
 pub type ApiCatalog = RigModelCatalog;

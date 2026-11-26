@@ -1,16 +1,16 @@
 //! Starts the card's agent when a person hands it work from the console:
 //! creating a card for an agent, assigning one, or replying on its card.
 
-use capitainerie_common::{CardId, CoreError, RunId};
-use capitainerie_core::domain::{
+use matos_common::{CardId, CoreError, RunId};
+use matos_core::domain::{
     agent_task::{RepositoryTarget, StartAgentRun},
     card::Column,
     crew::CrewAgent,
     execution::RepositoryRef,
     run::RunSubject,
 };
-use capitainerie_github::GithubApps;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_github::GithubApps;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Serialize;
 use utoipa::ToSchema;
 

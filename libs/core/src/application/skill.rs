@@ -1,7 +1,7 @@
-use capitainerie_common::{CoreError, SkillId};
-use capitainerie_macros::transactional;
+use matos_common::{CoreError, SkillId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::domain::{
     authorization::Subject,
     skill::{
@@ -10,7 +10,7 @@ use crate::domain::{
     },
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(skill, authz)]
     pub async fn list_skills(
         &self,

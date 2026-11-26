@@ -2,11 +2,11 @@
 permit (
   principal,
   action in [
-    Capitainerie::Action::"provider.manage",
-    Capitainerie::Action::"models.assign",
-    Capitainerie::Action::"github.manage",
-    Capitainerie::Action::"integration.manage",
-    Capitainerie::Action::"budget.manage"
+    Matos::Action::"provider.manage",
+    Matos::Action::"models.assign",
+    Matos::Action::"github.manage",
+    Matos::Action::"integration.manage",
+    Matos::Action::"budget.manage"
   ],
   resource
 )

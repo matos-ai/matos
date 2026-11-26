@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_analytics::{AgentRow, AgentsQuery, Analytics};
-use capitainerie_handlers::{ApiError, Caller};
 use chrono::{DateTime, Duration, Utc};
+use matos_analytics::{AgentRow, AgentsQuery, Analytics};
+use matos_handlers::{ApiError, Caller};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -43,8 +43,8 @@ impl From<AgentRow> for AgentResponse {
     tag = super::TAG,
     responses(
         (status = 200, description = "The agents that ran steps, with their activity over the last 30 days", body = Vec<AgentResponse>),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent, not a human", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent, not a human", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

@@ -5,8 +5,8 @@ pub mod state;
 
 use axum::{Router, extract::DefaultBodyLimit};
 use axum_extra::routing::RouterExt;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_core::{
+    MatosUseCase,
     domain::{
         document::{MAX_PDF_BYTES, ports::DocumentReaderFactory},
         transcription::{MAX_AUDIO_BYTES, ports::TranscriberFactory},
@@ -19,13 +19,13 @@ pub const TAG: &str = "transcriptions";
 
 pub const MAX_CONCURRENT_UPLOADS: usize = 4;
 
-pub fn busy(message: &str) -> capitainerie_handlers::ApiError {
-    capitainerie_handlers::ApiError::Busy(message.to_owned())
+pub fn busy(message: &str) -> matos_handlers::ApiError {
+    matos_handlers::ApiError::Busy(message.to_owned())
 }
 
 pub const MULTIPART_OVERHEAD: usize = 64 * 1024;
 
-pub fn router<S, F, R>(usecase: CapitainerieUseCase, factory: F, readers: R) -> Router<S>
+pub fn router<S, F, R>(usecase: MatosUseCase, factory: F, readers: R) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
     F: TranscriberFactory + 'static,

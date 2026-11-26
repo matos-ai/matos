@@ -2,15 +2,6 @@
 
 use std::time::Duration;
 
-use capitainerie_common::RunId;
-use capitainerie_core::domain::{
-    agent::SecretToken,
-    execution::{
-        CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, RepositoryRef, TaskLine,
-        TaskMarker, TaskOutcome, TaskSpec, ports::TaskRunner,
-    },
-};
-use capitainerie_runner_kube::{KubeRunnerConfig, KubeTaskRunner, job_name};
 use k8s_openapi::api::{
     batch::v1::Job,
     core::v1::{Namespace, Secret},
@@ -19,9 +10,18 @@ use kube::{
     Api, Client,
     api::{ObjectMeta, PostParams},
 };
+use matos_common::RunId;
+use matos_core::domain::{
+    agent::SecretToken,
+    execution::{
+        CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, RepositoryRef, TaskLine,
+        TaskMarker, TaskOutcome, TaskSpec, ports::TaskRunner,
+    },
+};
+use matos_runner_kube::{KubeRunnerConfig, KubeTaskRunner, job_name};
 use tokio::sync::mpsc;
 
-const SCRIPT: &str = r#"echo '{"type":"capitainerie","event":"cloned"}'; echo '{"type":"assistant","n":1}'; echo not json; echo '{"type":"capitainerie","event":"no_changes"}'"#;
+const SCRIPT: &str = r#"echo '{"type":"matos","event":"cloned"}'; echo '{"type":"assistant","n":1}'; echo not json; echo '{"type":"matos","event":"no_changes"}'"#;
 
 fn enabled() -> bool {
     std::env::var("REQUIRE_KUBE").as_deref() == Ok("1")
@@ -99,9 +99,9 @@ async fn a_job_runs_streams_its_lines_and_is_deleted() {
         lines.push(line);
     }
     assert_eq!(lines.len(), 3, "{lines:?}");
-    assert_eq!(lines[0], TaskLine::Capitainerie(TaskMarker::Cloned));
+    assert_eq!(lines[0], TaskLine::Matos(TaskMarker::Cloned));
     assert!(matches!(lines[1], TaskLine::Agent(_)));
-    assert_eq!(lines[2], TaskLine::Capitainerie(TaskMarker::NoChanges));
+    assert_eq!(lines[2], TaskLine::Matos(TaskMarker::NoChanges));
 
     runner.delete(spec.run_id).await.unwrap();
     runner.delete(spec.run_id).await.unwrap();

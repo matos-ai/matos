@@ -1,8 +1,8 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::execution::ports::CodeHost;
-use capitainerie_handlers::Caller;
+use matos_common::CoreError;
+use matos_core::domain::execution::ports::CodeHost;
+use matos_handlers::Caller;
 use serde::Deserialize;
 
 use crate::{IntegrationError, RepositoryListResponse, state::IntegrationsState};
@@ -18,8 +18,8 @@ pub struct RepositoriesPath;
     tag = super::TAG,
     responses(
         (status = 200, description = "The repositories the installation can see", body = RepositoryListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "github_not_connected: the organization has no installation", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "github_not_connected: the organization has no installation", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

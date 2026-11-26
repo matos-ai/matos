@@ -1,7 +1,7 @@
-use capitainerie_common::CoreError;
-use capitainerie_macros::transactional;
+use matos_common::CoreError;
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::Subject,
@@ -20,7 +20,7 @@ pub struct PreparedTranscription {
     access: ProviderAccess,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     pub async fn prepare_transcription(
         &self,
         subject: Subject,

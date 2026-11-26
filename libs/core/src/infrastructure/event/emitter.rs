@@ -1,8 +1,8 @@
 use std::sync::Mutex;
 
-use capitainerie_common::CoreError;
-use capitainerie_events::{DomainEvent, EventEnvelope};
 use chrono::Utc;
+use matos_common::CoreError;
+use matos_events::{DomainEvent, EventEnvelope};
 
 use crate::domain::event::ports::EventEmitter;
 
@@ -28,12 +28,9 @@ impl TransactionalEventEmitter {
 
 impl EventEmitter for TransactionalEventEmitter {
     fn emit<E: DomainEvent>(&self, event: &E) -> Result<(), CoreError> {
-        let envelope = EventEnvelope::wrap(
-            event,
-            Utc::now(),
-            capitainerie_telemetry::current_traceparent(),
-        )
-        .map_err(|error| CoreError::Internal(format!("encoding {}: {error}", E::KIND)))?;
+        let envelope =
+            EventEnvelope::wrap(event, Utc::now(), matos_telemetry::current_traceparent())
+                .map_err(|error| CoreError::Internal(format!("encoding {}: {error}", E::KIND)))?;
         self.buffer
             .lock()
             .map(|mut buffer| buffer.push(envelope))
@@ -43,7 +40,7 @@ impl EventEmitter for TransactionalEventEmitter {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_events::run::RunQueued;
+    use matos_events::run::RunQueued;
     use uuid::Uuid;
 
     use super::*;

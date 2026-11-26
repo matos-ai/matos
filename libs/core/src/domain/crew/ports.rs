@@ -1,4 +1,4 @@
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
+use matos_common::{AgentId, CoreError, OrganizationId};
 
 use super::{AgentRevision, CrewAgent};
 

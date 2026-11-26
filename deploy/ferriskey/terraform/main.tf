@@ -1,6 +1,6 @@
 # The realm and OIDC clients of the local demo organization.
 #
-# One realm per organization: this one is the demo organization `capitainerie`.
+# One realm per organization: this one is the demo organization `matos`.
 # Token exchange policies are not covered by provider v0.1.0; the bootstrap
 # script creates them through the admin API.
 
@@ -47,8 +47,8 @@ resource "ferriskey_realm_settings" "organization" {
 # Public: a browser cannot keep a secret. Authorization Code + PKCE.
 resource "ferriskey_client" "console" {
   realm         = ferriskey_realm.organization.name
-  client_id     = "capitainerie-console"
-  name          = "Capitainerie Console"
+  client_id     = "matos-console"
+  name          = "Matos Console"
   client_type   = "public"
   public_client = true
 
@@ -65,8 +65,8 @@ resource "ferriskey_client" "console" {
 # exchange them for a token addressed to an agent when a run is queued.
 resource "ferriskey_client" "api" {
   realm       = ferriskey_realm.organization.name
-  client_id   = "capitainerie-api"
-  name        = "Capitainerie API"
+  client_id   = "matos-api"
+  name        = "Matos API"
   client_type = "confidential"
 
   public_client                = false
@@ -77,8 +77,8 @@ resource "ferriskey_client" "api" {
 # The Kanban MCP server: the audience of every delegated agent token.
 resource "ferriskey_client" "mcp" {
   realm       = ferriskey_realm.organization.name
-  client_id   = "capitainerie-mcp"
-  name        = "Capitainerie Kanban MCP"
+  client_id   = "matos-mcp"
+  name        = "Matos Kanban MCP"
   client_type = "confidential"
 
   public_client                = false
@@ -91,8 +91,8 @@ resource "ferriskey_client" "agent" {
   for_each = toset(var.agents)
 
   realm       = ferriskey_realm.organization.name
-  client_id   = "capitainerie-agent-${each.key}"
-  name        = "Capitainerie agent ${each.key}"
+  client_id   = "matos-agent-${each.key}"
+  name        = "Matos agent ${each.key}"
   client_type = "confidential"
 
   public_client                = false
@@ -100,13 +100,13 @@ resource "ferriskey_client" "agent" {
   direct_access_grants_enabled = false
 }
 
-# Signs Capitainerie in to the admin API to create, enable and disable the
+# Signs Matos in to the admin API to create, enable and disable the
 # client of each agent of the crew. Its service account holds the provisioner
 # role and nothing else; the bootstrap script grants it.
 resource "ferriskey_client" "provisioner" {
   realm       = ferriskey_realm.organization.name
-  client_id   = "capitainerie-provisioner"
-  name        = "Capitainerie agent provisioner"
+  client_id   = "matos-provisioner"
+  name        = "Matos agent provisioner"
   client_type = "confidential"
 
   public_client                = false
@@ -116,7 +116,7 @@ resource "ferriskey_client" "provisioner" {
 
 resource "ferriskey_role" "provisioner" {
   realm       = ferriskey_realm.organization.name
-  name        = "capitainerie-provisioner"
+  name        = "matos-provisioner"
   description = "Manages the clients of the crew's agents."
   permissions = ["manage_clients"]
 }
@@ -126,7 +126,7 @@ resource "ferriskey_role" "provisioner" {
 # `realm_access.roles` in the access token.
 resource "ferriskey_role" "admin" {
   realm       = ferriskey_realm.organization.name
-  name        = "capitainerie-admin"
+  name        = "matos-admin"
   description = "Manages the organization's model providers and model choices."
   permissions = []
 }

@@ -1,4 +1,4 @@
-use capitainerie_core::domain::{
+use matos_core::domain::{
     card::attributes::{AcceptanceCriteria, Estimate, Priority},
     conversation::{
         ProposedCard,

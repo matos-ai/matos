@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_core::domain::provider::ProviderKind;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::provider::ProviderKind;
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 
 use crate::{dto::UserProviderResponse, state::ProvidersState};
@@ -17,8 +17,8 @@ pub struct UserProvidersPath;
     tag = super::TAG,
     responses(
         (status = 200, description = "The providers the caller connected with their own key, without the keys", body = Vec<UserProviderResponse>),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

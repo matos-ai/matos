@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 use super::{Extraction, Judgement, LocatedAction, WriteReport, WriteRequest};
 use crate::domain::{provider::ModelTarget, similarity::SimilarCard};

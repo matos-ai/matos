@@ -11,8 +11,8 @@ pub mod update_connector;
 
 use axum::Router;
 use axum_extra::routing::RouterExt;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_core::{
+    MatosUseCase,
     domain::mcp::ports::{McpGateway, McpOAuth},
 };
 
@@ -20,11 +20,7 @@ pub use state::McpState;
 
 pub const TAG: &str = "mcp-connectors";
 
-pub fn router<S, A>(
-    usecase: CapitainerieUseCase,
-    adapter: A,
-    console_url: Option<String>,
-) -> Router<S>
+pub fn router<S, A>(usecase: MatosUseCase, adapter: A, console_url: Option<String>) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
     A: McpOAuth + McpGateway + 'static,

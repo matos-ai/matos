@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use uuid::Uuid;
 
 use super::{
@@ -116,7 +116,7 @@ impl<'a, R: AuditRepository, A: Authorizer> AuditService<'a, R, A> {
 
     async fn names(
         &mut self,
-        organization_id: capitainerie_common::OrganizationId,
+        organization_id: matos_common::OrganizationId,
         events: &[super::AuditEvent],
         actors: &[ActorRef],
     ) -> Result<Names, CoreError> {
@@ -191,8 +191,8 @@ impl<'a, R: AuditRepository, A: Authorizer> AuditService<'a, R, A> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
     use chrono::Utc;
+    use matos_common::OrganizationId;
     use serde_json::json;
 
     use super::*;

@@ -2,8 +2,13 @@
 
 use std::{collections::HashSet, fs, path::PathBuf, str::FromStr};
 
-use capitainerie_common::OrganizationId;
-use capitainerie_core::domain::{
+use cedar_policy::{
+    Authorizer as CedarAuthorizer, Context, Decision as CedarDecision, Effect, Entities, Entity,
+    EntityId, EntityTypeName, EntityUid, Policy, PolicyId, PolicySet, Request, Schema,
+    SchemaFragment, ValidationMode, Validator,
+};
+use matos_common::OrganizationId;
+use matos_core::domain::{
     self,
     authorization::{AccessRequest, Action, Decision, ResourceKind, Subject, ports::Authorizer},
     card::Column,
@@ -11,19 +16,12 @@ use capitainerie_core::domain::{
     execution::EXECUTOR_AGENT,
     integration::{action::Access, journal::INTEGRATOR_AGENT},
 };
-use capitainerie_core::infrastructure::authorization::{
-    LocalPolicyEngine, actor_kind, evaluation_of,
-};
-use cedar_policy::{
-    Authorizer as CedarAuthorizer, Context, Decision as CedarDecision, Effect, Entities, Entity,
-    EntityId, EntityTypeName, EntityUid, Policy, PolicyId, PolicySet, Request, Schema,
-    SchemaFragment, ValidationMode, Validator,
-};
+use matos_core::infrastructure::authorization::{LocalPolicyEngine, actor_kind, evaluation_of};
 use serde_json::{Value, json};
 
 const BUILTIN_SCHEMA: &str = include_str!("fixtures/ferriskey-builtin-1078670.cedarschema");
 const REALM_SCHEMA: &str = include_str!("../../../deploy/ferriskey/authz/schema.cedarschema");
-const REALM_NAMESPACE: &str = "Capitainerie";
+const REALM_NAMESPACE: &str = "Matos";
 const ACTION_COUNT: usize = 46;
 
 const RESOURCE_KINDS: [ResourceKind; 25] = [
@@ -371,7 +369,7 @@ fn the_evaluation_body_is_authzen_shaped() {
     assert_eq!(body["subject"]["type"], "user");
     assert_eq!(body["subject"]["id"], request.subject.id);
     assert_eq!(body["action"]["name"], "card.move");
-    assert_eq!(body["resource"]["type"], "Capitainerie::Card");
+    assert_eq!(body["resource"]["type"], "Matos::Card");
     assert_eq!(
         body["resource"]["properties"]["organization"],
         request.resource.organization_id.to_string()

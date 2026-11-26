@@ -1,11 +1,11 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::IntegrationInstanceId;
-use capitainerie_core::domain::{
+use matos_common::IntegrationInstanceId;
+use matos_core::domain::{
     agent::SecretToken,
     integration::{Environment, service::UpdateInstance},
 };
-use capitainerie_handlers::Caller;
+use matos_handlers::Caller;
 use serde::Deserialize;
 
 use super::dto::{IntegrationInstanceResponse, UpdateIntegrationInstanceRequest};
@@ -26,11 +26,11 @@ pub struct IntegrationInstancePath {
     request_body = UpdateIntegrationInstanceRequest,
     responses(
         (status = 200, description = "The updated instance; absent fields are unchanged, and a new URL, database, login or secret is tested first. A new origin (scheme, host or port), database or login needs a new secret", body = IntegrationInstanceResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such instance in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "The client already has an instance of that name (instance_name_taken)", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to update, invalid fields, a new origin, database or login without a new secret, an archived instance, or the connection test failed: connection_failed, version_mismatch, network_blocked or not_supported", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such instance in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "The client already has an instance of that name (instance_name_taken)", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to update, invalid fields, a new origin, database or login without a new secret, an archived instance, or the connection test failed: connection_failed, version_mismatch, network_blocked or not_supported", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

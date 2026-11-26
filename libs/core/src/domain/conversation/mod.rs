@@ -2,8 +2,8 @@ pub mod ports;
 pub mod service;
 pub mod turn;
 
-use capitainerie_common::{ConversationId, ConversationMessageId, CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{ConversationId, ConversationMessageId, CoreError, OrganizationId};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -11,7 +11,7 @@ use crate::domain::provider::ModelRef;
 
 /// The client id the Captain acts through; the policy decision point knows it
 /// as the actor of every tool call.
-pub const CAPTAIN_AGENT: &str = "capitainerie-agent-captain";
+pub const CAPTAIN_AGENT: &str = "matos-agent-captain";
 
 pub const MAX_TOOL_CALLS_PER_TURN: usize = 20;
 pub const MAX_OUTPUT_TOKENS_PER_TURN: u32 = 16_000;

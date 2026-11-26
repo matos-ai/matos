@@ -1,8 +1,8 @@
-use capitainerie_common::{CoreError, RoutineId, RoutineTriggerId};
-use capitainerie_macros::transactional;
 use chrono::{DateTime, SubsecRound, Utc};
+use matos_common::{CoreError, RoutineId, RoutineTriggerId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::domain::{
     agent_task::{AgentRunError, StartAgentRun},
     authorization::Subject,
@@ -17,7 +17,7 @@ use crate::domain::{
     },
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(routine, authz)]
     pub async fn list_routines(
         &self,

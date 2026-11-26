@@ -1,7 +1,7 @@
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
 import { getOidcConfiguration } from '#/lib/runtime-config'
 
-export const RENEWAL_LOCK = 'capitainerie.oidc.silent-renew'
+export const RENEWAL_LOCK = 'matos.oidc.silent-renew'
 
 export function userStorageKey(authority: string, clientId: string): string {
 	return `oidc.user:${authority}:${clientId}`

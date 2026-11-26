@@ -3,10 +3,10 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::{RouterExt, TypedPath};
-use capitainerie_common::{AgentId, ArtifactId, CardId, RunId};
-use capitainerie_core::domain::artifact::{self, ArtifactFilter, ArtifactKind, ArtifactView};
-use capitainerie_handlers::{ApiError, AppState, Caller};
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, ArtifactId, CardId, RunId};
+use matos_core::domain::artifact::{self, ArtifactFilter, ArtifactKind, ArtifactView};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -132,10 +132,10 @@ pub struct ArtifactListResponse {
     params(ArtifactsQuery),
     responses(
         (status = 200, description = "The organization's artifacts, newest first", body = ArtifactListResponse),
-        (status = 400, description = "A malformed parameter or an unknown kind", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to artifacts", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "A limit out of bounds", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 400, description = "A malformed parameter or an unknown kind", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to artifacts", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "A limit out of bounds", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -170,9 +170,9 @@ pub async fn list_handler(
     params(("artifact_id" = ArtifactId, Path, description = "Artifact identifier")),
     responses(
         (status = 200, description = "The artifact with its content", body = ArtifactResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to artifacts", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such artifact in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to artifacts", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such artifact in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

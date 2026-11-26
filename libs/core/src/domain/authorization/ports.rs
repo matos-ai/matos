@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, OrganizationId, RunId};
+use matos_common::{CoreError, OrganizationId, RunId};
 
 use super::{AccessRequest, Decision, DecisionRecord};
 

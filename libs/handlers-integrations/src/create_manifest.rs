@@ -1,9 +1,9 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::authorization::{Action, ResourceKind};
-use capitainerie_handlers::Caller;
 use chrono::Utc;
+use matos_common::CoreError;
+use matos_core::domain::authorization::{Action, ResourceKind};
+use matos_handlers::Caller;
 use serde::Deserialize;
 
 use crate::{
@@ -23,11 +23,11 @@ pub struct ManifestPath;
     request_body = CreateManifestRequest,
     responses(
         (status = 200, description = "The manifest the browser POSTs to GitHub to create the organization's App; the state expires in 10 minutes", body = ManifestResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is not an organization admin", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "github_app_exists: the organization already has an App", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Not a GitHub organization login", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 503, description = "console_url_not_configured or secrets_key_not_configured", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is not an organization admin", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "github_app_exists: the organization already has an App", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Not a GitHub organization login", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 503, description = "console_url_not_configured or secrets_key_not_configured", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

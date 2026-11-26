@@ -52,13 +52,13 @@ Chaque état a une version `-soft` pour les fonds de badge. Les teintes sont tou
 
 ## Marque
 
-`src/components/brand/capitainerie-mark.tsx` : un môle (arc ouvert vers le large), son feu (point jaune) et la marée (vague). SVG en ligne, `currentColor` pour le trait. La même forme sert de favicon (`public/icon.svg`).
+`src/components/brand/matos-mark.tsx` : un môle (arc ouvert vers le large), son feu (point jaune) et la marée (vague). SVG en ligne, `currentColor` pour le trait. La même forme sert de favicon (`public/icon.svg`).
 
 ## Mise en page
 
-- **Barre latérale** (`components/layout/app-rail.tsx`, liens dans `nav-items.ts`) : marque et bouton de repli en haut ; trois sections titrées, « Travail » (Runs, Kanban), « Supervision » (Agents), « Paramètres » (Fournisseurs, Modèles) ; en pied, l'indicateur temps réel et le menu du compte (organisation, utilisateur, thème, « Se déconnecter »). Dépliée (240 px) ou repliée (56 px, infobulles, titres de section remplacés par un filet) ; le choix est gardé dans `localStorage` (`capitainerie.rail-expanded`). Sous 1024 px elle est toujours repliée. Flèches haut/bas, Début et Fin déplacent le focus entre tous les liens. Page active : fond `--rail-accent` et texte en medium.
+- **Barre latérale** (`components/layout/app-rail.tsx`, liens dans `nav-items.ts`) : marque et bouton de repli en haut ; trois sections titrées, « Travail » (Runs, Kanban), « Supervision » (Agents), « Paramètres » (Fournisseurs, Modèles) ; en pied, l'indicateur temps réel et le menu du compte (organisation, utilisateur, thème, « Se déconnecter »). Dépliée (240 px) ou repliée (56 px, infobulles, titres de section remplacés par un filet) ; le choix est gardé dans `localStorage` (`matos.rail-expanded`). Sous 1024 px elle est toujours repliée. Flèches haut/bas, Début et Fin déplacent le focus entre tous les liens. Page active : fond `--rail-accent` et texte en medium.
 - **Pas de barre du haut** : la page commence par son titre.
-- **Thème** (`lib/theme.ts`, `hooks/use-theme.ts`) : clair, sombre ou système, choisi dans le menu du compte et gardé dans `localStorage` (`capitainerie.theme`). Un script en tête de document applique la classe `dark` avant le premier rendu.
+- **Thème** (`lib/theme.ts`, `hooks/use-theme.ts`) : clair, sombre ou système, choisi dans le menu du compte et gardé dans `localStorage` (`matos.theme`). Un script en tête de document applique la classe `dark` avant le premier rendu.
 
 ## Primitives
 
@@ -77,7 +77,7 @@ Chaque état a une version `-soft` pour les fonds de badge. Les teintes sont tou
 
 Correspondances d'état : `domain/runs/status.ts` (statut de run → ton), colonnes Kanban (`Proposé` en jaune avec son compteur, les autres neutres), décisions (bouclier vert autorisé, rouge refusé).
 
-## Le geste propre à Capitainerie
+## Le geste propre à Matos
 
 Le détail d'un run est mis en page comme une ligne d'annuaire des marées : heure de début à gauche, barre de latence sur une échelle commune à toutes les étapes du run, durée calée à droite. On voit tout de suite quelle étape a pris le temps.
 

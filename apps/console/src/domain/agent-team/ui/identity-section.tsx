@@ -30,7 +30,7 @@ interface Props {
 	error: boolean
 }
 
-/** Le client FerrisKey de l'agent. Son secret ne quitte jamais Capitainerie. */
+/** Le client FerrisKey de l'agent. Son secret ne quitte jamais Matos. */
 export function IdentitySection({ identity, loading, error }: Props) {
 	const status = identity ? STATUS[identity.status] : undefined
 	return (

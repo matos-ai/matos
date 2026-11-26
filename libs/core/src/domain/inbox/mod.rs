@@ -2,8 +2,8 @@ pub mod ports;
 pub mod projection;
 pub mod service;
 
-use capitainerie_common::{CardId, CoreError, InboxItemId, OrganizationId, RunId};
 use chrono::{DateTime, Utc};
+use matos_common::{CardId, CoreError, InboxItemId, OrganizationId, RunId};
 use uuid::Uuid;
 
 pub const DEFAULT_PAGE: u32 = 50;

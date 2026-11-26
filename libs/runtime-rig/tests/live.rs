@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_core::domain::{
+use clap::Parser;
+use matos_core::domain::{
     agent::{ExtractedAction, LocatedAction, SecretToken, ports::AgentRuntime},
     provider::{ModelRef, ModelTarget, ProviderAccess, ProviderKind},
     similarity::{DEFAULT_DEDUP_THRESHOLD, Embedding, SimilarCard, ports::Embedder},
 };
-use capitainerie_runtime_rig::{EmbeddingArgs, LlmArgs, RigAgentRuntime, RigEmbedder};
-use clap::Parser;
+use matos_runtime_rig::{EmbeddingArgs, LlmArgs, RigAgentRuntime, RigEmbedder};
 
 #[derive(Parser)]
 struct Cli {
@@ -238,7 +238,7 @@ async fn live_judge_separates_the_same_task_from_a_related_one() {
             end: 1,
         };
         let card = SimilarCard {
-            card_id: capitainerie_common::CardId::new(),
+            card_id: matos_common::CardId::new(),
             score: 0.7,
             text: format!("{card_title}\n{card_description}"),
         };

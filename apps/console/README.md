@@ -1,4 +1,4 @@
-# Capitainerie · Console
+# Matos · Console
 
 Console d'orchestration d'agents IA. React 19, Vite, TanStack Start (mode SPA) et Router, TanStack Query, Tailwind v4, shadcn/ui.
 

@@ -1,8 +1,8 @@
 pub mod ports;
 pub mod service;
 
-use capitainerie_common::{ClientId, OrganizationId, ProjectId};
 use chrono::{DateTime, Utc};
+use matos_common::{ClientId, OrganizationId, ProjectId};
 
 use crate::domain::{
     client::{ClientRef, ColumnCount},

@@ -1,6 +1,7 @@
-use capitainerie_common::{CoreError, RunId};
-use capitainerie_core::{
-    AgentTaskPipeline, CapitainerieUseCase, ExecutePipeline, InterventionPipeline, MeetingPipeline,
+use chrono::{DateTime, Utc};
+use matos_common::{CoreError, RunId};
+use matos_core::{
+    AgentTaskPipeline, ExecutePipeline, InterventionPipeline, MatosUseCase, MeetingPipeline,
     domain::{
         agent::ports::AgentRuntime,
         agent_task::ports::TaskRuntime,
@@ -11,10 +12,9 @@ use capitainerie_core::{
         similarity::ports::{Embedder, VectorStore},
     },
 };
-use chrono::{DateTime, Utc};
 
 pub trait RunPipelines: Send + Sync + 'static {
-    fn usecase(&self) -> &CapitainerieUseCase;
+    fn usecase(&self) -> &MatosUseCase;
 
     fn stale_before(&self) -> DateTime<Utc>;
 
@@ -37,7 +37,7 @@ where
     E: Embedder + 'static,
     V: VectorStore + 'static,
 {
-    fn usecase(&self) -> &CapitainerieUseCase {
+    fn usecase(&self) -> &MatosUseCase {
         MeetingPipeline::usecase(self)
     }
 
@@ -59,7 +59,7 @@ where
     T: TaskRunner + 'static,
     H: CodeHost + 'static,
 {
-    fn usecase(&self) -> &CapitainerieUseCase {
+    fn usecase(&self) -> &MatosUseCase {
         ExecutePipeline::usecase(self)
     }
 
@@ -81,7 +81,7 @@ where
     R: IntegratorRuntime + 'static,
     C: IntegrationConnector + 'static,
 {
-    fn usecase(&self) -> &CapitainerieUseCase {
+    fn usecase(&self) -> &MatosUseCase {
         InterventionPipeline::usecase(self)
     }
 
@@ -104,7 +104,7 @@ where
     O: McpOAuth + 'static,
     G: McpGateway + 'static,
 {
-    fn usecase(&self) -> &CapitainerieUseCase {
+    fn usecase(&self) -> &MatosUseCase {
         AgentTaskPipeline::usecase(self)
     }
 
@@ -142,7 +142,7 @@ impl<M, E, I, A> Dispatcher<M, E, I, A> {
 impl<M: RunPipelines, E: RunPipelines, I: RunPipelines, A: RunPipelines> RunPipelines
     for Dispatcher<M, E, I, A>
 {
-    fn usecase(&self) -> &CapitainerieUseCase {
+    fn usecase(&self) -> &MatosUseCase {
         self.meeting.usecase()
     }
 

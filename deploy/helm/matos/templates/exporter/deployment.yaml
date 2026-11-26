@@ -1,0 +1,64 @@
+{{- if .Values.exporter.enabled }}
+{{- $ctx := dict "root" . "component" "exporter" }}
+{{- $name := include "matos.componentName" $ctx }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/exporter/configmap.yaml") . | sha256sum }}
+        {{- with .Values.exporter.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "matos.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.exporter.terminationGracePeriodSeconds }}
+      {{- include "matos.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "matos.scheduling" .Values.exporter | nindent 6 }}
+      containers:
+        - name: exporter
+          image: {{ include "matos.image" (dict "root" . "component" "exporter" "values" .Values.exporter) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}
+          env:
+            {{- include "matos.secretEnv" (dict "root" . "keys" .Values.exporter.secretEnv) | nindent 12 }}
+            {{- with .Values.exporter.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: analytics
+              mountPath: {{ .Values.analytics.mountPath | quote }}
+          resources:
+            {{- toYaml .Values.exporter.resources | nindent 12 }}
+      volumes:
+        - name: analytics
+          {{- if .Values.analytics.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "matos.analyticsClaim" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- end }}

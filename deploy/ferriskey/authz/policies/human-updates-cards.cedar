@@ -1,7 +1,7 @@
 @id("human-updates-cards")
 permit (
   principal,
-  action == Capitainerie::Action::"card.update",
+  action == Matos::Action::"card.update",
   resource
 )
 when {

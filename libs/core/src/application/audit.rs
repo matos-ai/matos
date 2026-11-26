@@ -1,8 +1,8 @@
-use capitainerie_common::{CoreError, ProjectId};
-use capitainerie_macros::transactional;
 use chrono::Utc;
+use matos_common::{CoreError, ProjectId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::domain::{
     audit::{AuditFilter, AuditPage, service::AuditService},
     authorization::Subject,
@@ -13,7 +13,7 @@ use crate::domain::{
     },
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(audit, authz)]
     pub async fn list_audit_events(
         &self,

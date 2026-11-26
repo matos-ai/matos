@@ -1,7 +1,7 @@
 @id("human-moves-cards")
 permit (
   principal,
-  action == Capitainerie::Action::"card.move",
+  action == Matos::Action::"card.move",
   resource
 )
 when {

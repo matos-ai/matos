@@ -1,8 +1,8 @@
-use capitainerie_common::{CardId, ClientId, CoreError, OrganizationId, ProjectId, RunId};
-use capitainerie_events::card::{CardAuthor, CardUpdated};
-use capitainerie_macros::transactional;
+use matos_common::{CardId, ClientId, CoreError, OrganizationId, ProjectId, RunId};
+use matos_events::card::{CardAuthor, CardUpdated};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::domain::{
     authorization::Subject,
     card::{
@@ -31,7 +31,7 @@ pub struct RunCardLinks {
     pub links: Links,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(client, project, authz)]
     pub async fn list_clients(
         &self,

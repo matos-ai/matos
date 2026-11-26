@@ -3,16 +3,16 @@ pub mod list_for_card;
 pub mod list_for_run;
 pub mod revert;
 
-use capitainerie_common::{CoreError, IntegrationInstanceId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use matos_common::{CoreError, IntegrationInstanceId};
+use matos_core::{
+    MatosUseCase,
     domain::{authorization::Subject, integration::journal::IntegrationAction},
 };
 
 use self::dto::{IntegrationActionListResponse, IntegrationActionResponse};
 
 pub(crate) async fn describe(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     subject: Subject,
     actions: Vec<IntegrationAction>,
 ) -> Result<IntegrationActionListResponse, CoreError> {

@@ -4,12 +4,12 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-use capitainerie_core::domain::{
+use clap::Parser;
+use matos_core::domain::{
     agent::{ExtractedAction, SecretToken, ports::AgentRuntime},
     provider::{ModelRef, ModelTarget, ProviderAccess, ProviderKind},
 };
-use capitainerie_runtime_rig::{LlmArgs, RigAgentRuntime};
-use clap::Parser;
+use matos_runtime_rig::{LlmArgs, RigAgentRuntime};
 use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]

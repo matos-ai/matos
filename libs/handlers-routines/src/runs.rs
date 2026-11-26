@@ -4,8 +4,8 @@ use axum::{
     http::StatusCode,
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::RoutineId;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::RoutineId;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -39,10 +39,10 @@ pub struct ListRoutineRunsQuery {
     params(("routine_id" = RoutineId, Path, description = "Routine identifier")),
     responses(
         (status = 202, description = "The passage: its card is created and the agent run started on behalf of the routine's creator, whatever the policies and triggers say. A run that cannot start leaves the card and gives the reason", body = RoutineRunResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the launch; agents may not manage routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "The routine is archived", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the launch; agents may not manage routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "The routine is archived", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -69,9 +69,9 @@ pub async fn launch_routine(
     ),
     responses(
         (status = 200, description = "The routine's passages, newest first, each with where its card and agent run stand, with the total count", body = RoutineRunListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to routines", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such routine in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to routines", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such routine in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

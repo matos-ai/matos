@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::agent::SecretToken;
-use capitainerie_core::domain::agent_identity::ports::AgentIdentityProvisioner;
-use capitainerie_core::domain::agent_identity::{AgentClientId, ProvisionedClient};
+use matos_common::CoreError;
+use matos_core::domain::agent::SecretToken;
+use matos_core::domain::agent_identity::ports::AgentIdentityProvisioner;
+use matos_core::domain::agent_identity::{AgentClientId, ProvisionedClient};
 use reqwest::{Method, RequestBuilder, Response, StatusCode};
 use serde::Deserialize;
 use serde_json::json;

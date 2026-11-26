@@ -1,5 +1,5 @@
-use capitainerie_common::{AgentId, CoreError};
 use chrono::Utc;
+use matos_common::{AgentId, CoreError};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -406,7 +406,7 @@ fn trimmed(value: String, max: usize, what: &str) -> Result<String, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::OrganizationId;
+    use matos_common::OrganizationId;
 
     use super::*;
     use crate::domain::{

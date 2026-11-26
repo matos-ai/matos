@@ -62,7 +62,7 @@ export function identityOf(
 	change: Partial<Schemas.TeamAgentIdentityResponse> = {},
 ): Schemas.TeamAgentIdentityResponse {
 	return {
-		client_id: `capitainerie-agent-${agent.id}`,
+		client_id: `matos-agent-${agent.id}`,
 		status: 'active',
 		failure: null,
 		synced: true,

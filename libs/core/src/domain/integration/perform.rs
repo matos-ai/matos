@@ -1,5 +1,5 @@
-use capitainerie_common::IntegrationActionId;
 use chrono::{DateTime, Utc};
+use matos_common::IntegrationActionId;
 use serde_json::Value;
 
 use super::{
@@ -343,8 +343,8 @@ impl Entry<'_> {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_common::{ClientId, IntegrationInstanceId, OrganizationId};
     use chrono::Utc;
+    use matos_common::{ClientId, IntegrationInstanceId, OrganizationId};
     use serde_json::{Value, json};
 
     use super::*;

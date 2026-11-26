@@ -1,15 +1,15 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{AgentId, CardId, CoreError, OrganizationId, ProjectId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::{DateTime, Duration, Utc};
+use matos_common::{AgentId, CardId, CoreError, OrganizationId, ProjectId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         authorization::Subject,
         cost::{CostFilter, Period},
     },
     infrastructure::postgres,
 };
-use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -56,8 +56,8 @@ fn admin(organization_id: OrganizationId) -> Subject {
     }
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
 }
 
 fn window() -> (DateTime<Utc>, DateTime<Utc>) {

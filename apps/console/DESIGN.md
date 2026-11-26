@@ -1,5 +1,5 @@
 ---
-name: Capitainerie Console
+name: Matos Console
 description: Compact console. Cool grey ground, one blue accent, colour only for state.
 colors:
   # Light theme (:root in src/styles.css)
@@ -62,13 +62,13 @@ spacing:
   topbar: "40px"
 ---
 
-# Design System: Capitainerie Console
+# Design System: Matos Console
 
 ## Overview
 
 A compact working console: one light or dark sidebar, a thin top bar with a breadcrumb and a search field (⌘K), pages that start with a small title and a grey one-line description. Density first: 13px text, 28px controls, tables laid on the ground, panels in a thin frame.
 
-The layout and density come from the "Capitainerie" mockup (2026-11-17, see `docs/specs/2026-11-console-ui-refresh.md`). It replaces the former "Harbour Register" direction (warm paper, Atkinson). Both themes follow the system by default and are first-class.
+The layout and density come from the "Matos" mockup (2026-11-17, see `docs/specs/2026-11-console-ui-refresh.md`). It replaces the former "Harbour Register" direction (warm paper, Atkinson). Both themes follow the system by default and are first-class.
 
 ## Colors
 

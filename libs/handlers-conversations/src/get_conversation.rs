@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::ConversationId;
-use capitainerie_handlers::{ApiError, Caller};
+use matos_common::ConversationId;
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 
 use crate::{
@@ -23,9 +23,9 @@ pub struct ConversationPath {
     params(("id" = ConversationId, Path, description = "Conversation identifier")),
     responses(
         (status = 200, description = "The conversation and its messages, oldest first", body = ConversationResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "Agents may not read conversations", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such conversation for the caller", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "Agents may not read conversations", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such conversation for the caller", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

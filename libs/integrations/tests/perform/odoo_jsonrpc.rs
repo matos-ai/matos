@@ -1,8 +1,6 @@
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
-use capitainerie_core::domain::integration::{
-    ConnectorFailure, IntegrationKind, action::ActionRequest,
-};
+use matos_core::domain::integration::{ConnectorFailure, IntegrationKind, action::ActionRequest};
 use serde_json::{Value, json};
 
 use crate::support::{

@@ -1,15 +1,15 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::{AcceptedClients, FerrisKeyVerifier, Identity};
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::Utc;
+use matos_auth::{AcceptedClients, FerrisKeyVerifier, Identity};
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::agent::SecretToken,
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_handlers::{AppState, Caller};
-use chrono::Utc;
+use matos_handlers::{AppState, Caller};
 use serde_json::Value;
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -49,12 +49,12 @@ async fn fixture() -> Option<Fixture> {
         issuer_url,
         created_at: Utc::now(),
     };
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     let state = AppState {
         usecase,
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     Some(Fixture {
@@ -76,11 +76,11 @@ impl Fixture {
             identity: Identity {
                 subject: subject.into(),
                 issuer: self.organization.issuer_url.clone(),
-                client_id: "capitainerie-console".into(),
+                client_id: "matos-console".into(),
                 username: Some(format!("{subject}-login")),
                 email: email.map(str::to_owned),
                 display_name: display_name.map(str::to_owned),
-                actor: agent.map(|client_id| capitainerie_auth::Actor {
+                actor: agent.map(|client_id| matos_auth::Actor {
                     sub: "service-account".into(),
                     client_id: Some(client_id.to_owned()),
                     act: None,
@@ -90,7 +90,7 @@ impl Fixture {
             organization: self.organization.clone(),
             token: SecretToken::new("user-token"),
         };
-        let app: Router = capitainerie_handlers_identity::router()
+        let app: Router = matos_handlers_identity::router()
             .layer(Extension(caller))
             .with_state(self.state.clone());
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -169,7 +169,7 @@ async fn an_agent_calling_me_is_not_recorded_as_a_member() {
         return;
     };
     let base = fixture
-        .serve("bot", Some("Bot"), None, Some("capitainerie-agent-writer"))
+        .serve("bot", Some("Bot"), None, Some("matos-agent-writer"))
         .await;
     assert_eq!(get(&base, "/api/v1/me").await.status(), 200);
     assert_eq!(fixture.stored("bot").await, None);
@@ -197,7 +197,7 @@ async fn members_lists_the_organization_by_name_and_refuses_agents() {
     assert_eq!(body["items"][0]["subject"], "a");
 
     let agent = fixture
-        .serve("a", Some("Alice"), None, Some("capitainerie-agent-writer"))
+        .serve("a", Some("Alice"), None, Some("matos-agent-writer"))
         .await;
     assert_eq!(get(&agent, "/api/v1/members").await.status(), 403);
 }

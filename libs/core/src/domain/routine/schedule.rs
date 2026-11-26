@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use capitainerie_common::CoreError;
 use chrono::{
     DateTime, Datelike, Days, Duration, LocalResult, Months, NaiveDate, NaiveDateTime, NaiveTime,
     TimeZone, Timelike, Utc, Weekday,
@@ -10,6 +9,7 @@ use croner::{
     Cron,
     parser::{CronParser, Seconds, Year},
 };
+use matos_common::CoreError;
 
 pub const MAX_EVERY_HOURS: u16 = 744;
 const CRON_MAX_CHARS: usize = 120;

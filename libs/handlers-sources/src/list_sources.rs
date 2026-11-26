@@ -3,7 +3,7 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -28,8 +28,8 @@ pub struct ListSourcesQuery {
     params(ListSourcesQuery),
     responses(
         (status = 200, description = "The organization's sources by name, each with its events of the last 24 hours and its last event", body = SourceListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to sources", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to sources", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

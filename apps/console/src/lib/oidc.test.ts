@@ -9,8 +9,8 @@ import {
 	userStorageKey,
 } from '#/lib/oidc'
 
-const AUTHORITY = 'http://idp.test/realms/capitainerie'
-const CLIENT_ID = 'capitainerie-console'
+const AUTHORITY = 'http://idp.test/realms/matos'
+const CLIENT_ID = 'matos-console'
 
 vi.mock('#/lib/runtime-config', () => ({
 	getOidcConfiguration: () => ({

@@ -7,9 +7,10 @@ use std::{
 
 use aws_lc_rs::digest;
 use base64::{Engine, engine::general_purpose::STANDARD};
-use capitainerie_common::{AgentId, ApprovalId, CardId, OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase, ExecuteConfig, ExecutePipeline, Executor,
+use chrono::Utc;
+use matos_common::{AgentId, ApprovalId, CardId, OrganizationId, RunId};
+use matos_core::{
+    ExecuteConfig, ExecutePipeline, Executor, MatosUseCase,
     domain::{
         agent::SecretToken,
         agent_task::{RepositoryTarget, StartAgentRun},
@@ -29,7 +30,6 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -61,7 +61,7 @@ fn fresh_id() -> i64 {
 
 struct World {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     run_id: RunId,
     card: Card,
     agent_id: Uuid,
@@ -86,7 +86,7 @@ async fn world(allow_writes: bool) -> Option<World> {
     .await
     .unwrap();
     let organization_id = OrganizationId(id);
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap());
     usecase
@@ -95,12 +95,12 @@ async fn world(allow_writes: bool) -> Option<World> {
             GithubAppCredentials {
                 organization_id,
                 app_id: fresh_id(),
-                slug: "capitainerie-test".into(),
+                slug: "matos-test".into(),
                 client_id: "Iv1.test".into(),
                 client_secret: SecretToken::new("oauth-secret"),
                 private_key_pem: SecretToken::new("pem"),
                 webhook_secret: SecretToken::new("hook"),
-                html_url: "https://github.com/apps/capitainerie-test".into(),
+                html_url: "https://github.com/apps/matos-test".into(),
                 owner_login: "acme".into(),
                 owner_type: "Organization".into(),
                 created_by: "user-1".into(),
@@ -166,7 +166,7 @@ async fn world(allow_writes: bool) -> Option<World> {
         .update_crew_agent(
             human(organization_id, false),
             agent.id,
-            capitainerie_core::domain::crew::service::UpdateAgent {
+            matos_core::domain::crew::service::UpdateAgent {
                 skills: Some(vec!["owasp".into()]),
                 ..Default::default()
             },
@@ -236,7 +236,7 @@ fn audit_lines(summary: bool, report: Option<&str>) -> Vec<TaskLine> {
         .lines()
         .filter_map(|line| {
             let value: serde_json::Value = serde_json::from_str(line).unwrap();
-            if value["type"] == "capitainerie" {
+            if value["type"] == "matos" {
                 return None;
             }
             if value["type"] == "result" && !summary {
@@ -248,12 +248,12 @@ fn audit_lines(summary: bool, report: Option<&str>) -> Vec<TaskLine> {
     if let Some(report) = report {
         let encoded = STANDARD.encode(report);
         for chunk in encoded.as_bytes().chunks(16) {
-            lines.push(TaskLine::Capitainerie(TaskMarker::ReportChunk {
+            lines.push(TaskLine::Matos(TaskMarker::ReportChunk {
                 data: String::from_utf8(chunk.to_vec()).unwrap(),
             }));
         }
         let hash = digest::digest(&digest::SHA256, report.as_bytes());
-        lines.push(TaskLine::Capitainerie(TaskMarker::ReportEnd {
+        lines.push(TaskLine::Matos(TaskMarker::ReportEnd {
             sha256: hash
                 .as_ref()
                 .iter()
@@ -263,7 +263,7 @@ fn audit_lines(summary: bool, report: Option<&str>) -> Vec<TaskLine> {
             truncated: false,
         }));
     }
-    lines.push(TaskLine::Capitainerie(TaskMarker::AuditDone));
+    lines.push(TaskLine::Matos(TaskMarker::AuditDone));
     lines
 }
 
@@ -353,7 +353,7 @@ async fn an_audit_files_its_report_and_comments_as_the_agent_without_any_pull_re
     );
     assert!(spec.prompt.contains("Cherche les injections SQL."));
     assert!(spec.prompt.contains("read-only analysis"));
-    assert!(spec.prompt.contains("/workspace/.capitainerie/report.md"));
+    assert!(spec.prompt.contains("/workspace/.matos/report.md"));
     assert!(spec.prompt.contains("cherche les failles"));
 
     let (mode, initiated_by, model): (String, Option<String>, String) =
@@ -501,7 +501,7 @@ async fn a_change_run_of_an_agent_keeps_the_change_prompt_after_the_agent() {
     let specs = Arc::new(Mutex::new(Vec::new()));
     let mut lines = audit_lines(true, None);
     lines.pop();
-    lines.push(TaskLine::Capitainerie(TaskMarker::NoChanges));
+    lines.push(TaskLine::Matos(TaskMarker::NoChanges));
     let pipeline = ExecutePipeline::new(
         world.usecase.clone(),
         Executor::Ready {
@@ -544,12 +544,12 @@ fn audit_lines_with_plan(plan: &str) -> Vec<TaskLine> {
     let done = lines.pop().unwrap();
     let encoded = STANDARD.encode(plan);
     for chunk in encoded.as_bytes().chunks(16) {
-        lines.push(TaskLine::Capitainerie(TaskMarker::PlanChunk {
+        lines.push(TaskLine::Matos(TaskMarker::PlanChunk {
             data: String::from_utf8(chunk.to_vec()).unwrap(),
         }));
     }
     let hash = digest::digest(&digest::SHA256, plan.as_bytes());
-    lines.push(TaskLine::Capitainerie(TaskMarker::PlanEnd {
+    lines.push(TaskLine::Matos(TaskMarker::PlanEnd {
         sha256: hash
             .as_ref()
             .iter()
@@ -612,7 +612,7 @@ async fn an_audit_proposing_a_plan_waits_for_a_member_then_applying_it_runs_the_
 
     assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
     let audit = specs.lock().unwrap()[0].clone();
-    assert!(audit.prompt.contains("/workspace/.capitainerie/plan.md"));
+    assert!(audit.prompt.contains("/workspace/.matos/plan.md"));
     assert!(audit.prompt.contains("Replies on the card, oldest first:"));
     assert!(audit.prompt.contains("Garde SheepWars et TowerWars"));
     let approval_id = pending_plan(&world).await;
@@ -649,7 +649,7 @@ async fn an_audit_proposing_a_plan_waits_for_a_member_then_applying_it_runs_the_
     let specs = Arc::new(Mutex::new(Vec::new()));
     let mut lines = audit_lines(true, None);
     lines.pop();
-    lines.push(TaskLine::Capitainerie(TaskMarker::NoChanges));
+    lines.push(TaskLine::Matos(TaskMarker::NoChanges));
     ExecutePipeline::new(
         world.usecase.clone(),
         Executor::Ready {

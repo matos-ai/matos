@@ -1,9 +1,9 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::{AgentId, CardId, ClientId, ProjectId};
-use capitainerie_core::domain::{card::edit::EditCard, client::links::Change};
-use capitainerie_handlers::{ApiError, AppState, Caller, Patch};
 use chrono::NaiveDate;
+use matos_common::{AgentId, CardId, ClientId, ProjectId};
+use matos_core::domain::{card::edit::EditCard, client::links::Change};
+use matos_handlers::{ApiError, AppState, Caller, Patch};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -77,11 +77,11 @@ pub struct PatchedCardResponse {
     request_body = PatchCardRequest,
     responses(
         (status = 200, description = "The card as edited; absent fields are unchanged, null clears a field (a priority goes back to normal, a title cannot be cleared); assigning an agent starts it on the card, and `agent_run` says whether it did", body = PatchedCardResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may never edit a card through this route", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such card in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "The card changed since it was read", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An invalid value (criteria, labels, title), an assignee who is not a member, an unknown or archived client or project, one of another organization, a client that is not the project's, an unknown or archived agent, or a parent that would make a loop, is not in the organization or nests over three levels", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may never edit a card through this route", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "The card changed since it was read", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An invalid value (criteria, labels, title), an assignee who is not a member, an unknown or archived client or project, one of another organization, a client that is not the project's, an unknown or archived agent, or a parent that would make a loop, is not in the organization or nests over three levels", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

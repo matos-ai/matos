@@ -1,6 +1,6 @@
 pub mod ports;
 
-use capitainerie_common::{CardId, RunId, TranscriptId};
+use matos_common::{CardId, RunId, TranscriptId};
 
 /// A bearer token that never shows up in `Debug` output or logs.
 #[derive(Clone, PartialEq, Eq)]

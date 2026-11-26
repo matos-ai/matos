@@ -1,6 +1,6 @@
-use capitainerie_common::{CardId, ClientId, CoreError, ProjectId};
-use capitainerie_events::card::{CardAuthor, CardUpdated};
 use chrono::Utc;
+use matos_common::{CardId, ClientId, CoreError, ProjectId};
+use matos_events::card::{CardAuthor, CardUpdated};
 
 use super::{Author, Card, ports::CardRepository};
 use crate::domain::{
@@ -164,8 +164,8 @@ pub(super) async fn resolve_links<K: ClientRepository, P: ProjectRepository>(
 mod tests {
     use std::sync::Mutex;
 
-    use capitainerie_common::OrganizationId;
-    use capitainerie_events::DomainEvent;
+    use matos_common::OrganizationId;
+    use matos_events::DomainEvent;
 
     use super::*;
     use crate::domain::{
@@ -189,7 +189,7 @@ mod tests {
         }
     }
 
-    fn human(organization_id: capitainerie_common::OrganizationId) -> Subject {
+    fn human(organization_id: matos_common::OrganizationId) -> Subject {
         Subject {
             id: "user-1".into(),
             organization_id,
@@ -522,7 +522,7 @@ mod tests {
         )
         .link(
             Subject {
-                actor: Some("capitainerie-agent-writer".into()),
+                actor: Some("matos-agent-writer".into()),
                 ..human(org)
             },
             id,

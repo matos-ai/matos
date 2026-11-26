@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-handlers-transcriptions"
+name = "matos-handlers-transcriptions"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,15 +8,15 @@ license.workspace = true
 [dependencies]
 axum.workspace = true
 axum-extra.workspace = true
-capitainerie-core.workspace = true
-capitainerie-handlers.workspace = true
+matos-core.workspace = true
+matos-handlers.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 utoipa.workspace = true
 
 [dev-dependencies]
-capitainerie-auth.workspace = true
-capitainerie-common.workspace = true
+matos-auth.workspace = true
+matos-common.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true

@@ -1,10 +1,11 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
-use capitainerie_common::{AgentId, ApprovalId, CardId, OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::Utc;
+use matos_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
+use matos_common::{AgentId, ApprovalId, CardId, OrganizationId, RunId};
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{
         agent::SecretToken,
         approval::{Approval, ApprovalKind, ApprovalStatus},
@@ -13,8 +14,7 @@ use capitainerie_core::{
     },
     infrastructure::postgres,
 };
-use capitainerie_handlers::{AppState, Caller};
-use chrono::Utc;
+use matos_handlers::{AppState, Caller};
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -33,7 +33,7 @@ fn database_url() -> Option<String> {
 
 struct Fixture {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization: Organization,
     base: String,
 }
@@ -67,17 +67,17 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
     };
     let pool = postgres::connect(&url, 3).await.unwrap();
     let organization = organization(&pool).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     let state = AppState {
         usecase: usecase.clone(),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     let caller = Caller {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -91,7 +91,7 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
         organization: organization.clone(),
         token: SecretToken::new("user-token"),
     };
-    let app: Router = capitainerie_handlers_approvals::router()
+    let app: Router = matos_handlers_approvals::router()
         .layer(Extension(caller))
         .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -382,7 +382,7 @@ async fn deciding_a_tool_call_says_whether_a_run_resumed_it() {
             .fetch_one(&fixture.pool)
             .await
             .unwrap();
-    assert_eq!(actor.as_deref(), Some("Capitainerie"));
+    assert_eq!(actor.as_deref(), Some("Matos"));
     assert!(text.starts_with("**Demande refusée**"), "{text}");
 
     let action = fixture.request("Dépassement de budget").await;

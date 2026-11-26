@@ -1,9 +1,7 @@
 use std::time::Duration;
 
-use capitainerie_common::{
-    CardId, ClientId, CoreError, IntegrationInstanceId, OrganizationId, RunId,
-};
 use chrono::{DateTime, Utc};
+use matos_common::{CardId, ClientId, CoreError, IntegrationInstanceId, OrganizationId, RunId};
 use serde_json::Value;
 
 use super::{action::Access, journal::Grant};

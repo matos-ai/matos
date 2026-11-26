@@ -1,0 +1,72 @@
+{{- if .Values.worker.enabled }}
+{{- $ctx := dict "root" . "component" "worker" }}
+{{- $name := include "matos.componentName" $ctx }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "matos.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  strategy:
+    {{- if .Values.worker.vectorStore.persistence.enabled }}
+    # A ReadWriteOnce index cannot be mounted by two pods at once.
+    type: Recreate
+    {{- else }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "matos.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/worker/configmap.yaml") . | sha256sum }}
+        {{- with .Values.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "matos.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: {{ .Values.executor.enabled }}
+      terminationGracePeriodSeconds: {{ .Values.worker.terminationGracePeriodSeconds }}
+      {{- include "matos.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "matos.topologySpread" $ctx | nindent 6 }}
+      {{- include "matos.scheduling" .Values.worker | nindent 6 }}
+      containers:
+        - name: worker
+          image: {{ include "matos.image" (dict "root" . "component" "worker" "values" .Values.worker) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}
+          env:
+            {{- include "matos.secretEnv" (dict "root" . "keys" .Values.worker.secretEnv) | nindent 12 }}
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: vector-store
+              mountPath: {{ .Values.worker.vectorStore.uri | quote }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+      volumes:
+        - name: vector-store
+          {{- if .Values.worker.vectorStore.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "matos.vectorStoreClaim" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- end }}

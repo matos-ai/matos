@@ -1,5 +1,5 @@
-use capitainerie_common::{ConversationId, ConversationMessageId, CoreError, OrganizationId};
 use chrono::{DateTime, Utc};
+use matos_common::{ConversationId, ConversationMessageId, CoreError, OrganizationId};
 use sqlx::types::Json;
 use uuid::Uuid;
 

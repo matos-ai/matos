@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_core::domain::{agent::SecretToken, user_provider::service::PutUserProvider};
-use capitainerie_handlers::{ApiError, Caller};
+use matos_core::domain::{agent::SecretToken, user_provider::service::PutUserProvider};
+use matos_handlers::{ApiError, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -36,9 +36,9 @@ pub struct PutUserProviderRequest {
     request_body = PutUserProviderRequest,
     responses(
         (status = 200, description = "The connection as stored; the key is not returned", body = UserProviderResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The caller is an agent", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Invalid or missing key, invalid model or base URL", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The caller is an agent", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Invalid or missing key, invalid model or base URL", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

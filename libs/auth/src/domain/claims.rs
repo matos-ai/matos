@@ -39,16 +39,13 @@ mod tests {
     fn a_nested_actor_without_a_subject_still_parses() {
         let actor: Actor = serde_json::from_value(serde_json::json!({
             "sub": "service-account-bernard",
-            "client_id": "capitainerie-agent-bernard",
-            "act": {"client_id": "capitainerie-api"},
+            "client_id": "matos-agent-bernard",
+            "act": {"client_id": "matos-api"},
         }))
         .unwrap();
-        assert_eq!(
-            actor.client_id.as_deref(),
-            Some("capitainerie-agent-bernard")
-        );
+        assert_eq!(actor.client_id.as_deref(), Some("matos-agent-bernard"));
         let first = actor.act.unwrap();
-        assert_eq!(first.client_id.as_deref(), Some("capitainerie-api"));
+        assert_eq!(first.client_id.as_deref(), Some("matos-api"));
         assert_eq!(first.sub, "");
     }
 }

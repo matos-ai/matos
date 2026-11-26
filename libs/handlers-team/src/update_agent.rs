@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
-use capitainerie_common::AgentId;
-use capitainerie_core::domain::crew::service::UpdateAgent;
-use capitainerie_handlers::{ApiError, AppState, Caller, Patch};
+use matos_common::AgentId;
+use matos_core::domain::crew::service::UpdateAgent;
+use matos_handlers::{ApiError, AppState, Caller, Patch};
 use serde::Deserialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -46,11 +46,11 @@ pub struct UpdateTeamAgentRequest {
     request_body = UpdateTeamAgentRequest,
     responses(
         (status = 200, description = "The updated agent; absent fields are unchanged, and the change is recorded as a new revision", body = TeamAgentResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage the registry", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such agent in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "An agent of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Nothing to update, an invalid field, a manager that is not an agent of the organization, or a reporting loop", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage the registry", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such agent in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "An agent of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Nothing to update, an invalid field, a manager that is not an agent of the organization, or a reporting loop", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

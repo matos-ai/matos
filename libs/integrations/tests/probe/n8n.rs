@@ -1,6 +1,4 @@
-use capitainerie_core::domain::integration::{
-    ConnectorFailure, InstanceConnection, IntegrationKind,
-};
+use matos_core::domain::integration::{ConnectorFailure, InstanceConnection, IntegrationKind};
 use serde_json::json;
 
 use crate::support::{Fake, Recorded, Reply, SECRET, connection, ok, probe, serve};

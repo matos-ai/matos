@@ -1,8 +1,8 @@
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
-use capitainerie_macros::transactional;
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CoreError, OrganizationId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         agent_identity::{
@@ -40,7 +40,7 @@ struct Backlog {
     unsynced: Vec<(UnsyncedClient, String)>,
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     /// The identity of an agent the subject may read. `None` for an agent
     /// the worker has not adopted yet.
     #[transactional(crew_agent, authz)]
@@ -199,8 +199,8 @@ impl CapitainerieUseCase {
 
 async fn issuer_of<R: OrganizationRepository>(
     organizations: &mut R,
-    known: &mut std::collections::HashMap<capitainerie_common::OrganizationId, String>,
-    organization_id: capitainerie_common::OrganizationId,
+    known: &mut std::collections::HashMap<matos_common::OrganizationId, String>,
+    organization_id: matos_common::OrganizationId,
 ) -> Result<String, CoreError> {
     if let Some(issuer) = known.get(&organization_id) {
         return Ok(issuer.clone());

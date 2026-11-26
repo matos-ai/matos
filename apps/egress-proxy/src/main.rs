@@ -1,24 +1,23 @@
 use anyhow::Context;
-use capitainerie_core::{
-    CapitainerieUseCase,
+use clap::Parser;
+use matos_core::{
+    MatosUseCase,
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_egress_proxy::{Live, Proxy, ProxyConfig, config::Args, router};
-use capitainerie_github::{GithubApps, GithubBases};
-use clap::Parser;
+use matos_egress_proxy::{Live, Proxy, ProxyConfig, config::Args, router};
+use matos_github::{GithubApps, GithubBases};
 use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let args = Args::parse();
-    let _telemetry =
-        capitainerie_telemetry::init("capitainerie-egress-proxy", &args.log, &args.observability)?;
+    let _telemetry = matos_telemetry::init("matos-egress-proxy", &args.log, &args.observability)?;
 
     let pool = postgres::connect(&args.database.url, args.database.max_connections)
         .await
         .context("connecting to postgres")?;
-    let mut usecase = CapitainerieUseCase::with_local_policies(pool);
+    let mut usecase = MatosUseCase::with_local_policies(pool);
     match &args.secrets.key {
         Some(key) => {
             usecase = usecase.with_secrets_cipher(
@@ -56,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("binding {addr}"))?;
     tracing::info!(%addr, "egress-proxy listening");
     axum::serve(listener, router(proxy))
-        .with_graceful_shutdown(capitainerie_telemetry::shutdown_signal())
+        .with_graceful_shutdown(matos_telemetry::shutdown_signal())
         .await?;
     Ok(())
 }

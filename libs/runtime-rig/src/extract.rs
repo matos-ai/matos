@@ -1,5 +1,5 @@
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::agent::{ExtractedAction, Extraction};
+use matos_common::CoreError;
+use matos_core::domain::agent::{ExtractedAction, Extraction};
 use rig_agent::{
     agent::AgentBuilder, completion::StructuredOutputError, extractor::ExtractorBuilder,
 };

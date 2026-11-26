@@ -11,12 +11,12 @@ pub mod update_source;
 
 use axum::{Extension, Router, extract::DefaultBodyLimit};
 use axum_extra::routing::RouterExt;
-use capitainerie_core::domain::source::PAYLOAD_MAX_BYTES;
-use capitainerie_handlers::AppState;
+use matos_core::domain::source::PAYLOAD_MAX_BYTES;
+use matos_handlers::AppState;
 
 pub const TAG: &str = "sources";
 
-pub use capitainerie_handlers::PublicBaseUrl;
+pub use matos_handlers::PublicBaseUrl;
 
 /// The authenticated management routes.
 pub fn router(public_base_url: Option<String>) -> Router<AppState> {

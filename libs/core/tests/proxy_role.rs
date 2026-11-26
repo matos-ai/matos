@@ -2,15 +2,15 @@
 
 use std::str::FromStr;
 
-use capitainerie_common::{OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::Utc;
+use matos_common::{OrganizationId, RunId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         execution::{ExecutionMode, TaskGrant},
         provider::ProviderKind,
     },
 };
-use chrono::Utc;
 use sqlx::{
     PgPool,
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -18,7 +18,7 @@ use sqlx::{
 use uuid::Uuid;
 
 const ROLE_SQL: &str = include_str!("../../../deploy/postgres/egress-proxy-role.sql");
-const ROLE: &str = "capitainerie_egress_proxy";
+const ROLE: &str = "matos_egress_proxy";
 const PASSWORD: &str = "proxy-role-test";
 
 fn database_url() -> Option<String> {
@@ -63,7 +63,7 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         return;
     };
     let pool = as_proxy(&url).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     let organization = OrganizationId(Uuid::now_v7());
 
     assert_eq!(usecase.find_task_grant(random_hash()).await.unwrap(), None);
@@ -107,7 +107,7 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         run_id: RunId::new(),
         organization_id: organization,
         repository: "acme/web".parse().unwrap(),
-        branch: "capitainerie/x".into(),
+        branch: "matos/x".into(),
         model: "claude-sonnet-5-5".into(),
         mode: ExecutionMode::Change,
         initiated_by: None,

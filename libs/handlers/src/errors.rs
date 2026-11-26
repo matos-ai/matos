@@ -3,8 +3,8 @@ use axum::{
     http::{HeaderValue, StatusCode, header::WWW_AUTHENTICATE},
     response::{IntoResponse, Response},
 };
-use capitainerie_auth::AuthError;
-use capitainerie_common::CoreError;
+use matos_auth::AuthError;
+use matos_common::CoreError;
 use serde::Serialize;
 use thiserror::Error;
 use utoipa::ToSchema;

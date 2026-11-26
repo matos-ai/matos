@@ -1,7 +1,7 @@
 pub mod ports;
 
 use bytes::Bytes;
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 use crate::domain::provider::ModelRef;
 

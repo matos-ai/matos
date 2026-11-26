@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use sqlx::{PgPool, Postgres, Transaction};
 use tokio::sync::{Mutex, MutexGuard};
 

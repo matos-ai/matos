@@ -1,6 +1,6 @@
-use capitainerie_common::{AgentId, CardId, ClientId, CoreError, ProjectId};
-use capitainerie_events::card::{CardAuthor, CardUpdated};
 use chrono::{NaiveDate, Utc};
+use matos_common::{AgentId, CardId, ClientId, CoreError, ProjectId};
+use matos_events::card::{CardAuthor, CardUpdated};
 
 use super::{
     Author, Card, CardTitle, DESCRIPTION_MAX_CHARS,
@@ -264,8 +264,8 @@ where
 mod tests {
     use std::sync::Mutex;
 
-    use capitainerie_common::OrganizationId;
-    use capitainerie_events::DomainEvent;
+    use matos_common::OrganizationId;
+    use matos_events::DomainEvent;
 
     use super::*;
     use crate::domain::{

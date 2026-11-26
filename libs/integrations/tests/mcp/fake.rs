@@ -9,7 +9,7 @@ use axum::body::Bytes;
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use capitainerie_core::domain::mcp::pkce::challenge_of;
+use matos_core::domain::mcp::pkce::challenge_of;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 

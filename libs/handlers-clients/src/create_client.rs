@@ -1,6 +1,6 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
-use capitainerie_core::domain::client::service::CreateClient;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_core::domain::client::service::CreateClient;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -21,10 +21,10 @@ pub struct CreateClientRequest {
     request_body = CreateClientRequest,
     responses(
         (status = 201, description = "The new client", body = ClientResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage clients", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A client of that name exists, whatever the case", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Invalid name, alias or notes", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage clients", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A client of that name exists, whatever the case", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Invalid name, alias or notes", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

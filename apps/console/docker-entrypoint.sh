@@ -2,7 +2,7 @@
 set -eu
 
 HTML_DIR=/usr/share/nginx/html
-SRC_DIR=/usr/local/src/capitainerie
+SRC_DIR=/usr/local/src/matos
 
 rm -rf -- "${HTML_DIR:?}/"* "${HTML_DIR:?}/".[!.]* "${HTML_DIR:?}/"..?* 2>/dev/null || true
 cp -r "$SRC_DIR"/. "$HTML_DIR"

@@ -3,8 +3,8 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::routing::TypedPath;
-use capitainerie_common::ClientId;
-use capitainerie_handlers::Caller;
+use matos_common::ClientId;
+use matos_handlers::Caller;
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -34,9 +34,9 @@ pub struct ListInstancesQuery {
     ),
     responses(
         (status = 200, description = "The client's Odoo and n8n instances by name, without their secrets; archived ones only with archived=true", body = IntegrationInstanceListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no integration access", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such client in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no integration access", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such client in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

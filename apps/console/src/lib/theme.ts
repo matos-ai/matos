@@ -3,7 +3,7 @@ import { Store } from '@tanstack/store'
 export type ThemePreference = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
 
-export const THEME_STORAGE_KEY = 'capitainerie.theme'
+export const THEME_STORAGE_KEY = 'matos.theme'
 export const THEME_PREFERENCES: ReadonlyArray<ThemePreference> = [
 	'light',
 	'dark',

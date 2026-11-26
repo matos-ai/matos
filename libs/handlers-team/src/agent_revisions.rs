@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::AgentId;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::AgentId;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 
 use crate::response::{TeamAgentResponse, TeamAgentRevisionListResponse};
@@ -27,9 +27,9 @@ pub struct RestoreTeamAgentRevisionPath {
     params(("agent_id" = AgentId, Path, description = "Agent identifier")),
     responses(
         (status = 200, description = "The agent's history, newest first", body = TeamAgentRevisionListResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the read; agents have no access to the registry", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such agent in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the read; agents have no access to the registry", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such agent in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -58,10 +58,10 @@ pub async fn list_handler(
     ),
     responses(
         (status = 200, description = "The agent with the revision's state, recorded as a new revision", body = TeamAgentResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage the registry", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such agent in the caller's organization, or no such revision", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "The revision's manager would now close a reporting loop", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage the registry", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such agent in the caller's organization, or no such revision", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "The revision's manager would now close a reporting loop", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

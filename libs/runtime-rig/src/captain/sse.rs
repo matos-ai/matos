@@ -1,4 +1,4 @@
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 use rig_reqwest::reqwest;
 
 pub(crate) const MAX_PENDING_BYTES: usize = 1024 * 1024;

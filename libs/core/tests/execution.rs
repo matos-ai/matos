@@ -1,8 +1,9 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::Utc;
+use matos_common::{CardId, CoreError, OrganizationId, RunId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         authorization::Subject,
         card::{
@@ -14,7 +15,6 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -32,7 +32,7 @@ fn fresh_installation() -> i64 {
     (Uuid::now_v7().as_u128() & 0x3FFF_FFFF_FFFF_FFFF) as i64
 }
 
-async fn setup() -> Option<(PgPool, CapitainerieUseCase, OrganizationId)> {
+async fn setup() -> Option<(PgPool, MatosUseCase, OrganizationId)> {
     let pool = postgres::connect(
         &database_url().or_else(|| {
             eprintln!("skipped: DATABASE_URL is unset");
@@ -52,7 +52,7 @@ async fn setup() -> Option<(PgPool, CapitainerieUseCase, OrganizationId)> {
     .execute(&pool)
     .await
     .unwrap();
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap());
     Some((pool, usecase, OrganizationId(id)))
 }
@@ -73,7 +73,7 @@ fn agent(organization_id: OrganizationId) -> Subject {
     }
 }
 
-async fn todo_card(usecase: &CapitainerieUseCase, organization_id: OrganizationId) -> Card {
+async fn todo_card(usecase: &MatosUseCase, organization_id: OrganizationId) -> Card {
     let proposed = usecase
         .create_card(
             human(organization_id, false),
@@ -101,7 +101,7 @@ async fn todo_card(usecase: &CapitainerieUseCase, organization_id: OrganizationI
         .unwrap()
 }
 
-async fn connect(usecase: &CapitainerieUseCase, organization_id: OrganizationId) {
+async fn connect(usecase: &MatosUseCase, organization_id: OrganizationId) {
     usecase
         .connect_github(
             human(organization_id, true),
@@ -113,10 +113,10 @@ async fn connect(usecase: &CapitainerieUseCase, organization_id: OrganizationId)
 }
 
 async fn execute(
-    usecase: &CapitainerieUseCase,
+    usecase: &MatosUseCase,
     subject: Subject,
     card: &Card,
-) -> Result<capitainerie_core::StartedExecution, CoreError> {
+) -> Result<matos_core::StartedExecution, CoreError> {
     usecase
         .execute_card(
             subject,
@@ -521,7 +521,7 @@ async fn a_task_grant_is_found_by_hash_and_revoked_with_its_run() {
         run_id: started.run_id,
         organization_id,
         repository: "acme/web".parse().unwrap(),
-        branch: "capitainerie/0a1b2c3d4e5f".into(),
+        branch: "matos/0a1b2c3d4e5f".into(),
         model: "claude-sonnet-5-5".into(),
         mode: ExecutionMode::Change,
         initiated_by: None,
@@ -576,7 +576,7 @@ async fn deleting_a_run_deletes_its_grants() {
                 run_id: RunId::new(),
                 organization_id,
                 repository: "acme/web".parse().unwrap(),
-                branch: "capitainerie/x".into(),
+                branch: "matos/x".into(),
                 model: "claude-sonnet-5-5".into(),
                 mode: ExecutionMode::Change,
                 initiated_by: None,
@@ -601,10 +601,7 @@ async fn deleting_a_run_deletes_its_grants() {
     assert_eq!(usecase.find_task_grant(hash).await.unwrap(), None);
 }
 
-async fn running_execute_step(
-    usecase: &CapitainerieUseCase,
-    started: &capitainerie_core::StartedExecution,
-) {
+async fn running_execute_step(usecase: &MatosUseCase, started: &matos_core::StartedExecution) {
     let context = usecase
         .claim_execution(
             started.run_id,
@@ -614,14 +611,14 @@ async fn running_execute_step(
         .await
         .unwrap()
         .unwrap();
-    let step = capitainerie_core::domain::run::step::Step {
-        id: capitainerie_common::StepId::new(),
+    let step = matos_core::domain::run::step::Step {
+        id: matos_common::StepId::new(),
         run_id: started.run_id,
         organization_id: context.run.organization_id,
         seq: 0,
-        kind: capitainerie_core::domain::run::StepKind::Execute,
+        kind: matos_core::domain::run::StepKind::Execute,
         agent: Some(EXECUTOR_AGENT.into()),
-        status: capitainerie_core::domain::run::step::StepStatus::Running,
+        status: matos_core::domain::run::step::StepStatus::Running,
         attempt: 1,
         output: None,
         usage: Default::default(),

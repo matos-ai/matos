@@ -1,15 +1,15 @@
 #![allow(clippy::unwrap_used)]
 
 use axum::{Extension, Router};
-use capitainerie_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
-use capitainerie_common::OrganizationId;
-use capitainerie_core::{
-    CapitainerieUseCase, Organization, OrganizationSlug,
+use chrono::Utc;
+use matos_auth::{AcceptedClients, Actor, FerrisKeyVerifier, Identity};
+use matos_common::OrganizationId;
+use matos_core::{
+    MatosUseCase, Organization, OrganizationSlug,
     domain::{agent::SecretToken, authorization::Subject},
     infrastructure::postgres,
 };
-use capitainerie_handlers::{AppState, Caller};
-use chrono::Utc;
+use matos_handlers::{AppState, Caller};
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -28,7 +28,7 @@ fn database_url() -> Option<String> {
 
 struct Fixture {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization: Organization,
     base: String,
 }
@@ -62,17 +62,17 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
     };
     let pool = postgres::connect(&url, 3).await.unwrap();
     let organization = organization(&pool).await;
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_local_policies(pool.clone());
     let state = AppState {
         usecase: usecase.clone(),
-        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["capitainerie-console"])),
+        verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };
     let caller = Caller {
         identity: Identity {
             subject: "user-1".into(),
             issuer: organization.issuer_url.clone(),
-            client_id: "capitainerie-console".into(),
+            client_id: "matos-console".into(),
             username: None,
             email: None,
             display_name: None,
@@ -86,7 +86,7 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
         organization: organization.clone(),
         token: SecretToken::new("user-token"),
     };
-    let app: Router = capitainerie_handlers_clients::router()
+    let app: Router = matos_handlers_clients::router()
         .layer(Extension(caller))
         .with_state(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -355,7 +355,7 @@ async fn another_organizations_records_are_unknown() {
         .usecase
         .create_client(
             other_subject.clone(),
-            capitainerie_core::domain::client::service::CreateClient {
+            matos_core::domain::client::service::CreateClient {
                 name: "Globex".into(),
                 aliases: vec![],
                 notes: String::new(),
@@ -367,7 +367,7 @@ async fn another_organizations_records_are_unknown() {
         .usecase
         .create_project(
             other_subject,
-            capitainerie_core::domain::project::service::CreateProject {
+            matos_core::domain::project::service::CreateProject {
                 client_id: Some(foreign_client.id),
                 name: "App".into(),
                 aliases: vec![],
@@ -422,7 +422,7 @@ async fn another_organizations_records_are_unknown() {
 
 #[tokio::test]
 async fn an_agent_is_refused_on_every_route() {
-    let Some(fixture) = fixture(Some("capitainerie-agent-writer")).await else {
+    let Some(fixture) = fixture(Some("matos-agent-writer")).await else {
         return;
     };
     let client_id = Uuid::now_v7();

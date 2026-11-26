@@ -7,10 +7,10 @@ import { clearAuth } from '#/store/auth.store'
 import { mockApi, withQueryClient } from '#/test-utils/api-mock'
 
 const APP = {
-	slug: 'capitainerie-acme-1a2b3c',
+	slug: 'matos-acme-1a2b3c',
 	owner_login: 'acme',
 	owner_type: 'Organization',
-	html_url: 'https://github.com/apps/capitainerie-acme-1a2b3c',
+	html_url: 'https://github.com/apps/matos-acme-1a2b3c',
 	created_by: 'u',
 	created_at: '2026-11-01T00:00:00Z',
 }
@@ -57,7 +57,7 @@ describe('GitHub settings page', () => {
 			'POST /api/v1/integrations/github/app/manifest': {
 				action_url:
 					'https://github.com/organizations/acme/settings/apps/new?state=s1',
-				manifest: '{"name":"Capitainerie Acme"}',
+				manifest: '{"name":"Matos Acme"}',
 				state: 's1',
 			},
 		})
@@ -95,7 +95,7 @@ describe('GitHub settings page', () => {
 		expect(form.method).toBe('post')
 		expect(
 			(form.querySelector('input[name="manifest"]') as HTMLInputElement).value,
-		).toBe('{"name":"Capitainerie Acme"}')
+		).toBe('{"name":"Matos Acme"}')
 	})
 
 	it('asks for a valid organization login before calling the API', async () => {
@@ -175,7 +175,7 @@ describe('GitHub settings page', () => {
 			{
 				'GET /api/v1/integrations/github': { app: APP, installation: null },
 				'GET /api/v1/integrations/github/install': {
-					url: 'https://github.com/apps/capitainerie-acme-1a2b3c/installations/new?state=s2',
+					url: 'https://github.com/apps/matos-acme-1a2b3c/installations/new?state=s2',
 				},
 			},
 			'Application GitHub créée. Installe-la maintenant sur GitHub.',
@@ -193,7 +193,7 @@ describe('GitHub settings page', () => {
 
 		await waitFor(() =>
 			expect(assign).toHaveBeenCalledWith(
-				'https://github.com/apps/capitainerie-acme-1a2b3c/installations/new?state=s2',
+				'https://github.com/apps/matos-acme-1a2b3c/installations/new?state=s2',
 			),
 		)
 	})

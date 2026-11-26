@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use capitainerie_core::CapitainerieUseCase;
+use matos_core::MatosUseCase;
 use tokio::sync::watch;
 
 const TICK_EVERY: Duration = Duration::from_secs(2);
@@ -12,11 +12,11 @@ const SETTLE_SECS: i64 = 5;
 /// Keeps the members' inboxes in step with the outbox. The projection's
 /// cursor is locked per batch, so several workers can run it side by side.
 pub struct InboxProjector {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
 }
 
 impl InboxProjector {
-    pub fn new(usecase: CapitainerieUseCase) -> Self {
+    pub fn new(usecase: MatosUseCase) -> Self {
         Self { usecase }
     }
 

@@ -1,5 +1,5 @@
 [package]
-name = "capitainerie-events"
+name = "matos-events"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

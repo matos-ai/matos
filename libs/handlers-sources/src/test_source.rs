@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
-use capitainerie_common::SourceId;
-use capitainerie_handlers::{AppState, Caller};
+use matos_common::SourceId;
+use matos_handlers::{AppState, Caller};
 use serde::Deserialize;
 
 use crate::{hook::HookError, response::SourceEventResponse};
@@ -20,11 +20,11 @@ pub struct TestSourcePath {
     params(("source_id" = SourceId, Path, description = "Source identifier")),
     responses(
         (status = 202, description = "A sample event went through the same path as the hook, even on a disabled source: its card is created and, when the source asks for it, its run queued", body = SourceEventResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage sources", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 404, description = "No such source in the caller's organization", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "The source is archived", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 429, description = "The source received too many events in the last minute", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage sources", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 404, description = "No such source in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "The source is archived", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 429, description = "The source received too many events in the last minute", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

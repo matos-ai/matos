@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::conversation::turn::ToolSpec;
+use matos_common::CoreError;
+use matos_core::domain::conversation::turn::ToolSpec;
 use serde_json::{Value, json};
 
 use super::{
@@ -238,7 +238,7 @@ impl Provider for AnthropicStream {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use capitainerie_core::domain::conversation::turn::ToolSpec;
+    use matos_core::domain::conversation::turn::ToolSpec;
 
     use super::*;
     use crate::captain::driver::ToolResult;

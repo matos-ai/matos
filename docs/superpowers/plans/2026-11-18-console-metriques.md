@@ -37,12 +37,12 @@
 **Interfaces:**
 - Produces: `pub struct CostFilter { pub agent: Option<AgentId>, pub card: Option<CardId> }` (`Clone, Copy, Debug, Default, PartialEq, Eq`), exportée par `domain::cost`.
 - Produces: port `CostRepository` : `project_rows(org, &Period, &CostFilter)`, `agent_rows(org, &Period, &CostFilter)`, `task_rows(org, &Period, project: Option<ProjectId>, &CostFilter)`, `user_rows(org, &Period, &CostFilter)`, `agent_exists(org, AgentId) -> bool`, `card_exists(org, CardId) -> bool`.
-- Produces: `CostService` et `CapitainerieUseCase::{project_costs, agent_costs, task_costs, user_costs}` prennent un `CostFilter` en dernier argument ; `NotFound` si `agent` ou `card` n'existe pas dans l'organisation.
+- Produces: `CostService` et `MatosUseCase::{project_costs, agent_costs, task_costs, user_costs}` prennent un `CostFilter` en dernier argument ; `NotFound` si `agent` ou `card` n'existe pas dans l'organisation.
 
 - [ ] **Step 1: Tests Postgres (rouge).** Dans `libs/core/tests/cost.rs`, trois tests : `agent_filter_narrows_every_report` (deux agents, un run chacun, `agent_costs`, `project_costs`, `task_costs`, `user_costs` filtrés sur l'un ne comptent que son run, détails = totaux), `card_filter_narrows_every_report` (deux cartes), `agent_and_card_filters_combine` (agent A sur carte 1 seulement).
-- [ ] **Step 2:** `cargo test -p capitainerie-core --test cost` : ne compile pas (signatures).
+- [ ] **Step 2:** `cargo test -p matos-core --test cost` : ne compile pas (signatures).
 - [ ] **Step 3: Implémenter** `CostFilter`, le port, le service et les quatre requêtes : `AND ($n::uuid IS NULL OR a.id = $n) AND ($m::uuid IS NULL OR r.card_id = $m)`. `user_rows` gagne les `LEFT JOIN agent_tasks` et `agents` des autres requêtes. `agent_exists` et `card_exists` sur le modèle de `project_exists`. Le service appelle ces deux vérifications avant les lignes quand le filtre est posé.
-- [ ] **Step 4:** `cargo sqlx prepare --workspace`, puis `cargo test -p capitainerie-core --test cost` : vert.
+- [ ] **Step 4:** `cargo sqlx prepare --workspace`, puis `cargo test -p matos-core --test cost` : vert.
 - [ ] **Step 5: Test 404 :** `unknown_agent_or_card_is_not_found` (ids d'une autre organisation et ids inconnus) ; vert.
 - [ ] **Step 6: Commit** `feat(core): agent and task filters on cost reports` (sans `Cargo.lock`).
 
@@ -58,7 +58,7 @@
 
 - [ ] **Step 1: Tests API (rouge) :** `unknown_agent_filter_is_not_found` et `unknown_card_filter_is_not_found` (404, quatre routes via une boucle), `filters_are_accepted` (200 avec les deux paramètres sur une base vide).
 - [ ] **Step 2:** Ajouter les deux champs aux deux structs de query et les passer à l'use-case ; documenter les paramètres.
-- [ ] **Step 3:** `cargo test -p capitainerie-handlers-audit` et `cargo test -p capitainerie-api openapi` : vert. Mettre à jour la ligne des routes dans `docs/ARCHITECTURE.md`.
+- [ ] **Step 3:** `cargo test -p matos-handlers-audit` et `cargo test -p matos-api openapi` : vert. Mettre à jour la ligne des routes dans `docs/ARCHITECTURE.md`.
 - [ ] **Step 4:** `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` (avec `DATABASE_URL`) : vert.
 - [ ] **Step 5: Commit** `feat(api): agent and task filters on cost routes`, puis push et PR 1 (base `feat/cost-observability`).
 

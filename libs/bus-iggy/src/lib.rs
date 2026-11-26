@@ -3,10 +3,10 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use capitainerie_common::CoreError;
-use capitainerie_core::domain::event::ports::EventBus;
-use capitainerie_events::{EventEnvelope, Topic};
 use iggy::prelude::*;
+use matos_common::CoreError;
+use matos_core::domain::event::ports::EventBus;
+use matos_events::{EventEnvelope, Topic};
 use uuid::Uuid;
 
 #[derive(Clone, clap::Args)]
@@ -21,11 +21,7 @@ pub struct IggyArgs {
     pub username: String,
     #[arg(long = "iggy-password", env = "IGGY_PASSWORD", default_value = "iggy")]
     pub password: String,
-    #[arg(
-        long = "iggy-stream",
-        env = "IGGY_STREAM",
-        default_value = "capitainerie"
-    )]
+    #[arg(long = "iggy-stream", env = "IGGY_STREAM", default_value = "matos")]
     pub stream: String,
     #[arg(long = "iggy-partitions", env = "IGGY_PARTITIONS", default_value_t = 3)]
     pub partitions: u32,

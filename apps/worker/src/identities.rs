@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use capitainerie_auth::FerrisKeyProvisioner;
-use capitainerie_core::CapitainerieUseCase;
 use chrono::Utc;
+use matos_auth::FerrisKeyProvisioner;
+use matos_core::MatosUseCase;
 use tokio::sync::watch;
 
 const TICK_EVERY: Duration = Duration::from_secs(10);
@@ -10,17 +10,17 @@ const TICK_EVERY: Duration = Duration::from_secs(10);
 const RETRY_AFTER: Duration = Duration::from_secs(60);
 const BATCH: i64 = 20;
 
-/// Keeps the agents' FerrisKey clients in line with Capitainerie: creates
+/// Keeps the agents' FerrisKey clients in line with Matos: creates
 /// the client of a new agent, retries the ones FerrisKey refused, and
 /// disables or enables a client when its agent is archived or comes back.
 /// Every step converges, so several workers may run it side by side.
 pub struct IdentitySweeper {
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     provisioner: FerrisKeyProvisioner,
 }
 
 impl IdentitySweeper {
-    pub fn new(usecase: CapitainerieUseCase, provisioner: FerrisKeyProvisioner) -> Self {
+    pub fn new(usecase: MatosUseCase, provisioner: FerrisKeyProvisioner) -> Self {
         Self {
             usecase,
             provisioner,

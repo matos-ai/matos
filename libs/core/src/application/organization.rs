@@ -1,10 +1,10 @@
-use capitainerie_common::CoreError;
-use capitainerie_macros::transactional;
+use matos_common::CoreError;
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{Organization, domain::organization::service::OrganizationService};
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     #[transactional(organization)]
     pub async fn organization_by_issuer(
         &self,

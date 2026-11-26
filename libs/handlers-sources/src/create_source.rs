@@ -3,9 +3,9 @@ use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
 };
-use capitainerie_common::{AgentId, ProjectId};
-use capitainerie_core::domain::source::service::CreateSource;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::{AgentId, ProjectId};
+use matos_core::domain::source::service::CreateSource;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -41,10 +41,10 @@ pub struct CreateSourceRequest {
     request_body = CreateSourceRequest,
     responses(
         (status = 201, description = "The new source with its webhook token and URL, shown this once", body = IssuedSourceResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage sources", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A source of that slug exists", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "An invalid field, or an agent or project not usable in the organization", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage sources", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A source of that slug exists", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "An invalid field, or an agent or project not usable in the organization", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

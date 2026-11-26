@@ -2,9 +2,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use capitainerie_common::{CoreError, OrganizationId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::NaiveDate;
+use matos_common::{CoreError, OrganizationId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         authorization::Subject,
         event::ports::EventBus,
@@ -16,8 +17,7 @@ use capitainerie_core::{
         postgres,
     },
 };
-use capitainerie_events::{EventEnvelope, run::RunQueued};
-use chrono::NaiveDate;
+use matos_events::{EventEnvelope, run::RunQueued};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -64,8 +64,8 @@ fn member(organization_id: OrganizationId) -> Subject {
     }
 }
 
-fn usecase(pool: &PgPool) -> CapitainerieUseCase {
-    CapitainerieUseCase::with_local_policies(pool.clone())
+fn usecase(pool: &PgPool) -> MatosUseCase {
+    MatosUseCase::with_local_policies(pool.clone())
 }
 
 async fn outbox_kinds_for_run(pool: &PgPool, run_id: Uuid) -> Vec<String> {
@@ -391,8 +391,8 @@ async fn the_timeline_lists_what_the_run_did_not_its_reads() {
 }
 
 mod cards {
-    use capitainerie_common::CoreError;
-    use capitainerie_core::domain::card::{
+    use matos_common::CoreError;
+    use matos_core::domain::card::{
         Column,
         service::{CreateCard, MoveCard, ProvenanceInput, UpdateCard},
     };
@@ -403,7 +403,7 @@ mod cards {
 
     fn agent(organization_id: OrganizationId) -> Subject {
         Subject {
-            actor: Some("capitainerie-agent-writer".into()),
+            actor: Some("matos-agent-writer".into()),
             is_admin: false,
             ..member(organization_id)
         }
@@ -436,7 +436,7 @@ mod cards {
         };
         let with_hint = submit(Some("acme/web")).await.unwrap();
         let without_hint = submit(None).await.unwrap();
-        let propose = |submitted: capitainerie_core::SubmittedTranscript, title: &str| {
+        let propose = |submitted: matos_core::SubmittedTranscript, title: &str| {
             usecase.create_card(
                 agent(organization_id),
                 CreateCard {

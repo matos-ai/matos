@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use capitainerie_analytics::EventRecord;
+use matos_analytics::EventRecord;
 
 #[derive(Debug)]
 pub struct Batcher {
@@ -56,9 +56,9 @@ impl Batcher {
 
 #[cfg(test)]
 mod tests {
-    use capitainerie_analytics::EventRecord;
-    use capitainerie_events::{EventEnvelope, run::RunStarted};
     use chrono::Utc;
+    use matos_analytics::EventRecord;
+    use matos_events::{EventEnvelope, run::RunStarted};
     use uuid::Uuid;
 
     use super::*;

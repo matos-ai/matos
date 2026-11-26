@@ -1,8 +1,8 @@
-use capitainerie_common::{CoreError, ProjectId};
-use capitainerie_macros::transactional;
 use chrono::{SubsecRound, Utc};
+use matos_common::{CoreError, ProjectId};
+use matos_macros::transactional;
 
-use super::{CapitainerieUseCase, execution::StartedExecution};
+use super::{MatosUseCase, execution::StartedExecution};
 use crate::{
     domain::{
         authorization::{AccessRequest, Action, ResourceKind, Subject, require},
@@ -30,7 +30,7 @@ use crate::{
     },
 };
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     /// Opens every worksite in one transaction: each draft becomes a card of
     /// the project, validated and handed to the executor, with the run queued.
     /// Any refusal rolls back the whole batch.

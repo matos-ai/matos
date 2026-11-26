@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use capitainerie_common::CoreError;
+use matos_common::CoreError;
 
 pub fn clean_label(value: &str, max: usize, what: &str) -> Result<String, CoreError> {
     let value = value.trim();

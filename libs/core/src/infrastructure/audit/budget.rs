@@ -1,6 +1,6 @@
-use capitainerie_common::{AgentId, CoreError, OrganizationId};
-use capitainerie_macros::repository;
 use chrono::{DateTime, Utc};
+use matos_common::{AgentId, CoreError, OrganizationId};
+use matos_macros::repository;
 use uuid::Uuid;
 
 use crate::{

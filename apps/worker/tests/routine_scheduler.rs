@@ -1,8 +1,9 @@
 #![allow(clippy::unwrap_used)]
 
-use capitainerie_common::{CoreError, OrganizationId, RoutineId};
-use capitainerie_core::{
-    CapitainerieUseCase,
+use chrono::{DateTime, Duration, SubsecRound, Utc};
+use matos_common::{CoreError, OrganizationId, RoutineId};
+use matos_core::{
+    MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
@@ -18,11 +19,10 @@ use capitainerie_core::{
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
-use capitainerie_core::{
+use matos_core::{
     domain::agent_identity::{AgentIdentity, ProvisionedClient, ports::AgentIdentityRepository},
     infrastructure::agent_identity::postgres::PgAgentIdentityRepository,
 };
-use chrono::{DateTime, Duration, SubsecRound, Utc};
 use sqlx::PgPool;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -77,7 +77,7 @@ impl McpOAuth for FakeOAuth {
 
 struct Fixture {
     pool: PgPool,
-    usecase: CapitainerieUseCase,
+    usecase: MatosUseCase,
     organization_id: OrganizationId,
 }
 
@@ -108,7 +108,7 @@ async fn fixture() -> Option<Fixture> {
     .execute(&pool)
     .await
     .unwrap();
-    let usecase = CapitainerieUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_local_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     Some(Fixture {
@@ -558,7 +558,7 @@ async fn two_concurrent_ticks_run_a_passage_once() {
         .await;
     let now = now();
     fixture.due_at(routine, now).await;
-    let other = CapitainerieUseCase::with_local_policies(fixture.pool.clone())
+    let other = MatosUseCase::with_local_policies(fixture.pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
 

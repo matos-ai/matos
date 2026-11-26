@@ -1,7 +1,7 @@
 use axum::{Extension, Json, extract::State, http::StatusCode};
-use capitainerie_common::ClientId;
-use capitainerie_core::domain::project::service::CreateProject;
-use capitainerie_handlers::{ApiError, AppState, Caller};
+use matos_common::ClientId;
+use matos_core::domain::project::service::CreateProject;
+use matos_handlers::{ApiError, AppState, Caller};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -24,10 +24,10 @@ pub struct CreateProjectRequest {
     request_body = CreateProjectRequest,
     responses(
         (status = 201, description = "The new project", body = ProjectResponse),
-        (status = 401, description = "Missing or invalid token", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 403, description = "The policy refused the change; agents may not manage projects", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 409, description = "A project of that name exists for this client, whatever the case", body = capitainerie_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Invalid input, or an unknown, archived or foreign client", body = capitainerie_handlers::errors::ApiErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 403, description = "The policy refused the change; agents may not manage projects", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 409, description = "A project of that name exists for this client, whatever the case", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Invalid input, or an unknown, archived or foreign client", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]

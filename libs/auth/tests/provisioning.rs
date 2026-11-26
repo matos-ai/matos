@@ -7,11 +7,11 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, patch, post};
 use axum::{Form, Json, Router};
-use capitainerie_auth::{ClientCredentials, FerrisKeyProvisioner};
-use capitainerie_common::{AgentId, CoreError};
-use capitainerie_core::domain::agent::SecretToken;
-use capitainerie_core::domain::agent_identity::AgentClientId;
-use capitainerie_core::domain::agent_identity::ports::AgentIdentityProvisioner;
+use matos_auth::{ClientCredentials, FerrisKeyProvisioner};
+use matos_common::{AgentId, CoreError};
+use matos_core::domain::agent::SecretToken;
+use matos_core::domain::agent_identity::AgentClientId;
+use matos_core::domain::agent_identity::ports::AgentIdentityProvisioner;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -87,7 +87,7 @@ async fn discovery(State(state): State<AppState>) -> Json<Value> {
 
 async fn token(Form(form): Form<HashMap<String, String>>) -> (StatusCode, Json<Value>) {
     if form["grant_type"] == "client_credentials"
-        && form["client_id"] == "capitainerie-provisioner"
+        && form["client_id"] == "matos-provisioner"
         && form["client_secret"] == "provisioner-secret"
     {
         return (StatusCode::OK, Json(json!({"access_token": ADMIN_TOKEN})));
@@ -202,21 +202,18 @@ async fn start(realm: Realm) -> String {
 fn provisioner(secret: &str) -> FerrisKeyProvisioner {
     FerrisKeyProvisioner::new(
         ClientCredentials {
-            client_id: "capitainerie-provisioner".into(),
+            client_id: "matos-provisioner".into(),
             client_secret: SecretToken::new(secret),
         },
-        "capitainerie-api",
-        "capitainerie-mcp",
+        "matos-api",
+        "matos-mcp",
     )
 }
 
 async fn realm_with_api() -> (Realm, String) {
     let realm = Realm::default();
     let api = realm
-        .add(
-            "capitainerie-api",
-            json!({"service_account_enabled": false}),
-        )
+        .add("matos-api", json!({"service_account_enabled": false}))
         .await;
     (realm, api)
 }
@@ -232,7 +229,7 @@ async fn a_new_agent_gets_a_confidential_client_and_both_exchange_policies() {
     let client_id = agent_client();
 
     let provisioned = provisioner("provisioner-secret")
-        .provision(&issuer, &client_id, "Capitainerie agent Bernard")
+        .provision(&issuer, &client_id, "Matos agent Bernard")
         .await
         .unwrap();
 
@@ -242,7 +239,7 @@ async fn a_new_agent_gets_a_confidential_client_and_both_exchange_policies() {
     assert_eq!(client["service_account_enabled"], true);
     assert_eq!(client["token_exchange_enabled"], true);
     assert_eq!(client["direct_access_grants_enabled"], false);
-    assert_eq!(client["name"], "Capitainerie agent Bernard");
+    assert_eq!(client["name"], "Matos agent Bernard");
     assert_eq!(
         provisioned.secret.expose(),
         format!("secret-of-{}", provisioned.client_uuid)
@@ -250,7 +247,7 @@ async fn a_new_agent_gets_a_confidential_client_and_both_exchange_policies() {
     let policies = realm.policies.lock().await;
     assert!(policies.contains(&(
         provisioned.client_uuid.clone(),
-        "capitainerie-mcp".into(),
+        "matos-mcp".into(),
         false,
         true
     )));
@@ -352,7 +349,7 @@ async fn a_wrong_provisioner_secret_is_refused_without_leaking_it() {
 #[tokio::test]
 async fn set_enabled_patches_the_client() {
     let (realm, _) = realm_with_api().await;
-    let client = realm.add("capitainerie-agent-x", json!({})).await;
+    let client = realm.add("matos-agent-x", json!({})).await;
     let issuer = start(realm.clone()).await;
 
     provisioner("provisioner-secret")
@@ -379,8 +376,8 @@ async fn client_credentials(issuer: &str, client_id: &str, secret: &str) -> Stat
 }
 
 /// Against a real FerrisKey bootstrapped by `scripts/bootstrap-ferriskey.sh`:
-/// `FERRISKEY_ISSUER=http://localhost:3333/realms/capitainerie
-/// PROVISIONER_CLIENT_SECRET=... cargo test -p capitainerie-auth --test
+/// `FERRISKEY_ISSUER=http://localhost:3333/realms/matos
+/// PROVISIONER_CLIENT_SECRET=... cargo test -p matos-auth --test
 /// provisioning -- --ignored`. It leaves one agent client in the realm.
 #[tokio::test]
 #[ignore = "needs a running FerrisKey"]
@@ -391,11 +388,11 @@ async fn a_real_ferriskey_provisions_an_agent_that_can_sign_in() {
     let client_id = AgentClientId::of(AgentId(Uuid::now_v7()));
 
     let first = provisioner
-        .provision(&issuer, &client_id, "Capitainerie agent live test")
+        .provision(&issuer, &client_id, "Matos agent live test")
         .await
         .unwrap();
     let second = provisioner
-        .provision(&issuer, &client_id, "Capitainerie agent live test")
+        .provision(&issuer, &client_id, "Matos agent live test")
         .await
         .unwrap();
     assert_eq!(first, second);

@@ -1,4 +1,4 @@
-use capitainerie_common::{CoreError, OrganizationId, TranscriptId};
+use matos_common::{CoreError, OrganizationId, TranscriptId};
 
 use super::Transcript;
 

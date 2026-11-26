@@ -1,4 +1,4 @@
-use capitainerie_core::domain::integration::{
+use matos_core::domain::integration::{
     ConnectorFailure, InstanceConnection, action::ActionRequest,
 };
 use serde_json::json;

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cluster="capitainerie"
-namespace="${EXECUTOR_NAMESPACE:-capitainerie-tasks}"
-image="${EXECUTOR_IMAGE:-capitainerie-executor:dev}"
+cluster="matos"
+namespace="${EXECUTOR_NAMESPACE:-matos-tasks}"
+image="${EXECUTOR_IMAGE:-matos-executor:dev}"
 
 for tool in kind kubectl docker; do
   command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }

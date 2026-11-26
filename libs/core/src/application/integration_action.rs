@@ -1,9 +1,9 @@
 use std::time::Instant;
 
-use capitainerie_common::{CardId, CoreError, OrganizationId, RunId};
-use capitainerie_macros::transactional;
+use matos_common::{CardId, CoreError, OrganizationId, RunId};
+use matos_macros::transactional;
 
-use super::CapitainerieUseCase;
+use super::MatosUseCase;
 use crate::{
     domain::{
         authorization::{AccessRequest, Action, ResourceKind, Subject, ports::Authorizer, require},
@@ -40,7 +40,7 @@ fn elapsed_ms(started: Instant) -> i64 {
     i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX)
 }
 
-impl CapitainerieUseCase {
+impl MatosUseCase {
     pub async fn perform_integration_action<C: IntegrationConnector>(
         &self,
         context: &ActionContext,
