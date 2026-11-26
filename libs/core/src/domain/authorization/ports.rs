@@ -8,6 +8,19 @@ pub trait Authorizer: Send + Sync {
         &self,
         request: &AccessRequest,
     ) -> impl Future<Output = Result<Decision, CoreError>> + Send;
+
+    fn evaluate_all(
+        &self,
+        requests: &[AccessRequest],
+    ) -> impl Future<Output = Result<Vec<Decision>, CoreError>> + Send {
+        async move {
+            let mut decisions = Vec::with_capacity(requests.len());
+            for request in requests {
+                decisions.push(self.evaluate(request).await?);
+            }
+            Ok(decisions)
+        }
+    }
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]

@@ -52,6 +52,9 @@ config:
     webBase: ""
     # -- GITHUB_API_BASE, for GitHub Enterprise. Empty keeps https://api.github.com.
     apiBase: ""
+  authz:
+    # -- AUTHZ_ENGINE on api, worker and mcp-kanban: `local` (default) decides in process; `authzen` asks the AuthZEN decision point of the organization's FerrisKey realm, as the EXCHANGE_CLIENT_ID client, and denies with `pdp_unavailable` when it cannot answer.
+    engine: local
   integrations:
     # -- INTEGRATIONS_ALLOW_INSECURE_HTTP on api and worker: accept Odoo and n8n instances served over plain http://.
     allowInsecureHttp: false
@@ -141,6 +144,8 @@ mcpKanban:
   publicUrl: http://localhost:4101
   secretEnv:
     - DATABASE_URL
+    - EXCHANGE_CLIENT_ID
+    - EXCHANGE_CLIENT_SECRET
   extraEnv: []
   podAnnotations: {}
   service:

@@ -26,6 +26,8 @@ Matos fait travailler des agents IA **pour le compte d'un utilisateur**. Exemple
 
 ## Besoin 1 : endpoint HTTP AuthZEN (PDP)
 
+**Couvert depuis FerrisKey 0.10.2** (`docker-compose.yml` épinglé sur `0.10.2`, `AUTHZ_ENABLED=true`). Vérifié contre l'image `ghcr.io/ferriskey/ferriskey-api:0.10.2` : `evaluation`, `evaluations` (au plus 100 éléments), `.well-known/authzen-configuration`, gestion du schéma, des politiques (étiquette `managed_by`) et de l'état sous `/realms/{realm}/authz/`. Le PEP porte la permission `evaluate_authorization` (rôle `matos-pdp` du compte de service `matos-api`) ; la gestion demande `manage_authorization`. Le constat et l'attendu ci-dessous sont conservés pour mémoire.
+
 **Constat.** Le endpoint est spécifié dans `docs/design/authz/07-http-authzen.md`, mais `api/` ne l'expose pas : aucune occurrence de `authzen` sous `api/`, sur `main` comme sur `origin/main`. `libs/ferriskey-authz` contient les ports, les entités et le moteur, sans route HTTP.
 
 **Attendu.**

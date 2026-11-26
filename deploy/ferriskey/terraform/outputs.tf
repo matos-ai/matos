@@ -44,3 +44,8 @@ output "provisioner_role_uuid" {
   description = "matos-provisioner; the bootstrap script grants it to the provisioner's service account."
   value       = ferriskey_role.provisioner.role_uuid
 }
+
+output "pdp_role_uuid" {
+  description = "matos-pdp; the bootstrap script grants it to the API's service account."
+  value       = ferriskey_role.pdp.role_uuid
+}

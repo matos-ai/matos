@@ -28,6 +28,7 @@ ADMIN_ROLE_UUID="$(terraform -chdir="${TF_DIR}" output -raw admin_role_uuid)"
 PROVISIONER_CLIENT_ID="$(terraform -chdir="${TF_DIR}" output -raw provisioner_client_id)"
 PROVISIONER_CLIENT_UUID="$(terraform -chdir="${TF_DIR}" output -raw provisioner_client_uuid)"
 PROVISIONER_ROLE_UUID="$(terraform -chdir="${TF_DIR}" output -raw provisioner_role_uuid)"
+PDP_ROLE_UUID="$(terraform -chdir="${TF_DIR}" output -raw pdp_role_uuid)"
 ADMIN_USERNAME="${ADMIN_USERNAME:-demo}"
 
 # What provider 0.1.0 cannot declare: token exchange, resource ownership and
@@ -94,6 +95,23 @@ if ! admin GET "/users/${provisioner_user_id}/roles" \
     admin POST "/users/${provisioner_user_id}/roles/${PROVISIONER_ROLE_UUID}" >/dev/null
 fi
 
+# The API asks the realm's AuthZEN decision point as its own service account,
+# which holds the evaluate permission and nothing else.
+api_account="service-account-matos-api"
+api_user_id="$(admin GET "/users" \
+    | jq -r --arg u "${api_account}" '(if type == "array" then . else .data end)[]? | select(.username == $u) | .id' \
+    | head -1)"
+[ -n "${api_user_id}" ] || { echo "❌ no user ${api_account}" >&2; exit 1; }
+echo "⚖️  ${api_account} -> matos-pdp"
+if ! admin GET "/users/${api_user_id}/roles" \
+    | jq -e '(if type == "array" then . else .data end)[]? | select(.name == "matos-pdp")' >/dev/null; then
+    admin POST "/users/${api_user_id}/roles/${PDP_ROLE_UUID}" >/dev/null
+fi
+
+echo "📜 Cedar schema and policies -> ${REALM} (deploy/ferriskey/authz)"
+FERRISKEY_URL="${FERRISKEY_URL}" REALM="${REALM}" ADMIN_TOKEN="${ADMIN_TOKEN}" \
+    "${REPO_ROOT}/deploy/ferriskey/authz/push.sh"
+
 client_secret() {
     admin GET "/clients/$1/client-secret" | jq -r '.data.client_secret // .client_secret'
 }
@@ -130,6 +148,7 @@ cat <<SUMMARY
      AGENT_CREDENTIALS=${AGENT_CREDENTIALS}
      PROVISIONER_CLIENT_ID=${PROVISIONER_CLIENT_ID}
      PROVISIONER_CLIENT_SECRET=${PROVISIONER_SECRET}
+     AUTHZ_ENGINE=authzen   # optional: ask FerrisKey's AuthZEN decision point instead of the local engine (default: local)
      DELEGATION_KEY=<openssl rand -base64 32, the same for the API and the worker>
      SECRETS_KEY=<openssl rand -base64 32, distinct from DELEGATION_KEY, the same for the API and the worker>
 

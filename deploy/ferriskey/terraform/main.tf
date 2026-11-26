@@ -33,7 +33,7 @@ resource "ferriskey_realm" "organization" {
 resource "ferriskey_realm_settings" "organization" {
   realm = ferriskey_realm.organization.name
 
-  access_token_lifetime  = var.access_token_lifetime
+  access_token_lifetime = var.access_token_lifetime
   # Bounds the user session (`sid`). Every token of the delegation chain is
   # refused once that session ends, whatever its own `exp`: 8 hours lets a
   # local run finish without logging in again (docs/ferriskey-needs.md, need 5).
@@ -70,7 +70,7 @@ resource "ferriskey_client" "api" {
   client_type = "confidential"
 
   public_client                = false
-  service_account_enabled      = false
+  service_account_enabled      = true
   direct_access_grants_enabled = false
 }
 
@@ -119,6 +119,15 @@ resource "ferriskey_role" "provisioner" {
   name        = "matos-provisioner"
   description = "Manages the clients of the crew's agents."
   permissions = ["manage_clients"]
+}
+
+# Lets the API's service account ask the realm's AuthZEN policy decision
+# point, and nothing else; the bootstrap script grants it.
+resource "ferriskey_role" "pdp" {
+  realm       = ferriskey_realm.organization.name
+  name        = "matos-pdp"
+  description = "Asks the realm's authorization decision point."
+  permissions = ["evaluate_authorization"]
 }
 
 # Marks a member as an admin of the organization: only they manage the

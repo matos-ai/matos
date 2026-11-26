@@ -1,5 +1,5 @@
 use clap::Parser;
-use matos_args::{DatabaseArgs, LogArgs, ObservabilityArgs};
+use matos_args::{AuthzArgs, DatabaseArgs, LogArgs, ObservabilityArgs};
 
 #[derive(Debug, Clone, Parser)]
 #[command(name = "matos-mcp-kanban", version)]
@@ -27,6 +27,8 @@ pub struct Args {
         default_value = "matos-agent-writer,matos-agent-captain"
     )]
     pub accepted_agents: Vec<String>,
+    #[command(flatten)]
+    pub authz: AuthzArgs,
     #[command(flatten)]
     pub database: DatabaseArgs,
     #[command(flatten)]
