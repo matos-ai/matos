@@ -1,7 +1,9 @@
 pub mod contribution;
+pub mod guard;
 pub mod harness;
 pub mod ports;
 pub mod report;
+pub mod repository_config;
 
 use std::{fmt, time::Duration};
 
@@ -9,6 +11,7 @@ use chrono::{DateTime, Utc};
 use matos_common::{CoreError, OrganizationId, RunId};
 use serde::{Deserialize, Serialize};
 
+pub use self::guard::PushGuard;
 use self::harness::{ANTIGRAVITY_MODELS, CODEX_MODELS, Harness};
 use crate::domain::{
     agent::SecretToken,
@@ -376,6 +379,7 @@ pub struct TaskSpec {
     /// Only the credentials proxy accepts it; never a real key.
     pub task_token: SecretToken,
     pub commit: CommitSettings,
+    pub push_guard: PushGuard,
 }
 
 /// How a change run commits: as whom, what its message may not contain, and
@@ -457,6 +461,24 @@ pub enum TaskMarker {
         truncated: bool,
     },
     AuditDone,
+    /// The checks refused the diff: nothing was committed or pushed.
+    GuardBlocked {
+        reasons: Vec<String>,
+    },
+    /// The result of the repository's linter, before the commit.
+    Quality {
+        lint: QualityStatus,
+        #[serde(default)]
+        excerpt: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QualityStatus {
+    Passed,
+    Failed,
+    NotRun,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

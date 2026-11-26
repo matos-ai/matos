@@ -75,6 +75,8 @@ pub fn parse_line(line: &str) -> Option<TaskLine> {
 
 #[cfg(test)]
 mod tests {
+    use matos_core::domain::execution::QualityStatus;
+
     use super::*;
 
     async fn lines_of(input: &[u8], max: usize) -> Vec<Line> {
@@ -130,6 +132,32 @@ mod tests {
         assert_eq!(
             parse_line(r#"{"type":"matos","event":"no_changes"}"#),
             Some(TaskLine::Matos(TaskMarker::NoChanges))
+        );
+    }
+
+    #[test]
+    fn the_guard_and_quality_markers_are_parsed() {
+        assert_eq!(
+            parse_line(
+                r#"{"type":"matos","event":"guard_blocked","reasons":["chemin sensible : a","b"]}"#
+            ),
+            Some(TaskLine::Matos(TaskMarker::GuardBlocked {
+                reasons: vec!["chemin sensible : a".into(), "b".into()]
+            }))
+        );
+        assert_eq!(
+            parse_line(r#"{"type":"matos","event":"quality","lint":"failed","excerpt":"a\nb"}"#),
+            Some(TaskLine::Matos(TaskMarker::Quality {
+                lint: QualityStatus::Failed,
+                excerpt: Some("a\nb".into())
+            }))
+        );
+        assert_eq!(
+            parse_line(r#"{"type":"matos","event":"quality","lint":"not_run"}"#),
+            Some(TaskLine::Matos(TaskMarker::Quality {
+                lint: QualityStatus::NotRun,
+                excerpt: None
+            }))
         );
     }
 

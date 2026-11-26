@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::domain::{
     agent::ToolCall,
     execution::{
-        TaskLine, TaskMarker,
+        QualityStatus, TaskLine, TaskMarker,
         harness::{AgentEvent, AgentFinish, Harness},
         report::{ReportAssembler, ReportOutcome},
     },
@@ -108,9 +108,17 @@ pub(super) struct StreamReader {
     report: ReportAssembler,
     plan: ReportAssembler,
     contribution: ReportAssembler,
+    blocked: Option<Vec<String>>,
+    quality: Option<Quality>,
     pending: HashMap<String, PendingCall>,
     order: Vec<String>,
     dirty: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Quality {
+    pub(super) lint: QualityStatus,
+    pub(super) excerpt: Option<String>,
 }
 
 impl StreamReader {
@@ -123,6 +131,8 @@ impl StreamReader {
             report: ReportAssembler::default(),
             plan: ReportAssembler::default(),
             contribution: ReportAssembler::default(),
+            blocked: None,
+            quality: None,
             pending: HashMap::new(),
             order: Vec::new(),
             dirty: false,
@@ -135,6 +145,8 @@ impl StreamReader {
         self.report = ReportAssembler::default();
         self.plan = ReportAssembler::default();
         self.contribution = ReportAssembler::default();
+        self.blocked = None;
+        self.quality = None;
         self.pending.clear();
         self.order.clear();
         self.dirty = true;
@@ -150,6 +162,27 @@ impl StreamReader {
 
     pub(super) fn marker(&self) -> Option<&TaskMarker> {
         self.digest.marker.as_ref()
+    }
+
+    /// Why the checks refused the diff, redacted; `None` when they did not.
+    pub(super) fn blocked(&self) -> Option<Vec<String>> {
+        self.blocked.as_ref().map(|reasons| {
+            reasons
+                .iter()
+                .map(|reason| self.redactor.apply(reason))
+                .collect()
+        })
+    }
+
+    /// The linter's result the task reported, redacted.
+    pub(super) fn quality(&self) -> Option<Quality> {
+        self.quality.as_ref().map(|quality| Quality {
+            lint: quality.lint,
+            excerpt: quality
+                .excerpt
+                .as_deref()
+                .map(|excerpt| self.redactor.apply(excerpt)),
+        })
     }
 
     /// The audit report the output carried, redacted.
@@ -217,6 +250,17 @@ impl StreamReader {
                 truncated,
             }) => {
                 self.report.end(sha256, *bytes, *truncated);
+                self.dirty = true;
+            }
+            TaskLine::Matos(TaskMarker::GuardBlocked { reasons }) => {
+                self.blocked = Some(reasons.clone());
+                self.dirty = true;
+            }
+            TaskLine::Matos(TaskMarker::Quality { lint, excerpt }) => {
+                self.quality = Some(Quality {
+                    lint: *lint,
+                    excerpt: excerpt.clone(),
+                });
                 self.dirty = true;
             }
             TaskLine::Matos(marker) => {
@@ -772,6 +816,34 @@ mod tests {
             reader.marker(),
             Some(&TaskMarker::Pushed { sha: "abc".into() })
         );
+    }
+
+    #[test]
+    fn the_guard_and_quality_markers_are_kept_apart_from_the_final_marker() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new("tok-secret"));
+        reader.accept(&TaskLine::Matos(TaskMarker::Quality {
+            lint: QualityStatus::Failed,
+            excerpt: Some("error tok-secret".into()),
+        }));
+        reader.accept(&TaskLine::Matos(TaskMarker::Pushed { sha: "abc".into() }));
+        assert_eq!(
+            reader.quality(),
+            Some(Quality {
+                lint: QualityStatus::Failed,
+                excerpt: Some("error ***".into())
+            })
+        );
+        assert_eq!(reader.blocked(), None);
+        assert_eq!(
+            reader.marker(),
+            Some(&TaskMarker::Pushed { sha: "abc".into() })
+        );
+        reader.accept(&TaskLine::Matos(TaskMarker::GuardBlocked {
+            reasons: vec!["chemin sensible : tok-secret".into()],
+        }));
+        assert_eq!(reader.blocked(), Some(vec!["chemin sensible : ***".into()]));
+        reader.reset();
+        assert_eq!((reader.blocked(), reader.quality()), (None, None));
     }
 
     #[test]

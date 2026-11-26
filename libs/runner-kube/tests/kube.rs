@@ -14,8 +14,8 @@ use matos_common::RunId;
 use matos_core::domain::{
     agent::SecretToken,
     execution::{
-        CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, RepositoryRef, TaskLine,
-        TaskMarker, TaskOutcome, TaskSpec, ports::TaskRunner,
+        CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, PushGuard, RepositoryRef,
+        TaskLine, TaskMarker, TaskOutcome, TaskSpec, ports::TaskRunner,
     },
 };
 use matos_runner_kube::{KubeRunnerConfig, KubeTaskRunner, job_name};
@@ -44,6 +44,7 @@ fn spec(deadline: Duration) -> TaskSpec {
             leak_terms: String::new(),
             fallback_message: "test".into(),
         },
+        push_guard: PushGuard::default(),
     }
 }
 

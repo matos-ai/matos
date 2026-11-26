@@ -102,6 +102,10 @@ fn environment(config: &KubeRunnerConfig, spec: &TaskSpec, secret: &str) -> Vec<
         plain("COMMIT_AUTHOR_EMAIL", &spec.commit.author.email),
         plain("COMMIT_FALLBACK_MESSAGE", &spec.commit.fallback_message),
         plain("LEAK_TERMS", &spec.commit.leak_terms),
+        plain("GUARD_DENY_PATHS", spec.push_guard.deny_lines()),
+        plain("GUARD_ALLOW_PATHS", spec.push_guard.allow_lines()),
+        plain("GUARD_MAX_FILES", spec.push_guard.max_files.to_string()),
+        plain("GUARD_MAX_LINES", spec.push_guard.max_lines.to_string()),
         plain("MAX_TURNS", spec.max_turns.to_string()),
         plain("PROMPT", &spec.prompt),
         plain("HOME", "/home/executor"),
@@ -296,7 +300,9 @@ mod tests {
 
     use matos_core::domain::{
         agent::SecretToken,
-        execution::{CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, RepositoryRef},
+        execution::{
+            CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, PushGuard, RepositoryRef,
+        },
     };
 
     use super::*;
@@ -322,6 +328,12 @@ mod tests {
                 },
                 leak_terms: "claude-opus-5-5\nmatos".into(),
                 fallback_message: "Fix the bug".into(),
+            },
+            push_guard: PushGuard {
+                deny_paths: vec![".github/workflows/".into(), "*.pem".into()],
+                allow_paths: vec!["docs/".into()],
+                max_files: 80,
+                max_lines: 3000,
             },
         }
     }
@@ -606,6 +618,16 @@ mod tests {
             value("CONTRIBUTION_PATH"),
             "/workspace/.matos/contribution.md"
         );
+    }
+
+    #[test]
+    fn the_push_guard_rules_reach_the_container() {
+        let job = build_job(&config(), &spec(), Some(&proxy())).unwrap();
+        let value = |name| env(&job, name).value.clone().unwrap();
+        assert_eq!(value("GUARD_DENY_PATHS"), ".github/workflows/\n*.pem");
+        assert_eq!(value("GUARD_ALLOW_PATHS"), "docs/");
+        assert_eq!(value("GUARD_MAX_FILES"), "80");
+        assert_eq!(value("GUARD_MAX_LINES"), "3000");
     }
 
     #[test]

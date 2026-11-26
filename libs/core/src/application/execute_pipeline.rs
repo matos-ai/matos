@@ -16,7 +16,7 @@ use super::{
     MatosUseCase,
     agent_run::ExecutionAgentSource,
     agent_task_pipeline::agent_identity,
-    execute_stream::{Digest, Redactor, StreamReader, truncate_chars},
+    execute_stream::{Digest, Quality, Redactor, StreamReader, truncate_chars},
     pipeline::{claim_decision, new_step, retry_transient},
 };
 use crate::{
@@ -30,14 +30,16 @@ use crate::{
         event::ports::EventEmitter,
         execution::{
             CommitAuthor, CommitSettings, DraftPullRequest, EXECUTOR_AGENT, ExecutionMode,
-            ExecutorModel, PLAN_PATH, REPORT_PATH, RepositoryRef, TaskGrant, TaskLine, TaskMarker,
-            TaskOutcome, TaskSpec, agent_executor_model, agent_harness,
+            ExecutorModel, PLAN_PATH, PushGuard, QualityStatus, REPORT_PATH, RepositoryRef,
+            TaskGrant, TaskLine, TaskMarker, TaskOutcome, TaskSpec, agent_executor_model,
+            agent_harness,
             contribution::{
                 CONTRIBUTION_PATH, Contribution, LeakGuard, RunTraces, change_branch,
                 fallback_contribution,
             },
             ports::{CodeHost, TaskGrantRepository, TaskRunner},
             report::ReportOutcome,
+            repository_config::{REPOSITORY_CONFIG_PATH, RepositoryConfig},
         },
         member::Member,
         provider::{ModelAssignments, ModelRef},
@@ -66,6 +68,11 @@ const BRANCH_MISMATCH_REASON: &str = "branche absente ou différente";
 const NO_REPORT_REASON: &str = "no_report";
 const MISSING_REPORT: &str = "aucun rapport produit";
 const AUDIT_END_MISSING: &str = "l'audit s'est terminé sans signaler sa fin";
+const GUARD_BLOCKED_REASON: &str = "rien n'a été poussé, les garde-fous ont bloqué le diff";
+const GUARD_REASONS_MAX: usize = 20;
+const CONFIG_INVALID_NOTE: &str =
+    "Le fichier .matos.toml du dépôt est invalide : les règles par défaut ont été appliquées.";
+const LINT_EXCERPT_MAX_CHARS: usize = 2_000;
 
 pub enum Executor<T, H> {
     Ready { runner: T, host: H },
@@ -237,6 +244,7 @@ struct Prepared {
     agent: Option<ExecutionAgentSource>,
     redactor: Redactor,
     guard: LeakGuard,
+    config_invalid: bool,
 }
 
 impl Prepared {
@@ -275,6 +283,7 @@ struct Extras {
     plan: Option<String>,
     /// Where the pull request's text came from: `run`, or `fallback: <why>`.
     contribution: Option<String>,
+    config_invalid: bool,
 }
 
 impl Extras {
@@ -539,7 +548,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             .await?;
         let started = Instant::now();
 
-        let prepared = match self.prepare(context, &model).await {
+        let prepared = match self.prepare(context, host, &model).await {
             Ok(prepared) => prepared,
             Err(error) if is_infrastructure(&error) => return Err(error),
             Err(error) => {
@@ -556,6 +565,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         };
         step.usage.model = prepared.spec.model.as_str().to_owned();
         extras.mode = prepared.spec.mode;
+        extras.config_invalid = prepared.config_invalid;
         if prepared.spec.mode == ExecutionMode::Change {
             extras.branch = Some(prepared.spec.branch.clone());
         }
@@ -608,6 +618,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
     async fn prepare(
         &self,
         context: &ExecutionContext,
+        host: &H,
         model: &ExecutorModel,
     ) -> Result<Prepared, CoreError> {
         let run_id = context.run.id;
@@ -672,6 +683,13 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         });
         let branch = change_branch(card.title.as_str(), run_id, &guard);
         let (token, branch) = self.task_token(context, &model, mode, branch).await?;
+        let (push_guard, config_invalid) = match mode {
+            ExecutionMode::Change => {
+                self.push_guard(host, organization_id, installation.installation_id, context)
+                    .await?
+            }
+            ExecutionMode::Audit => (PushGuard::default(), false),
+        };
         let commit = CommitSettings {
             author: self.commit_author(context, &app.slug).await?,
             leak_terms: guard.as_lines(),
@@ -689,6 +707,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             mode,
             task_token: SecretToken::new(token.as_str()),
             commit,
+            push_guard,
         };
         Ok(Prepared {
             spec,
@@ -698,6 +717,36 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             agent,
             redactor: Redactor::new(&token),
             guard,
+            config_invalid,
+        })
+    }
+
+    /// The rules of the repository's `.matos.toml`, read from the base
+    /// branch; the defaults, flagged, when the file is invalid.
+    async fn push_guard(
+        &self,
+        host: &H,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        context: &ExecutionContext,
+    ) -> Result<(PushGuard, bool), CoreError> {
+        let text = retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
+            host.file_at(
+                organization_id,
+                installation_id,
+                &context.repository,
+                &context.base_branch,
+                REPOSITORY_CONFIG_PATH,
+            )
+        })
+        .await?;
+        Ok(match text.as_deref().map(RepositoryConfig::parse) {
+            None => (PushGuard::default(), false),
+            Some(Ok(config)) => (PushGuard::from_config(&config.guard), false),
+            Some(Err(error)) => {
+                tracing::warn!(run_id = %context.run.id, %error, "the repository configuration is invalid");
+                (PushGuard::default(), true)
+            }
         })
     }
 
@@ -864,9 +913,10 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         let mut progress = progress.lock().await;
         match outcome {
             TaskOutcome::DeadlineExceeded => Err(CoreError::Internal(DEADLINE_REASON.into())),
-            TaskOutcome::Failed { reason } => Err(CoreError::Internal(
-                prepared.redactor.apply(&reason),
-            )),
+            TaskOutcome::Failed { reason } => match progress.reader.blocked() {
+                Some(reasons) => Err(CoreError::Invalid(blocked_reason(&reasons))),
+                None => Err(CoreError::Internal(prepared.redactor.apply(&reason))),
+            },
             TaskOutcome::Succeeded if prepared.spec.mode == ExecutionMode::Audit => {
                 match progress.reader.marker() {
                     Some(TaskMarker::AuditDone) => audited(&progress.reader),
@@ -886,8 +936,9 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                                 progress.reader.contribution().as_deref(),
                                 progress.reader.snapshot().summary.as_deref(),
                             );
+                            let quality = quality_of(&prepared.guard, progress.reader.quality());
                             let url = self
-                                .open_pull_request(host, prepared, &contribution)
+                                .open_pull_request(host, prepared, &contribution, &quality)
                                 .await?;
                             progress.extras.contribution = Some(source);
                             progress.extras.pull_request = Some(url.clone());
@@ -1005,9 +1056,14 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         host: &H,
         prepared: &Prepared,
         contribution: &Contribution,
+        quality: &Quality,
     ) -> Result<String, CoreError> {
         let title = prepared.redactor.apply(&contribution.title);
-        let body = defang_mentions(&prepared.redactor.apply(&contribution.body));
+        let body = defang_mentions(&format!(
+            "{}{}",
+            prepared.redactor.apply(&contribution.body).trim_end(),
+            quality_section(quality)
+        ));
         let pull_request =
             retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
                 host.open_draft_pr(
@@ -1065,7 +1121,12 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                         .map(|base| format!("{}/artifacts", base.trim_end_matches('/'))),
                 },
             ),
-            _ => comment_body(&finished.result, reason.as_deref(), &finished.digest),
+            _ => comment_body(
+                &finished.result,
+                reason.as_deref(),
+                &finished.digest,
+                finished.extras.config_invalid,
+            ),
         };
         let body = defang_mentions(&truncate_chars(
             &finished.redactor.apply(&body),
@@ -1324,8 +1385,14 @@ fn comment_body(
     result: &Result<Finish, CoreError>,
     reason: Option<&str>,
     digest: &Digest,
+    config_invalid: bool,
 ) -> String {
     let summary = digest.summary.as_deref().unwrap_or("");
+    let note = if config_invalid {
+        format!("{CONFIG_INVALID_NOTE}\n\n")
+    } else {
+        String::new()
+    };
     let body = match result {
         Ok(Finish::Pushed {
             pull_request,
@@ -1335,18 +1402,68 @@ fn comment_body(
                 .as_deref()
                 .map(|why| format!("\n\nTitre et description de secours : {why}."))
                 .unwrap_or_default();
-            format!("Pull request ouverte en brouillon : {pull_request}{fallback}\n\n{summary}")
+            format!(
+                "Pull request ouverte en brouillon : {pull_request}{fallback}\n\n{note}{summary}"
+            )
         }
         Ok(Finish::NoChanges) => {
-            format!("Aucun changement : rien n'a été modifié dans le dépôt.\n\n{summary}")
+            format!("Aucun changement : rien n'a été modifié dans le dépôt.\n\n{note}{summary}")
         }
         Ok(Finish::Audited { .. }) => summary.to_owned(),
         Err(_) => format!(
-            "L'exécution a échoué : {}",
-            reason.unwrap_or("raison inconnue")
+            "L'exécution a échoué : {}{}",
+            reason.unwrap_or("raison inconnue"),
+            if config_invalid {
+                format!("\n\n{CONFIG_INVALID_NOTE}")
+            } else {
+                String::new()
+            }
         ),
     };
     body.trim_end().to_owned()
+}
+
+fn blocked_reason(reasons: &[String]) -> String {
+    let listed = reasons
+        .iter()
+        .take(GUARD_REASONS_MAX)
+        .map(|reason| format!("\n- {reason}"))
+        .collect::<String>();
+    let more = reasons.len().saturating_sub(GUARD_REASONS_MAX);
+    let more = if more > 0 {
+        format!("\n- et {more} autres")
+    } else {
+        String::new()
+    };
+    format!("{GUARD_BLOCKED_REASON} :{listed}{more}")
+}
+
+/// What the task reported of the linter, without an excerpt that names what
+/// may not leave the platform; a task that reported nothing did not run it.
+fn quality_of(guard: &LeakGuard, reported: Option<Quality>) -> Quality {
+    let mut quality = reported.unwrap_or(Quality {
+        lint: QualityStatus::NotRun,
+        excerpt: None,
+    });
+    quality.excerpt = quality
+        .excerpt
+        .map(|excerpt| truncate_chars(excerpt.trim(), LINT_EXCERPT_MAX_CHARS))
+        .filter(|excerpt| !excerpt.is_empty() && guard.passes(excerpt));
+    quality
+}
+
+fn quality_section(quality: &Quality) -> String {
+    match (quality.lint, quality.excerpt.as_deref()) {
+        (QualityStatus::Passed, _) => "\n\n## Checks\n\nLint: passed".to_owned(),
+        (QualityStatus::Failed, Some(excerpt)) => format!(
+            "\n\n## Checks\n\nLint: failed\n\n```\n{}\n```",
+            excerpt.replace("```", "'''")
+        ),
+        (QualityStatus::Failed, None) => "\n\n## Checks\n\nLint: failed".to_owned(),
+        (QualityStatus::NotRun, _) => {
+            "\n\n## Checks\n\nLint: not run, the toolchain is not available".to_owned()
+        }
+    }
 }
 
 /// The title and body of the pull request, with where they came from: the
