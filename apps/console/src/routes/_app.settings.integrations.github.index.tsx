@@ -8,14 +8,21 @@ const BANNERS: Record<GithubReturn, string> = {
 }
 
 export const Route = createFileRoute('/_app/settings/integrations/github/')({
-	validateSearch: (search): { retour?: GithubReturn } =>
-		search.retour === 'app' || search.retour === 'installation'
-			? { retour: search.retour }
-			: {},
+	validateSearch: (search): { retour?: GithubReturn; compte?: string } =>
+		typeof search.compte === 'string' && search.compte !== ''
+			? { compte: search.compte }
+			: search.retour === 'app' || search.retour === 'installation'
+				? { retour: search.retour }
+				: {},
 	component: GithubRoute,
 })
 
 function GithubRoute() {
-	const { retour } = Route.useSearch()
-	return <GithubPage banner={retour ? BANNERS[retour] : undefined} />
+	const { retour, compte } = Route.useSearch()
+	const banner = compte
+		? `Compte GitHub connecté : @${compte}`
+		: retour
+			? BANNERS[retour]
+			: undefined
+	return <GithubPage banner={banner} />
 }

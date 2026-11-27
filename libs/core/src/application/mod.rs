@@ -12,6 +12,7 @@ mod document;
 mod execute_pipeline;
 mod execute_stream;
 mod execution;
+mod github_user;
 mod inbox;
 mod integration;
 mod integration_action;

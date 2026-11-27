@@ -15,6 +15,7 @@ pub mod delegation;
 pub mod document;
 pub mod event;
 pub mod execution;
+pub mod github_user;
 pub mod inbox;
 pub mod integration;
 pub mod label;

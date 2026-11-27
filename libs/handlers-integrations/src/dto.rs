@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
-use matos_core::domain::execution::{GithubAppSummary, GithubInstallation, RepositoryListing};
+use matos_core::domain::{
+    execution::{GithubAppSummary, GithubInstallation, RepositoryListing},
+    github_user::GithubConnectionStatus,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -134,4 +137,29 @@ impl From<&RepositoryListing> for RepositoryResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RepositoryListResponse {
     pub repositories: Vec<RepositoryResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GithubConnectionResponse {
+    pub connected: bool,
+    pub login: Option<String>,
+    pub connected_at: Option<DateTime<Utc>>,
+}
+
+impl From<GithubConnectionStatus> for GithubConnectionResponse {
+    fn from(status: GithubConnectionStatus) -> Self {
+        Self {
+            connected: status.connected,
+            login: status.login,
+            connected_at: status.connected_at,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ConnectGithubUserRequest {
+    /// The OAuth `code` GitHub returns with the redirect.
+    pub code: String,
+    /// The `state` of the authorize URL, returned untouched by GitHub.
+    pub state: String,
 }

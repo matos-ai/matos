@@ -22,6 +22,7 @@ pub struct InvalidState;
 pub enum StatePurpose {
     Install,
     Manifest,
+    UserConnect,
 }
 
 impl StatePurpose {
@@ -29,6 +30,7 @@ impl StatePurpose {
         match self {
             Self::Install => "install",
             Self::Manifest => "manifest",
+            Self::UserConnect => "user-connect",
         }
     }
 }
@@ -204,6 +206,8 @@ mod tests {
         for (issued, other) in [
             (StatePurpose::Install, StatePurpose::Manifest),
             (StatePurpose::Manifest, StatePurpose::Install),
+            (StatePurpose::UserConnect, StatePurpose::Install),
+            (StatePurpose::Install, StatePurpose::UserConnect),
         ] {
             let state = signer(1).sign(issued, organization, "user-1", now);
             assert!(

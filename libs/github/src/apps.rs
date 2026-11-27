@@ -9,6 +9,7 @@ use matos_core::{
             DraftPullRequest, GithubAppCredentials, PullRequestUrl, RepositoryIssue,
             RepositoryListing, RepositoryRef, ports::CodeHost,
         },
+        github_user::{GithubUser, UserTokens, ports::GithubUserOAuth},
     },
 };
 use reqwest::header::{ACCEPT, USER_AGENT};
@@ -167,6 +168,12 @@ impl GithubApps {
             .ok_or_else(|| CoreError::Invalid(APP_MISSING.into()))
     }
 
+    async fn for_member(&self, organization_id: OrganizationId) -> Result<GithubClient, CoreError> {
+        self.client(organization_id)
+            .await?
+            .ok_or_else(|| CoreError::Conflict(APP_MISSING.into()))
+    }
+
     pub async fn default_branch(
         &self,
         organization_id: OrganizationId,
@@ -301,6 +308,92 @@ impl CodeHost for GithubApps {
             .required(organization_id)
             .await?
             .create_draft_pr(installation_id, &pull_request)
+            .await?)
+    }
+
+    async fn open_draft_pr_as_member(
+        &self,
+        organization_id: OrganizationId,
+        token: &SecretToken,
+        pull_request: DraftPullRequest,
+    ) -> Result<PullRequestUrl, CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .create_draft_pr_as_user(token.expose(), &pull_request)
+            .await?)
+    }
+
+    async fn member_can_push(
+        &self,
+        organization_id: OrganizationId,
+        token: &SecretToken,
+        repository: &RepositoryRef,
+    ) -> Result<bool, CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .user_can_push(token.expose(), repository)
+            .await?)
+    }
+
+    async fn refresh_user_token(
+        &self,
+        organization_id: OrganizationId,
+        refresh_token: &SecretToken,
+    ) -> Result<UserTokens, CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .refresh_user_token(refresh_token.expose())
+            .await?
+            .into_tokens())
+    }
+}
+
+impl GithubUserOAuth for GithubApps {
+    async fn authorize_url(
+        &self,
+        organization_id: OrganizationId,
+        state: &str,
+    ) -> Result<String, CoreError> {
+        Ok(self.for_member(organization_id).await?.authorize_url(state))
+    }
+
+    async fn exchange_code(
+        &self,
+        organization_id: OrganizationId,
+        code: &str,
+    ) -> Result<UserTokens, CoreError> {
+        Ok(self
+            .for_member(organization_id)
+            .await?
+            .exchange_user_code(code)
+            .await?
+            .into_tokens())
+    }
+
+    async fn user(
+        &self,
+        organization_id: OrganizationId,
+        access_token: &SecretToken,
+    ) -> Result<GithubUser, CoreError> {
+        Ok(self
+            .for_member(organization_id)
+            .await?
+            .authenticated_user(access_token.expose())
+            .await?)
+    }
+
+    async fn revoke(
+        &self,
+        organization_id: OrganizationId,
+        access_token: &SecretToken,
+    ) -> Result<(), CoreError> {
+        Ok(self
+            .for_member(organization_id)
+            .await?
+            .revoke_user_grant(access_token.expose())
             .await?)
     }
 }

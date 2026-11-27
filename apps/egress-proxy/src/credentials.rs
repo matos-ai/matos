@@ -44,6 +44,13 @@ pub trait Credentials: Send + Sync + 'static {
         repository: &RepositoryRef,
         mode: ExecutionMode,
     ) -> impl Future<Output = Result<Option<SecretToken>, CredentialsError>> + Send;
+
+    /// The member's own GitHub access token, read as stored: never refreshed here.
+    fn member_github_token(
+        &self,
+        organization_id: OrganizationId,
+        subject: &str,
+    ) -> impl Future<Output = Result<Option<SecretToken>, CredentialsError>> + Send;
 }
 
 pub struct Live {
@@ -115,5 +122,16 @@ impl Credentials for Live {
         }
         .map_err(CredentialsError::from_display)?;
         Ok(Some(token.token))
+    }
+
+    async fn member_github_token(
+        &self,
+        organization_id: OrganizationId,
+        subject: &str,
+    ) -> Result<Option<SecretToken>, CredentialsError> {
+        self.usecase
+            .member_git_access_token(organization_id, subject)
+            .await
+            .map_err(CredentialsError::from_display)
     }
 }

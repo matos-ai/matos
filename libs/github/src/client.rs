@@ -7,6 +7,7 @@ use matos_core::domain::{
         DraftPullRequest, GithubAppCredentials, PullRequestUrl, RepositoryIssue, RepositoryListing,
         RepositoryRef,
     },
+    github_user::{GithubUser, UserTokens},
 };
 use reqwest::{
     RequestBuilder, Response,
@@ -77,12 +78,34 @@ impl fmt::Debug for GithubApp {
     }
 }
 
-/// A user-to-server token: used once to check an installation, never stored.
-pub struct UserToken(SecretToken);
+pub struct UserToken {
+    token: SecretToken,
+    expires_at: Option<DateTime<Utc>>,
+    refresh_token: Option<SecretToken>,
+    refresh_expires_at: Option<DateTime<Utc>>,
+}
+
+impl UserToken {
+    pub fn access_token(&self) -> &SecretToken {
+        &self.token
+    }
+
+    pub fn into_tokens(self) -> UserTokens {
+        UserTokens {
+            access_token: self.token,
+            expires_at: self.expires_at,
+            refresh_token: self.refresh_token,
+            refresh_expires_at: self.refresh_expires_at,
+        }
+    }
+}
 
 impl fmt::Debug for UserToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("UserToken").field(&"***").finish()
+        f.debug_struct("UserToken")
+            .field("token", &"***")
+            .field("expires_at", &self.expires_at)
+            .finish_non_exhaustive()
     }
 }
 
@@ -116,7 +139,27 @@ struct TokenResponse {
 #[derive(Deserialize)]
 struct OAuthResponse {
     access_token: Option<String>,
+    expires_in: Option<i64>,
+    refresh_token: Option<String>,
+    refresh_token_expires_in: Option<i64>,
     error: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UserProfile {
+    id: i64,
+    login: String,
+}
+
+#[derive(Deserialize)]
+struct RepositoryPermissions {
+    #[serde(default)]
+    push: bool,
+}
+
+#[derive(Deserialize)]
+struct RepositoryAccess {
+    permissions: Option<RepositoryPermissions>,
 }
 
 #[derive(Deserialize)]
@@ -469,7 +512,7 @@ impl GithubClient {
         token: &UserToken,
         account: &InstallationAccount,
     ) -> Result<bool, GithubError> {
-        let authorization = format!("Bearer {}", token.0.expose());
+        let authorization = format!("Bearer {}", token.token.expose());
         match account.kind {
             AccountKind::Organization => {
                 let response = Self::send(
@@ -570,32 +613,121 @@ impl GithubClient {
         }
     }
 
-    /// Exchanges the `code` GitHub appends to the setup redirect when the App
-    /// asks for user authorization during installation.
-    pub async fn exchange_user_code(&self, code: &str) -> Result<UserToken, GithubError> {
-        let url = format!(
-            "{}/login/oauth/access_token",
-            self.app.web_base.trim_end_matches('/')
-        );
+    fn oauth_url(&self, path: &str) -> String {
+        format!("{}{path}", self.app.web_base.trim_end_matches('/'))
+    }
+
+    async fn request_user_token(&self, grant: Value) -> Result<UserToken, GithubError> {
+        let mut body = json!({
+            "client_id": self.app.client_id,
+            "client_secret": self.app.client_secret.expose(),
+        });
+        if let (Some(body), Value::Object(grant)) = (body.as_object_mut(), grant) {
+            body.extend(grant);
+        }
         let response = Self::send(
             self.http
-                .post(url)
+                .post(self.oauth_url("/login/oauth/access_token"))
                 .header(ACCEPT, "application/json")
                 .header(USER_AGENT, AGENT)
-                .json(&json!({
-                    "client_id": self.app.client_id,
-                    "client_secret": self.app.client_secret.expose(),
-                    "code": code,
-                })),
+                .json(&body),
         )
         .await?;
         let exchanged: OAuthResponse = Self::decode(response).await?;
-        match (exchanged.access_token, exchanged.error) {
-            (Some(token), _) => Ok(UserToken(SecretToken::new(token))),
-            (None, error) => Err(GithubError::Status {
+        let Some(token) = exchanged.access_token else {
+            return Err(GithubError::Status {
                 status: 400,
-                message: error.unwrap_or_else(|| "no access token returned".to_owned()),
-            }),
+                message: exchanged
+                    .error
+                    .unwrap_or_else(|| "no access token returned".to_owned()),
+            });
+        };
+        let now = Utc::now();
+        let expiry = |seconds: Option<i64>| seconds.map(|seconds| now + Duration::seconds(seconds));
+        Ok(UserToken {
+            token: SecretToken::new(token),
+            expires_at: expiry(exchanged.expires_in),
+            refresh_token: exchanged.refresh_token.map(SecretToken::new),
+            refresh_expires_at: expiry(exchanged.refresh_token_expires_in),
+        })
+    }
+
+    pub async fn exchange_user_code(&self, code: &str) -> Result<UserToken, GithubError> {
+        self.request_user_token(json!({"code": code})).await
+    }
+
+    pub async fn refresh_user_token(&self, refresh_token: &str) -> Result<UserToken, GithubError> {
+        self.request_user_token(json!({
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }))
+        .await
+    }
+
+    pub fn authorize_url(&self, state: &str) -> String {
+        self.oauth_url(&format!(
+            "/login/oauth/authorize?client_id={}&state={}",
+            encode_segment(&self.app.client_id),
+            encode_segment(state)
+        ))
+    }
+
+    pub async fn authenticated_user(&self, access_token: &str) -> Result<GithubUser, GithubError> {
+        let response = Self::send(
+            self.request(
+                self.http
+                    .get(self.url("/user"))
+                    .header(AUTHORIZATION, format!("Bearer {access_token}")),
+            ),
+        )
+        .await?;
+        let user: UserProfile = Self::decode(response).await?;
+        Ok(GithubUser {
+            id: user.id,
+            login: user.login,
+        })
+    }
+
+    pub async fn user_can_push(
+        &self,
+        access_token: &str,
+        repository: &RepositoryRef,
+    ) -> Result<bool, GithubError> {
+        let response = Self::send(
+            self.request(
+                self.http
+                    .get(self.url(&format!(
+                        "/repos/{}/{}",
+                        repository.owner(),
+                        repository.name()
+                    )))
+                    .header(AUTHORIZATION, format!("Bearer {access_token}")),
+            ),
+        )
+        .await;
+        match response {
+            Ok(response) => Ok(Self::decode::<RepositoryAccess>(response)
+                .await?
+                .permissions
+                .is_some_and(|permissions| permissions.push)),
+            Err(GithubError::Status { status: 404, .. }) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn revoke_user_grant(&self, access_token: &str) -> Result<(), GithubError> {
+        let response = Self::send(
+            self.request(
+                self.http
+                    .delete(self.url(&format!("/applications/{}/grant", self.app.client_id)))
+                    .basic_auth(&self.app.client_id, Some(self.app.client_secret.expose()))
+                    .json(&json!({"access_token": access_token})),
+            ),
+        )
+        .await;
+        match response {
+            Ok(_) | Err(GithubError::Status { status: 404, .. }) => Ok(()),
+            Err(error) => Err(error),
         }
     }
 
@@ -611,7 +743,7 @@ impl GithubClient {
                 self.request(
                     self.http
                         .get(&url)
-                        .header(AUTHORIZATION, format!("Bearer {}", token.0.expose())),
+                        .header(AUTHORIZATION, format!("Bearer {}", token.token.expose())),
                 ),
             )
             .await?;
@@ -784,8 +916,26 @@ impl GithubClient {
         installation_id: i64,
         pull_request: &DraftPullRequest,
     ) -> Result<PullRequestUrl, GithubError> {
+        let token = self
+            .token_for(installation_id, Some(&pull_request.repository))
+            .await?;
+        self.open_draft_pr(token.token.expose(), pull_request).await
+    }
+
+    pub async fn create_draft_pr_as_user(
+        &self,
+        access_token: &str,
+        pull_request: &DraftPullRequest,
+    ) -> Result<PullRequestUrl, GithubError> {
+        self.open_draft_pr(access_token, pull_request).await
+    }
+
+    async fn open_draft_pr(
+        &self,
+        bearer: &str,
+        pull_request: &DraftPullRequest,
+    ) -> Result<PullRequestUrl, GithubError> {
         let repository = &pull_request.repository;
-        let token = self.token_for(installation_id, Some(repository)).await?;
         let pulls_url = self.url(&format!(
             "/repos/{}/{}/pulls",
             repository.owner(),
@@ -795,7 +945,7 @@ impl GithubClient {
             self.request(
                 self.http
                     .post(&pulls_url)
-                    .header(AUTHORIZATION, format!("Bearer {}", token.token.expose()))
+                    .header(AUTHORIZATION, format!("Bearer {bearer}"))
                     .json(&json!({
                         "title": pull_request.title,
                         "head": pull_request.head,
@@ -816,7 +966,7 @@ impl GithubClient {
                 message,
             }) if message.contains(PULL_REQUEST_EXISTS) => {
                 match self
-                    .open_pull_request_of(&pulls_url, &token, repository, &pull_request.head)
+                    .open_pull_request_of(&pulls_url, bearer, repository, &pull_request.head)
                     .await?
                 {
                     Some(url) => Ok(url),
@@ -833,7 +983,7 @@ impl GithubClient {
     async fn open_pull_request_of(
         &self,
         pulls_url: &str,
-        token: &InstallationToken,
+        bearer: &str,
         repository: &RepositoryRef,
         branch: &str,
     ) -> Result<Option<PullRequestUrl>, GithubError> {
@@ -845,7 +995,7 @@ impl GithubClient {
                         ("head", format!("{}:{branch}", repository.owner())),
                         ("state", "open".to_owned()),
                     ])
-                    .header(AUTHORIZATION, format!("Bearer {}", token.token.expose())),
+                    .header(AUTHORIZATION, format!("Bearer {bearer}")),
             ),
         )
         .await?;
@@ -964,6 +1114,12 @@ mod tests {
         oauth_bodies: Vec<Value>,
         oauth_reply: Option<Value>,
         user_auth: Vec<String>,
+        user_id: i64,
+        push_allowed: bool,
+        repo_auth: Vec<String>,
+        pull_auth: Vec<String>,
+        grant_requests: Vec<(String, Value)>,
+        grant_status: Option<u16>,
     }
 
     type Shared = Arc<StdMutex<Recorded>>;
@@ -1033,7 +1189,9 @@ mod tests {
             )
                 .into_response();
         }
-        assert_eq!(headers["authorization"], "Bearer ghs_secret1");
+        recorded
+            .pull_auth
+            .push(headers["authorization"].to_str().unwrap().to_owned());
         recorded.pull_bodies.push(body);
         Json(json!({"html_url": "https://github.com/acme/api/pull/9"})).into_response()
     }
@@ -1047,8 +1205,37 @@ mod tests {
         Json(Value::Array(recorded.listed_pulls.clone()))
     }
 
-    async fn repo() -> Json<Value> {
-        Json(json!({"default_branch": "trunk"}))
+    async fn repo(State(shared): State<Shared>, headers: HeaderMap) -> impl IntoResponse {
+        let mut recorded = shared.lock().unwrap();
+        recorded
+            .repo_auth
+            .push(headers["authorization"].to_str().unwrap().to_owned());
+        if recorded
+            .repo_auth
+            .last()
+            .is_some_and(|auth| auth == "Bearer hidden")
+        {
+            return (AxumStatus::NOT_FOUND, Json(json!({"message": "Not Found"}))).into_response();
+        }
+        Json(json!({
+            "default_branch": "trunk",
+            "permissions": {"push": recorded.push_allowed},
+        }))
+        .into_response()
+    }
+
+    async fn revoke_grant(
+        State(shared): State<Shared>,
+        axum::extract::Path(client_id): axum::extract::Path<String>,
+        headers: HeaderMap,
+        Json(body): Json<Value>,
+    ) -> impl IntoResponse {
+        let mut recorded = shared.lock().unwrap();
+        recorded.grant_requests.push((
+            format!("{client_id} {}", headers["authorization"].to_str().unwrap()),
+            body,
+        ));
+        AxumStatus::from_u16(recorded.grant_status.unwrap_or(204)).unwrap()
     }
 
     async fn installation(
@@ -1090,7 +1277,8 @@ mod tests {
             .user_login
             .clone()
             .unwrap_or_default();
-        Json(json!({"login": login}))
+        let id = shared.lock().unwrap().user_id;
+        Json(json!({"id": id, "login": login}))
     }
 
     async fn git_ref(
@@ -1180,6 +1368,10 @@ mod tests {
             .route("/app/installations/{id}/access_tokens", post(issue_token))
             .route("/installation/repositories", get(repositories))
             .route("/repos/{owner}/{repo}", get(repo))
+            .route(
+                "/applications/{client_id}/grant",
+                axum::routing::delete(revoke_grant),
+            )
             .route("/repos/{owner}/{repo}/pulls", post(pulls).get(list_pulls))
             .with_state(Arc::clone(&shared));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1258,7 +1450,17 @@ mod tests {
         let app = GithubApp::new(&leaky, &GithubBases::default()).unwrap();
         assert!(!format!("{app:?}").contains("pem-leak"));
         assert!(!format!("{app:?}").contains("oauth-leak"));
-        assert!(!format!("{:?}", UserToken(SecretToken::new("ghu_leak"))).contains("ghu_leak"));
+        let user = UserToken {
+            token: SecretToken::new("ghu_leak"),
+            expires_at: None,
+            refresh_token: Some(SecretToken::new("ghr_leak")),
+            refresh_expires_at: None,
+        };
+        let shown = format!("{user:?}");
+        assert!(
+            !shown.contains("ghu_leak") && !shown.contains("ghr_leak"),
+            "{shown}"
+        );
     }
 
     #[tokio::test]
@@ -1266,7 +1468,7 @@ mod tests {
         let shared = Shared::default();
         let client = serve(Arc::clone(&shared)).await;
         let token = client.exchange_user_code("the-code").await.unwrap();
-        assert_eq!(token.0.expose(), "ghu_secret");
+        assert_eq!(token.access_token().expose(), "ghu_secret");
         assert_eq!(
             shared.lock().unwrap().oauth_bodies[0],
             json!({"client_id": "Iv1.abc", "client_secret": "oauth-secret", "code": "the-code"})
@@ -1715,5 +1917,165 @@ mod tests {
         let client = GithubClient::new(app_for("http://127.0.0.1:1")).unwrap();
         let error = CoreError::from(client.list_repositories(5).await.unwrap_err());
         assert!(matches!(error, CoreError::Internal(_)));
+    }
+
+    #[tokio::test]
+    async fn the_expiries_of_a_user_token_are_kept_as_absolute_times() {
+        let shared = Shared::default();
+        shared.lock().unwrap().oauth_reply = Some(json!({
+            "access_token": "ghu_new",
+            "expires_in": 28800,
+            "refresh_token": "ghr_new",
+            "refresh_token_expires_in": 15811200,
+        }));
+        let client = serve(Arc::clone(&shared)).await;
+        let before = Utc::now();
+        let tokens = client.exchange_user_code("c").await.unwrap().into_tokens();
+        assert_eq!(tokens.access_token.expose(), "ghu_new");
+        assert_eq!(tokens.refresh_token.unwrap().expose(), "ghr_new");
+        let access_ttl = tokens.expires_at.unwrap() - before;
+        assert!((Duration::seconds(28790)..=Duration::seconds(28810)).contains(&access_ttl));
+        let refresh_ttl = tokens.refresh_expires_at.unwrap() - before;
+        assert!(refresh_ttl > Duration::seconds(15811000));
+    }
+
+    #[tokio::test]
+    async fn a_token_without_expiry_has_none() {
+        let client = serve(Shared::default()).await;
+        let tokens = client.exchange_user_code("c").await.unwrap().into_tokens();
+        assert!(tokens.expires_at.is_none());
+        assert!(tokens.refresh_token.is_none());
+        assert!(tokens.refresh_expires_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_refresh_token_is_traded_for_a_new_pair() {
+        let shared = Shared::default();
+        shared.lock().unwrap().oauth_reply = Some(json!({
+            "access_token": "ghu_next",
+            "expires_in": 3600,
+            "refresh_token": "ghr_next",
+            "refresh_token_expires_in": 7200,
+        }));
+        let client = serve(Arc::clone(&shared)).await;
+        let tokens = client
+            .refresh_user_token("ghr_old")
+            .await
+            .unwrap()
+            .into_tokens();
+        assert_eq!(tokens.access_token.expose(), "ghu_next");
+        assert_eq!(tokens.refresh_token.unwrap().expose(), "ghr_next");
+        assert_eq!(
+            shared.lock().unwrap().oauth_bodies[0],
+            json!({
+                "client_id": "Iv1.abc",
+                "client_secret": "oauth-secret",
+                "grant_type": "refresh_token",
+                "refresh_token": "ghr_old",
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_refresh_is_a_permanent_error() {
+        let shared = Shared::default();
+        shared.lock().unwrap().oauth_reply = Some(json!({"error": "bad_refresh_token"}));
+        let client = serve(Arc::clone(&shared)).await;
+        let error = client.refresh_user_token("ghr_old").await.unwrap_err();
+        assert!(matches!(
+            CoreError::from(error),
+            CoreError::Invalid(message) if message.contains("bad_refresh_token")
+        ));
+    }
+
+    #[tokio::test]
+    async fn the_authorize_url_carries_the_client_and_the_encoded_state() {
+        let client = serve(Shared::default()).await;
+        let base = client.app.web_base.clone();
+        assert_eq!(
+            client.authorize_url("a.b c"),
+            format!("{base}/login/oauth/authorize?client_id=Iv1.abc&state=a.b%20c")
+        );
+    }
+
+    #[tokio::test]
+    async fn the_authenticated_user_is_read_with_their_token() {
+        let shared = Shared::default();
+        {
+            let mut recorded = shared.lock().unwrap();
+            recorded.user_id = 583231;
+            recorded.user_login = Some("octocat".into());
+        }
+        let client = serve(Arc::clone(&shared)).await;
+        let user = client.authenticated_user("ghu_secret").await.unwrap();
+        assert_eq!(
+            user,
+            GithubUser {
+                id: 583231,
+                login: "octocat".into()
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn push_access_follows_the_permissions_of_the_user_token() {
+        let shared = Shared::default();
+        let client = serve(Arc::clone(&shared)).await;
+        let api = repo_ref("acme/api");
+
+        shared.lock().unwrap().push_allowed = true;
+        assert!(client.user_can_push("ghu_secret", &api).await.unwrap());
+        shared.lock().unwrap().push_allowed = false;
+        assert!(!client.user_can_push("ghu_secret", &api).await.unwrap());
+        assert!(!client.user_can_push("hidden", &api).await.unwrap());
+        assert_eq!(shared.lock().unwrap().repo_auth[0], "Bearer ghu_secret");
+    }
+
+    #[tokio::test]
+    async fn a_draft_pull_request_can_be_opened_with_a_user_token() {
+        let shared = Shared::default();
+        let client = serve(Arc::clone(&shared)).await;
+        let url = client
+            .create_draft_pr_as_user("ghu_member", &draft())
+            .await
+            .unwrap();
+        assert_eq!(
+            url,
+            PullRequestUrl("https://github.com/acme/api/pull/9".into())
+        );
+        let recorded = shared.lock().unwrap();
+        assert_eq!(recorded.pull_auth, ["Bearer ghu_member"]);
+        assert!(recorded.token_bodies.is_empty());
+        assert_eq!(recorded.pull_bodies[0]["draft"], true);
+    }
+
+    #[tokio::test]
+    async fn a_refused_user_pull_request_is_an_error_naming_github_not_the_token() {
+        let shared = Shared::default();
+        shared.lock().unwrap().fail_pulls_with = Some(403);
+        let client = serve(Arc::clone(&shared)).await;
+        let error = client
+            .create_draft_pr_as_user("ghu_member", &draft())
+            .await
+            .unwrap_err();
+        assert!(matches!(error, GithubError::Status { status: 403, .. }));
+        assert!(!error.to_string().contains("ghu_member"));
+    }
+
+    #[tokio::test]
+    async fn the_grant_is_revoked_with_the_app_credentials_and_a_missing_grant_is_fine() {
+        let shared = Shared::default();
+        let client = serve(Arc::clone(&shared)).await;
+        client.revoke_user_grant("ghu_secret").await.unwrap();
+        {
+            let recorded = shared.lock().unwrap();
+            let (who, body) = &recorded.grant_requests[0];
+            assert_eq!(who, "Iv1.abc Basic SXYxLmFiYzpvYXV0aC1zZWNyZXQ=");
+            assert_eq!(body, &json!({"access_token": "ghu_secret"}));
+        }
+        shared.lock().unwrap().grant_status = Some(404);
+        client.revoke_user_grant("ghu_secret").await.unwrap();
+        shared.lock().unwrap().grant_status = Some(500);
+        assert!(client.revoke_user_grant("ghu_secret").await.is_err());
     }
 }

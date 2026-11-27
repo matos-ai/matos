@@ -8,7 +8,11 @@ use axum::{
 };
 use futures_util::{StreamExt, stream};
 use matos_common::RunId;
-use matos_core::domain::execution::{ExecutionMode, RepositoryRef};
+use matos_core::domain::{
+    agent::SecretToken,
+    execution::{ExecutionMode, RepositoryRef, TaskGrant},
+    github_user::GitIdentity,
+};
 
 use crate::{
     auth,
@@ -134,7 +138,15 @@ async fn run<C: Credentials>(
 
     let request = match operation {
         Operation::InfoRefs(service) => {
-            installation_token(proxy, &grant, repository, mode, &mut upstream_headers).await?;
+            upstream_token(
+                proxy,
+                &grant,
+                repository,
+                mode,
+                operation,
+                &mut upstream_headers,
+            )
+            .await?;
             proxy
                 .http
                 .get(format!("{base}/info/refs?service={service}"))
@@ -144,7 +156,15 @@ async fn run<C: Credentials>(
             if let Some(encoding) = headers.get(header::CONTENT_ENCODING) {
                 upstream_headers.insert(header::CONTENT_ENCODING, encoding.clone());
             }
-            installation_token(proxy, &grant, repository, mode, &mut upstream_headers).await?;
+            upstream_token(
+                proxy,
+                &grant,
+                repository,
+                mode,
+                operation,
+                &mut upstream_headers,
+            )
+            .await?;
             proxy
                 .http
                 .post(format!("{base}/git-upload-pack"))
@@ -160,7 +180,15 @@ async fn run<C: Credentials>(
             }
             let mut stream = Box::pin(forward::capped(body));
             let prefix = read_commands(&mut stream, &grant.branch, run_id).await?;
-            installation_token(proxy, &grant, repository, mode, &mut upstream_headers).await?;
+            upstream_token(
+                proxy,
+                &grant,
+                repository,
+                mode,
+                operation,
+                &mut upstream_headers,
+            )
+            .await?;
             let body = stream::once(async move { Ok::<Bytes, io::Error>(prefix) }).chain(stream);
             proxy
                 .http
@@ -176,27 +204,56 @@ async fn run<C: Credentials>(
     Ok(forward::relay(upstream, permit))
 }
 
-async fn installation_token<C: Credentials>(
+async fn upstream_token<C: Credentials>(
     proxy: &Proxy<C>,
-    grant: &matos_core::domain::execution::TaskGrant,
+    grant: &TaskGrant,
     repository: &RepositoryRef,
     mode: ExecutionMode,
+    operation: Operation,
     headers: &mut HeaderMap,
 ) -> Result<(), ProxyError> {
-    let token = proxy
-        .credentials
-        .github_token(grant.organization_id, repository, mode)
-        .await?
-        .ok_or(ProxyError::forbidden(
-            grant.run_id,
-            "GitHub is not connected for the organization",
-        ))?;
-    let mut value = HeaderValue::from_str(&auth::basic_header(token.expose())).map_err(|_| {
-        ProxyError::forbidden(grant.run_id, "the GitHub installation token is unusable")
-    })?;
+    let token = match member_token(proxy, grant, operation).await {
+        Some(token) => token,
+        None => proxy
+            .credentials
+            .github_token(grant.organization_id, repository, mode)
+            .await?
+            .ok_or(ProxyError::forbidden(
+                grant.run_id,
+                "GitHub is not connected for the organization",
+            ))?,
+    };
+    let mut value = HeaderValue::from_str(&auth::basic_header(token.expose()))
+        .map_err(|_| ProxyError::forbidden(grant.run_id, "the GitHub token is unusable"))?;
     value.set_sensitive(true);
     headers.insert(header::AUTHORIZATION, value);
     Ok(())
+}
+
+async fn member_token<C: Credentials>(
+    proxy: &Proxy<C>,
+    grant: &TaskGrant,
+    operation: Operation,
+) -> Option<SecretToken> {
+    if !operation.pushes() || grant.git_identity != GitIdentity::Member {
+        return None;
+    }
+    let subject = grant.initiated_by.as_deref()?;
+    match proxy
+        .credentials
+        .member_github_token(grant.organization_id, subject)
+        .await
+    {
+        Ok(Some(token)) => Some(token),
+        Ok(None) => {
+            tracing::warn!(run_id = %grant.run_id, "the member has no usable GitHub token: pushing as the GitHub App");
+            None
+        }
+        Err(error) => {
+            tracing::warn!(run_id = %grant.run_id, %error, "the member's GitHub token could not be read: pushing as the GitHub App");
+            None
+        }
+    }
 }
 
 async fn read_commands<S>(

@@ -186,7 +186,7 @@ describe('GitHub settings page', () => {
 				'Application GitHub créée. Installe-la maintenant sur GitHub.',
 			),
 		).toBeTruthy()
-		expect(screen.getByText(APP.slug)).toBeTruthy()
+		expect(await screen.findByText(APP.slug)).toBeTruthy()
 		await user.click(
 			screen.getByRole('button', { name: 'Installer sur GitHub' }),
 		)
@@ -238,5 +238,98 @@ describe('GitHub settings page', () => {
 			]),
 		)
 		expect(await screen.findByText('GitHub déconnecté')).toBeTruthy()
+	})
+	describe('personal account', () => {
+		const ORG = { app: null, installation: null }
+
+		it('shows the connected login and disconnects after confirmation', async () => {
+			const user = userEvent.setup()
+			const fetchMock = await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': {
+					connected: true,
+					login: 'octo',
+					connected_at: '2026-11-03T00:00:00Z',
+				},
+				'DELETE /api/v1/me/github': { status: 204, body: null },
+			})
+
+			expect(await screen.findByText('@octo')).toBeTruthy()
+			await user.click(screen.getByRole('button', { name: 'Déconnecter' }))
+			const dialog = await screen.findByRole('alertdialog')
+			await user.click(
+				within(dialog).getByRole('button', { name: 'Déconnecter' }),
+			)
+
+			await waitFor(() =>
+				expect(calls(fetchMock, 'DELETE')).toEqual([
+					{ path: '/api/v1/me/github', body: undefined },
+				]),
+			)
+		})
+
+		it('fetches the authorize url and sends the browser there', async () => {
+			const user = userEvent.setup()
+			const assign = vi.fn()
+			vi.stubGlobal('location', { ...window.location, assign })
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { connected: false },
+				'GET /api/v1/me/github/authorize': {
+					url: 'https://github.com/login/oauth/authorize?client_id=x',
+				},
+			})
+
+			expect(await screen.findByText(/seront faits en ton nom/)).toBeTruthy()
+			await user.click(
+				screen.getByRole('button', { name: 'Connecter mon compte GitHub' }),
+			)
+
+			await waitFor(() =>
+				expect(assign).toHaveBeenCalledWith(
+					'https://github.com/login/oauth/authorize?client_id=x',
+				),
+			)
+		})
+
+		it('says an admin must create the app when the organization has none', async () => {
+			const user = userEvent.setup()
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { connected: false },
+				'GET /api/v1/me/github/authorize': {
+					status: 409,
+					body: { code: 'github_app_missing', message: 'x', status: 409 },
+				},
+			})
+
+			await user.click(
+				await screen.findByRole('button', {
+					name: 'Connecter mon compte GitHub',
+				}),
+			)
+
+			expect(
+				await screen.findByText(
+					"L'organisation n'a pas encore d'application GitHub : un admin doit la créer.",
+				),
+			).toBeTruthy()
+		})
+
+		it('stays visible when the organization integration cannot be read', async () => {
+			await open({
+				'GET /api/v1/integrations/github': {
+					status: 403,
+					body: { code: 'forbidden', message: 'x', status: 403 },
+				},
+				'GET /api/v1/me/github': { connected: false },
+			})
+
+			expect(
+				await screen.findByRole('button', {
+					name: 'Connecter mon compte GitHub',
+				}),
+			).toBeTruthy()
+		})
 	})
 })

@@ -1,5 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { GithubInstallCallbackPage } from '#/domain/integrations/feature/github-callback-pages'
+import {
+	GithubInstallCallbackPage,
+	GithubMemberCallbackPage,
+} from '#/domain/integrations/feature/github-callback-pages'
 
 /** Le routeur lit `?code=123` comme un nombre : on le reprend en texte. */
 function text(value: unknown): string | undefined {
@@ -31,6 +34,14 @@ export const Route = createFileRoute(
 
 function InstallCallbackRoute() {
 	const { installation_id, setup_action, code, state } = Route.useSearch()
+	if (
+		installation_id === undefined &&
+		setup_action === undefined &&
+		code &&
+		state
+	) {
+		return <GithubMemberCallbackPage code={code} state={state} />
+	}
 	return (
 		<GithubInstallCallbackPage
 			installationId={installation_id}

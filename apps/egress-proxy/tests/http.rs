@@ -24,6 +24,7 @@ use matos_common::{OrganizationId, RunId};
 use matos_core::domain::{
     agent::SecretToken,
     execution::{ExecutionMode, RepositoryRef, TaskGrant},
+    github_user::GitIdentity,
     provider::ProviderKind,
 };
 use matos_egress_proxy::{
@@ -48,6 +49,7 @@ const AGY_BODY: &str = include_str!("fixtures/agy-request-body.json");
 const INSTALLATION_TOKEN: &str = "ghs_installation";
 const READ_ONLY_TOKEN: &str = "ghs_read_only";
 const INITIATOR: &str = "user-1";
+const MEMBER_TOKEN: &str = "ghu_member";
 const INITIATOR_KEY: &str = "sk-ant-initiator-key";
 const MODEL: &str = "claude-sonnet-5-5";
 const BRANCH: &str = "matos/0a1b2c3d4e5f";
@@ -104,6 +106,7 @@ fn grant() -> TaskGrant {
         mode: ExecutionMode::Change,
         companions: Vec::new(),
         initiated_by: Some(INITIATOR.into()),
+        git_identity: GitIdentity::App,
         expires_at: Utc::now() + chrono::Duration::minutes(30),
         revoked_at: None,
     }
@@ -117,6 +120,7 @@ struct Fake {
     mistral_key: Option<&'static str>,
     user_keys: HashMap<&'static str, &'static str>,
     github_token: Option<&'static str>,
+    member_tokens: HashMap<&'static str, &'static str>,
     lookups: Arc<AtomicUsize>,
     token_modes: Arc<Mutex<Vec<ExecutionMode>>>,
 }
@@ -131,6 +135,7 @@ impl Fake {
             mistral_key: Some(MISTRAL_KEY),
             user_keys: HashMap::new(),
             github_token: Some(INSTALLATION_TOKEN),
+            member_tokens: HashMap::new(),
             lookups: Arc::new(AtomicUsize::new(0)),
             token_modes: Arc::default(),
         }
@@ -173,6 +178,18 @@ impl Credentials for Fake {
             ExecutionMode::Change => SecretToken::new(token),
             ExecutionMode::Audit => SecretToken::new(READ_ONLY_TOKEN),
         }))
+    }
+
+    async fn member_github_token(
+        &self,
+        _: OrganizationId,
+        subject: &str,
+    ) -> Result<Option<SecretToken>, CredentialsError> {
+        Ok(self
+            .member_tokens
+            .get(subject)
+            .copied()
+            .map(SecretToken::new))
     }
 }
 
@@ -2453,4 +2470,96 @@ async fn an_unreachable_registry_is_a_502() {
         .await
         .unwrap();
     assert_eq!(response.status(), 502);
+}
+
+fn member_fake(identity: GitIdentity, connected: bool) -> Fake {
+    let mut fake = Fake::with(TaskGrant {
+        git_identity: identity,
+        ..grant()
+    });
+    if connected {
+        fake.member_tokens.insert(INITIATOR, MEMBER_TOKEN);
+    }
+    fake
+}
+
+async fn push_and_fetch(h: &Harness) -> Vec<Captured> {
+    let refs = h
+        .git_get(
+            "acme/web.git/info/refs?service=git-receive-pack",
+            TASK_TOKEN,
+        )
+        .await;
+    assert_eq!(refs.status(), 200);
+    let push = h
+        .git_post(
+            "acme/web.git/git-receive-pack",
+            TASK_TOKEN,
+            push_body(&[(OLD, NEW, &branch_ref())]),
+        )
+        .await;
+    assert_eq!(push.status(), 200);
+    let fetch = h
+        .git_get("acme/web.git/info/refs?service=git-upload-pack", TASK_TOKEN)
+        .await;
+    assert_eq!(fetch.status(), 200);
+    let pack = h
+        .git_post(
+            "acme/web.git/git-upload-pack",
+            TASK_TOKEN,
+            b"0032want abc\n0000".to_vec(),
+        )
+        .await;
+    assert_eq!(pack.status(), 200);
+    let seen = Harness::received(&h.github);
+    assert_eq!(seen.len(), 4);
+    seen
+}
+
+fn authorizations(seen: &[Captured]) -> Vec<&str> {
+    seen.iter()
+        .map(|request| request.headers["authorization"].to_str().unwrap())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_member_identity_pushes_with_the_member_token_and_fetches_with_the_installation_token() {
+    let h = harness_with(member_fake(GitIdentity::Member, true)).await;
+    let seen = push_and_fetch(&h).await;
+    let member = basic(MEMBER_TOKEN);
+    let installation = basic(INSTALLATION_TOKEN);
+    assert_eq!(
+        authorizations(&seen),
+        [&member, &member, &installation, &installation]
+    );
+}
+
+#[tokio::test]
+async fn an_app_identity_pushes_with_the_installation_token_even_if_the_member_is_connected() {
+    let h = harness_with(member_fake(GitIdentity::App, true)).await;
+    let seen = push_and_fetch(&h).await;
+    let installation = basic(INSTALLATION_TOKEN);
+    assert_eq!(authorizations(&seen), [&installation; 4]);
+}
+
+#[tokio::test]
+async fn a_member_without_a_token_falls_back_to_the_installation_token() {
+    let h = harness_with(member_fake(GitIdentity::Member, false)).await;
+    let seen = push_and_fetch(&h).await;
+    let installation = basic(INSTALLATION_TOKEN);
+    assert_eq!(authorizations(&seen), [&installation; 4]);
+}
+
+#[tokio::test]
+async fn a_member_identity_without_an_initiator_pushes_with_the_installation_token() {
+    let mut fake = Fake::with(TaskGrant {
+        git_identity: GitIdentity::Member,
+        initiated_by: None,
+        ..grant()
+    });
+    fake.member_tokens.insert(INITIATOR, MEMBER_TOKEN);
+    let h = harness_with(fake).await;
+    let seen = push_and_fetch(&h).await;
+    let installation = basic(INSTALLATION_TOKEN);
+    assert_eq!(authorizations(&seen), [&installation; 4]);
 }

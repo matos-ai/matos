@@ -6,6 +6,7 @@ use super::{
     DraftPullRequest, GithubAppCredentials, GithubAppSummary, GithubInstallation, PullRequestUrl,
     RepositoryIssue, RepositoryListing, RepositoryRef, TaskGrant, TaskLine, TaskOutcome, TaskSpec,
 };
+use crate::domain::{agent::SecretToken, github_user::UserTokens};
 
 /// Runs one execution in a disposable container. Implementations must not
 /// leak their client types through this port.
@@ -29,6 +30,8 @@ pub trait TaskRunner: Send + Sync {
 
     fn delete(&self, run_id: RunId) -> impl Future<Output = Result<(), CoreError>> + Send;
 }
+
+const NO_MEMBER_IDENTITY: &str = "ce dépôt de code ne gère pas l'identité des membres";
 
 /// The code host the organization connected (GitHub).
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -79,6 +82,32 @@ pub trait CodeHost: Send + Sync {
         installation_id: i64,
         pull_request: DraftPullRequest,
     ) -> impl Future<Output = Result<PullRequestUrl, CoreError>> + Send;
+
+    fn open_draft_pr_as_member(
+        &self,
+        _organization_id: OrganizationId,
+        _token: &SecretToken,
+        _pull_request: DraftPullRequest,
+    ) -> impl Future<Output = Result<PullRequestUrl, CoreError>> + Send {
+        std::future::ready(Err(CoreError::Invalid(NO_MEMBER_IDENTITY.into())))
+    }
+
+    fn member_can_push(
+        &self,
+        _organization_id: OrganizationId,
+        _token: &SecretToken,
+        _repository: &RepositoryRef,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send {
+        std::future::ready(Ok(false))
+    }
+
+    fn refresh_user_token(
+        &self,
+        _organization_id: OrganizationId,
+        _refresh_token: &SecretToken,
+    ) -> impl Future<Output = Result<UserTokens, CoreError>> + Send {
+        std::future::ready(Err(CoreError::Invalid(NO_MEMBER_IDENTITY.into())))
+    }
 }
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]

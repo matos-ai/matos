@@ -11,6 +11,7 @@ use matos_core::{
             service::{CreateCard, MoveCard},
         },
         execution::{EXECUTOR_AGENT, ExecutionMode, ExecutorModel, TaskGrant, harness::Harness},
+        github_user::GitIdentity,
         provider::ModelAssignments,
     },
     infrastructure::{crypto::SecretCipher, postgres},
@@ -526,6 +527,7 @@ async fn a_task_grant_is_found_by_hash_and_revoked_with_its_run() {
         mode: ExecutionMode::Change,
         companions: vec!["acme/sdk".parse().unwrap(), "acme/docs".parse().unwrap()],
         initiated_by: None,
+        git_identity: GitIdentity::Member,
         expires_at: Utc::now() + chrono::Duration::minutes(40),
         revoked_at: None,
     };
@@ -545,6 +547,14 @@ async fn a_task_grant_is_found_by_hash_and_revoked_with_its_run() {
     assert_eq!(found.branch, grant.branch);
     assert_eq!(found.model, "claude-sonnet-5-5");
     assert_eq!(found.companions, grant.companions);
+    assert_eq!(found.git_identity, GitIdentity::Member);
+    let stored_identity: String =
+        sqlx::query_scalar("SELECT git_identity FROM task_grants WHERE run_id = $1")
+            .bind(started.run_id.0)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stored_identity, "member");
     assert!(found.is_usable(Utc::now()));
     assert_eq!(unknown, None);
     assert!(revoked.revoked_at.is_some());
@@ -583,6 +593,7 @@ async fn deleting_a_run_deletes_its_grants() {
                 mode: ExecutionMode::Change,
                 companions: Vec::new(),
                 initiated_by: None,
+                git_identity: GitIdentity::App,
                 expires_at: Utc::now() + chrono::Duration::minutes(1),
                 revoked_at: None,
             },
