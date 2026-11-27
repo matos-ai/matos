@@ -110,6 +110,7 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         branch: "matos/x".into(),
         model: "claude-sonnet-5-5".into(),
         mode: ExecutionMode::Change,
+        companions: Vec::new(),
         initiated_by: None,
         expires_at: Utc::now() + chrono::Duration::minutes(1),
         revoked_at: None,

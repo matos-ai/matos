@@ -8,6 +8,7 @@ use axum::{
 };
 use futures_util::{StreamExt, stream};
 use matos_common::RunId;
+use matos_core::domain::execution::{ExecutionMode, RepositoryRef};
 
 use crate::{
     auth,
@@ -94,18 +95,26 @@ async fn run<C: Credentials>(
     let grant = proxy.authenticate(&token).await?;
     let run_id = grant.run_id;
     let permit = proxy.acquire(run_id)?;
-    let repository = &grant.repository;
-    if owner != repository.owner() || repo.strip_suffix(".git") != Some(repository.name()) {
-        return Err(ProxyError::forbidden(
-            run_id,
-            "the repository is not the one of this execution",
-        ));
-    }
+    let name = repo.strip_suffix(".git");
+    let (repository, mode) =
+        if owner == grant.repository.owner() && name == Some(grant.repository.name()) {
+            (&grant.repository, grant.mode)
+        } else if let Some(companion) = grant.companions.iter().find(|companion| {
+            owner.eq_ignore_ascii_case(companion.owner())
+                && name.is_some_and(|name| name.eq_ignore_ascii_case(companion.name()))
+        }) {
+            (companion, ExecutionMode::Audit)
+        } else {
+            return Err(ProxyError::forbidden(
+                run_id,
+                "the repository is not the one of this execution",
+            ));
+        };
     let operation = operation.ok_or(ProxyError::forbidden(
         run_id,
         "only fetch and push of the execution branch are allowed",
     ))?;
-    if grant.mode.is_read_only() && operation.pushes() {
+    if mode.is_read_only() && operation.pushes() {
         return Err(ProxyError::forbidden(
             run_id,
             "this execution is read-only: push is refused",
@@ -125,7 +134,7 @@ async fn run<C: Credentials>(
 
     let request = match operation {
         Operation::InfoRefs(service) => {
-            installation_token(proxy, &grant, &mut upstream_headers).await?;
+            installation_token(proxy, &grant, repository, mode, &mut upstream_headers).await?;
             proxy
                 .http
                 .get(format!("{base}/info/refs?service={service}"))
@@ -135,7 +144,7 @@ async fn run<C: Credentials>(
             if let Some(encoding) = headers.get(header::CONTENT_ENCODING) {
                 upstream_headers.insert(header::CONTENT_ENCODING, encoding.clone());
             }
-            installation_token(proxy, &grant, &mut upstream_headers).await?;
+            installation_token(proxy, &grant, repository, mode, &mut upstream_headers).await?;
             proxy
                 .http
                 .post(format!("{base}/git-upload-pack"))
@@ -151,7 +160,7 @@ async fn run<C: Credentials>(
             }
             let mut stream = Box::pin(forward::capped(body));
             let prefix = read_commands(&mut stream, &grant.branch, run_id).await?;
-            installation_token(proxy, &grant, &mut upstream_headers).await?;
+            installation_token(proxy, &grant, repository, mode, &mut upstream_headers).await?;
             let body = stream::once(async move { Ok::<Bytes, io::Error>(prefix) }).chain(stream);
             proxy
                 .http
@@ -170,11 +179,13 @@ async fn run<C: Credentials>(
 async fn installation_token<C: Credentials>(
     proxy: &Proxy<C>,
     grant: &matos_core::domain::execution::TaskGrant,
+    repository: &RepositoryRef,
+    mode: ExecutionMode,
     headers: &mut HeaderMap,
 ) -> Result<(), ProxyError> {
     let token = proxy
         .credentials
-        .github_token(grant.organization_id, &grant.repository, grant.mode)
+        .github_token(grant.organization_id, repository, mode)
         .await?
         .ok_or(ProxyError::forbidden(
             grant.run_id,

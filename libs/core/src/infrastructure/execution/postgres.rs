@@ -75,9 +75,9 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
             r#"
             INSERT INTO task_grants (
                 token_sha256, run_id, organization_id, repository, branch, model, expires_at,
-                revoked_at, mode, initiated_by
+                revoked_at, mode, initiated_by, companions
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             "#,
             token_sha256.as_slice(),
             grant.run_id.0,
@@ -89,6 +89,11 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
             grant.revoked_at,
             grant.mode.as_str(),
             grant.initiated_by.as_deref(),
+            &grant
+                .companions
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
         )
         .execute(&mut ***tx)
         .await
@@ -101,7 +106,7 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
         let row = sqlx::query!(
             r#"
             SELECT run_id, organization_id, repository, branch, model, expires_at, revoked_at,
-                   mode, initiated_by
+                   mode, initiated_by, companions
             FROM task_grants
             WHERE token_sha256 = $1
             "#,
@@ -118,6 +123,11 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
                 branch: row.branch,
                 model: row.model,
                 mode: ExecutionMode::try_from(row.mode.as_str())?,
+                companions: row
+                    .companions
+                    .iter()
+                    .map(|companion| companion.parse())
+                    .collect::<Result<_, _>>()?,
                 initiated_by: row.initiated_by,
                 expires_at: row.expires_at,
                 revoked_at: row.revoked_at,

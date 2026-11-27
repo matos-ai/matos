@@ -16,7 +16,8 @@ use k8s_openapi::{
 };
 use matos_common::RunId;
 use matos_core::domain::execution::{
-    PLAN_PATH, REPORT_PATH, TaskSpec, contribution::CONTRIBUTION_PATH, harness::Harness,
+    PLAN_PATH, REPORT_PATH, TaskSpec, companion::companion_lines, contribution::CONTRIBUTION_PATH,
+    harness::Harness,
 };
 
 use crate::{config::KubeRunnerConfig, error::RunnerError};
@@ -90,6 +91,10 @@ fn environment(config: &KubeRunnerConfig, spec: &TaskSpec, secret: &str) -> Vec<
                 spec.repository.name()
             ),
         ),
+        plain("GIT_REMOTE_BASE", format!("{proxy}/git")),
+        plain("CARGO_REGISTRY_INDEX", format!("{proxy}/crates-index/")),
+        plain("NPM_REGISTRY", format!("{proxy}/npm/")),
+        plain("COMPANIONS", companion_lines(&spec.companions)),
         plain("REPOSITORY", spec.repository.to_string()),
         plain("BASE_BRANCH", &spec.base_branch),
         plain("BRANCH", &spec.branch),
@@ -301,7 +306,8 @@ mod tests {
     use matos_core::domain::{
         agent::SecretToken,
         execution::{
-            CommitAuthor, CommitSettings, ExecutionMode, ExecutorModel, PushGuard, RepositoryRef,
+            CommitAuthor, CommitSettings, Companion, ExecutionMode, ExecutorModel, PushGuard,
+            RepositoryRef,
         },
     };
 
@@ -335,6 +341,7 @@ mod tests {
                 max_files: 80,
                 max_lines: 3000,
             },
+            companions: Vec::new(),
         }
     }
 
@@ -628,6 +635,45 @@ mod tests {
         assert_eq!(value("GUARD_ALLOW_PATHS"), "docs/");
         assert_eq!(value("GUARD_MAX_FILES"), "80");
         assert_eq!(value("GUARD_MAX_LINES"), "3000");
+    }
+
+    #[test]
+    fn the_companions_reach_the_container_one_per_line() {
+        let spec = TaskSpec {
+            companions: vec![
+                Companion {
+                    repository: "acme/sdk".parse().unwrap(),
+                    path: "/workspace/sdk".into(),
+                    reference: Some("0a1b2c3".into()),
+                },
+                Companion {
+                    repository: "acme/docs".parse().unwrap(),
+                    path: "/workspace/docs".into(),
+                    reference: None,
+                },
+            ],
+            ..spec()
+        };
+        let job = build_job(&config(), &spec, Some(&proxy())).unwrap();
+        assert_eq!(
+            env(&job, "COMPANIONS").value.as_deref(),
+            Some("acme/sdk\t/workspace/sdk\t0a1b2c3\nacme/docs\t/workspace/docs\t")
+        );
+        let none = build_job(&config(), &self::spec(), Some(&proxy())).unwrap();
+        assert_eq!(env(&none, "COMPANIONS").value.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn the_package_registries_and_the_git_base_are_routes_of_the_proxy() {
+        let job = build_job(&config(), &spec(), Some(&proxy())).unwrap();
+        let proxy = "http://matos-egress-proxy.matos.svc:4130";
+        let value = |name| env(&job, name).value.clone().unwrap();
+        assert_eq!(value("GIT_REMOTE_BASE"), format!("{proxy}/git"));
+        assert_eq!(
+            value("CARGO_REGISTRY_INDEX"),
+            format!("{proxy}/crates-index/")
+        );
+        assert_eq!(value("NPM_REGISTRY"), format!("{proxy}/npm/"));
     }
 
     #[test]

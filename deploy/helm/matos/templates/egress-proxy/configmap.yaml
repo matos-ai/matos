@@ -10,6 +10,10 @@ data:
   EGRESS_PROXY_PORT: {{ .Values.egressProxy.port | quote }}
   DATABASE_MAX_CONNECTIONS: {{ .Values.config.databaseMaxConnections | quote }}
   {{- include "matos.githubBases" . | nindent 2 }}
+  EGRESS_CRATES_INDEX_BASE: {{ .Values.egressProxy.registries.cratesIndex | quote }}
+  EGRESS_CRATES_STATIC_BASE: {{ .Values.egressProxy.registries.cratesStatic | quote }}
+  EGRESS_NPM_BASE: {{ .Values.egressProxy.registries.npm | quote }}
+  EGRESS_PUBLIC_BASE: {{ include "matos.egressProxyUrl" . | quote }}
   LOG_FILTER: {{ .Values.config.logFilter | quote }}
   LOG_JSON: {{ .Values.config.logJson | quote }}
   {{- with .Values.config.otlpEndpoint }}
