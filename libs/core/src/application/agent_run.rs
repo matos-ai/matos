@@ -29,9 +29,7 @@ use crate::{
             ports::{DelegationVault, TokenExchanger},
         },
         event::ports::EventEmitter,
-        execution::{
-            RepositoryRef, harness::Harness, harness_of_agent, ports::GithubInstallationRepository,
-        },
+        execution::{harness::Harness, harness_of_agent, ports::GithubInstallationRepository},
         mcp::{
             McpConnector,
             ports::{McpConnectionRepository, McpConnectorRepository},
@@ -344,9 +342,9 @@ impl MatosUseCase {
         subject: Subject,
         card_id: CardId,
         command: StartAgentRun,
-        repository: RepositoryRef,
+        target: &RepositoryTarget,
     ) -> Result<(), AgentRunError> {
-        self.vetted_repository_run(subject, card_id, command, repository)
+        self.vetted_repository_run(subject, card_id, command, target)
             .await??;
         Ok(())
     }
@@ -357,10 +355,10 @@ impl MatosUseCase {
         subject: Subject,
         card_id: CardId,
         command: StartAgentRun,
-        repository: RepositoryRef,
+        target: &RepositoryTarget,
     ) -> Stored<()> {
         Ok(self
-            .vet_repository_run(&tx, &subject, card_id, command, &repository, true)
+            .vet_repository_run(&tx, &subject, card_id, command, target, true)
             .await?
             .map(|_| ()))
     }
@@ -415,14 +413,7 @@ impl MatosUseCase {
             .clone()
             .ok_or_else(|| CoreError::Invalid("the base branch is unknown".into()))?;
         let agent = match self
-            .vet_repository_run(
-                &tx,
-                &subject,
-                card_id,
-                command,
-                &target.repository,
-                applied.is_none(),
-            )
+            .vet_repository_run(&tx, &subject, card_id, command, &target, applied.is_none())
             .await?
         {
             Ok(agent) => agent,
@@ -444,6 +435,7 @@ impl MatosUseCase {
             card_id,
             target.repository,
             base_branch,
+            target.extra_repositories.into_vec(),
             subject.id.clone(),
             now,
         );
@@ -478,7 +470,7 @@ impl MatosUseCase {
         subject: &Subject,
         card_id: CardId,
         command: StartAgentRun,
-        repository: &RepositoryRef,
+        target: &RepositoryTarget,
         check_version: bool,
     ) -> Stored<CrewAgent> {
         let organization_id = subject.organization_id;
@@ -526,10 +518,14 @@ impl MatosUseCase {
         if agent.paused {
             return Ok(Err(AgentRunRefusal::AgentPaused));
         }
-        if !agent.repository_grants.allows(repository) {
-            return Ok(Err(AgentRunRefusal::RepositoryNotGranted(
-                repository.to_string(),
-            )));
+        for repository in
+            std::iter::once(&target.repository).chain(target.extra_repositories.as_slice())
+        {
+            if !agent.repository_grants.allows(repository) {
+                return Ok(Err(AgentRunRefusal::RepositoryNotGranted(
+                    repository.to_string(),
+                )));
+            }
         }
         if PgGithubInstallationRepository::new(tx)
             .get(organization_id)

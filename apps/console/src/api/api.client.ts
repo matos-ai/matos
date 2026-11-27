@@ -318,6 +318,7 @@ export namespace Schemas {
     assignee_agent_id?: (null | AgentId) | undefined;
     client_id?: (null | ClientId) | undefined;
     description?: (string | null) | undefined;
+    extra_repositories?: Array<string> | undefined;
     parent_id?: (null | CardId) | undefined;
     priority?: (null | PriorityDto) | undefined;
     project_id?: (null | ProjectId) | undefined;
@@ -419,7 +420,11 @@ export namespace Schemas {
     resource_kind: string;
   };
   export type DocumentTextResponse = { model: string; pages: number; text: string };
-  export type ExecuteCardRequest = { expected_version: number; repository: string };
+  export type ExecuteCardRequest = {
+    expected_version: number;
+    extra_repositories?: Array<string> | undefined;
+    repository: string;
+  };
   export type ExecuteCardResponse = { card: CardResponse; run_id: RunId };
   export type ExecutionResponse = Partial<{
     branch: string | null;
@@ -427,6 +432,7 @@ export namespace Schemas {
     error: string | null;
     no_changes: boolean;
     pull_request: string | null;
+    pull_requests: Record<string, string>;
     sha: string | null;
     summary: string | null;
   }>;
@@ -759,6 +765,7 @@ export namespace Schemas {
     allow_writes?: boolean | undefined;
     base_branch?: (string | null) | undefined;
     expected_version: number;
+    extra_repositories?: Array<string> | undefined;
     repository?: (string | null) | undefined;
   };
   export type RunAgentResponse = { run_id: RunId };

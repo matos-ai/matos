@@ -3,10 +3,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/guard.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/companions.sh"
-
-marker() {
-  printf '{"type":"matos","event":"%s"%s}\n' "$1" "${2:-}"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/repositories.sh"
 
 : "${GIT_REMOTE:?}" "${BASE_BRANCH:?}" "${BRANCH:?}" "${MODEL:?}" "${MAX_TURNS:?}" "${PROMPT:?}"
 : "${MATOS_TASK_TOKEN:?}"
@@ -30,33 +27,6 @@ case "$mode" in
     ;;
 esac
 
-REPORT_MAX_BYTES=1048576
-REPORT_CHUNK_CHARS=4096
-REPORT_NOTE=$'\n\n_[rapport tronque a 1 Mio]_\n'
-
-# Sends a document on stdout as base64 chunks, then its SHA-256 and size;
-# one above REPORT_MAX_BYTES is cut and ends with a note. The second argument
-# names it in the markers: report (report_chunk, report_end) or plan.
-emit_report() {
-  local source="$1" doc="${2:-report}" sent truncated=false size keep
-  [ -s "$source" ] || return 1
-  sent="$(mktemp /tmp/report.XXXXXX)"
-  size="$(wc -c <"$source" | tr -d ' ')"
-  if [ "$size" -gt "$REPORT_MAX_BYTES" ]; then
-    keep=$((REPORT_MAX_BYTES - $(printf '%s' "$REPORT_NOTE" | LC_ALL=C wc -c | tr -d ' ')))
-    head -c "$keep" "$source" >"$sent"
-    printf '%s' "$REPORT_NOTE" >>"$sent"
-    truncated=true
-  else
-    cat "$source" >"$sent"
-  fi
-  base64 -w0 <"$sent" | fold -w "$REPORT_CHUNK_CHARS" | while IFS= read -r chunk || [ -n "$chunk" ]; do
-    marker "${doc}_chunk" ",\"data\":\"$chunk\""
-  done
-  marker "${doc}_end" ",\"sha256\":\"$(sha256sum "$sent" | cut -d' ' -f1)\",\"bytes\":$(wc -c <"$sent" | tr -d ' '),\"truncated\":$truncated"
-  rm -f "$sent"
-}
-
 askpass="$(mktemp /tmp/askpass.XXXXXX)"
 trap 'rm -f "$askpass"' EXIT
 cat >"$askpass" <<'ASKPASS'
@@ -75,6 +45,7 @@ git config --global user.email "${COMMIT_AUTHOR_EMAIL:-executor@localhost}"
 
 git clone --depth 50 --branch "$BASE_BRANCH" "$GIT_REMOTE" repo >&2
 marker cloned
+extras_clone || exit 1
 
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$COMPANION_WORKSPACE/.matos/target}"
@@ -220,63 +191,17 @@ if [ "$mode" = audit ]; then
   exit 0
 fi
 
-# The title and body the agent wrote, as a commit message, when the file has
-# a title and holds none of the terms that may not leave the platform.
-contribution_message() {
-  local out="$1" terms
-  [ -s "$CONTRIBUTION_PATH" ] || return 1
-  awk '
-    !titled && /[^[:space:]]/ {
-      sub(/^[[:space:]]*#*[[:space:]]*/, ""); sub(/[[:space:]]+$/, "")
-      if ($0 == "") exit 1
-      print; print ""; titled = 1; next
-    }
-    titled { print }
-    END { if (!titled) exit 1 }
-  ' "$CONTRIBUTION_PATH" >"$out" || return 1
-  terms="$(mktemp /tmp/terms.XXXXXX)"
-  printf '%s\n' "${LEAK_TERMS:-}" | grep -v '^[[:space:]]*$' >"$terms" || true
-  if [ -s "$terms" ] && grep -qiF -f "$terms" "$out"; then
-    echo "the contribution text names what may not leave the platform, the fallback message is used" >&2
-    rm -f "$terms"
-    return 1
-  fi
-  rm -f "$terms"
-}
-
 : "${COMMIT_FALLBACK_MESSAGE:?}" "${CONTRIBUTION_PATH:?}"
 : "${GUARD_MAX_FILES:?}" "${GUARD_MAX_LINES:?}"
 mkdir -p "$(dirname "$CONTRIBUTION_PATH")"
-rm -f "$CONTRIBUTION_PATH"
+rm -rf "$CONTRIBUTION_PATH" "$(dirname "$CONTRIBUTION_PATH")/contribution"
+mkdir -p "$(dirname "$CONTRIBUTION_PATH")/contribution"
 base_sha="$(git rev-parse HEAD)"
 git switch -c "$BRANCH" >&2
 run_agent change || agent_status=$?
 
-# Commits the agent made itself are folded into one, with its message.
-git reset -q --soft "$base_sha"
-git add -A
-if git diff --cached --quiet; then
-  marker no_changes
-else
-  guard_format
-  if git diff --cached --quiet; then
-    marker no_changes
-    exit "$agent_status"
-  fi
-  if ! guard_check; then
-    guard_blocked_marker
-    echo "the diff is not pushed: ${guard_reasons[*]}" >&2
-    exit 3
-  fi
-  guard_lint
-  guard_quality_marker
-  message="$(mktemp /tmp/message.XXXXXX)"
-  contribution_message "$message" || printf '%s\n' "$COMMIT_FALLBACK_MESSAGE" >"$message"
-  git commit -q --cleanup=whitespace -F "$message" >&2
-  rm -f "$message"
-  git push origin "HEAD:refs/heads/$BRANCH" >&2
-  emit_report "$CONTRIBUTION_PATH" contribution || true
-  marker pushed ",\"sha\":\"$(git rev-parse HEAD)\""
-fi
+# Commits the agent made itself are folded into one per repository, with its
+# message; nothing is pushed unless every changed repository passes the guard.
+publish_changes "$base_sha" || exit $?
 
 exit "$agent_status"

@@ -31,6 +31,38 @@ export interface RunPlan {
 	repository: string
 	baseBranch: string
 	allowWrites: boolean
+	extraRepositories: ReadonlyArray<string>
+}
+
+export const MAX_EXTRA_REPOSITORIES = 4
+
+export const TOO_MANY_REPOSITORIES =
+	'Trop de dépôts : 4 dépôts supplémentaires au plus, sans doublon.'
+
+export function extraCandidates(
+	grants: ReadonlyArray<string>,
+	primary: string,
+): ReadonlyArray<string> {
+	return grants.filter((grant) => grant !== primary)
+}
+
+export function toggleExtra(
+	extras: ReadonlyArray<string>,
+	name: string,
+	checked: boolean,
+): ReadonlyArray<string> {
+	if (!checked) return extras.filter((extra) => extra !== name)
+	if (extras.includes(name) || extras.length >= MAX_EXTRA_REPOSITORIES) {
+		return extras
+	}
+	return [...extras, name]
+}
+
+export function withoutPrimary(
+	extras: ReadonlyArray<string>,
+	primary: string,
+): ReadonlyArray<string> {
+	return extras.filter((extra) => extra !== primary)
 }
 
 /** Le dépôt accordé que le titre ou la description de la tâche nomme, s'il y en a un. */
@@ -74,6 +106,7 @@ export function initialRunPlan(
 		repository: mentioned ?? grants[0] ?? '',
 		baseBranch: '',
 		allowWrites: false,
+		extraRepositories: [],
 	}
 }
 
@@ -85,11 +118,13 @@ export function runRequest(
 		return { expected_version: version, allow_writes: plan.allowWrites }
 	}
 	const baseBranch = plan.baseBranch.trim()
+	const extras = withoutPrimary(plan.extraRepositories, plan.repository)
 	return {
 		expected_version: version,
 		allow_writes: plan.allowWrites,
 		repository: plan.repository,
 		...(baseBranch ? { base_branch: baseBranch } : {}),
+		...(extras.length > 0 ? { extra_repositories: [...extras] } : {}),
 	}
 }
 
@@ -208,6 +243,8 @@ export function describeRunError(error: unknown): RunErrorInfo {
 					false,
 					'agent_repositories',
 				)
+			case 'too_many_repositories':
+				return info(TOO_MANY_REPOSITORIES)
 			case 'invalid':
 				return info(
 					'Le dépôt ou la branche de base est invalide : vérifie le nom de la branche.',

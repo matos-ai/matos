@@ -21,6 +21,7 @@ pub(super) struct RunOverviewRow {
     pub card_id: Option<Uuid>,
     pub repository: Option<String>,
     pub base_branch: Option<String>,
+    pub extra_repositories: Vec<String>,
     pub initiated_by: String,
     pub status: String,
     pub pipeline: Vec<String>,
@@ -60,6 +61,11 @@ fn subject(row: &RunOverviewRow) -> Result<RunSubject, CoreError> {
             card_id: CardId(card_id),
             repository: repository.parse()?,
             base_branch: base_branch.clone(),
+            extra_repositories: row
+                .extra_repositories
+                .iter()
+                .map(|repository| repository.parse())
+                .collect::<Result<_, _>>()?,
         }),
         (None, Some(card_id), None, None) if is_agent_task(&row.pipeline) => {
             Ok(RunSubject::AgentTask {

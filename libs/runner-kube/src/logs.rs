@@ -126,7 +126,8 @@ mod tests {
         assert_eq!(
             parse_line(r#"{"type":"matos","event":"pushed","sha":"abc123"}"#),
             Some(TaskLine::Matos(TaskMarker::Pushed {
-                sha: "abc123".into()
+                sha: "abc123".into(),
+                repository: None
             }))
         );
         assert_eq!(
@@ -149,14 +150,16 @@ mod tests {
             parse_line(r#"{"type":"matos","event":"quality","lint":"failed","excerpt":"a\nb"}"#),
             Some(TaskLine::Matos(TaskMarker::Quality {
                 lint: QualityStatus::Failed,
-                excerpt: Some("a\nb".into())
+                excerpt: Some("a\nb".into()),
+                repository: None
             }))
         );
         assert_eq!(
             parse_line(r#"{"type":"matos","event":"quality","lint":"not_run"}"#),
             Some(TaskLine::Matos(TaskMarker::Quality {
                 lint: QualityStatus::NotRun,
-                excerpt: None
+                excerpt: None,
+                repository: None
             }))
         );
     }

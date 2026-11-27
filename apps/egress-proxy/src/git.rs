@@ -103,10 +103,9 @@ async fn run<C: Credentials>(
     let (repository, mode) =
         if owner == grant.repository.owner() && name == Some(grant.repository.name()) {
             (&grant.repository, grant.mode)
-        } else if let Some(companion) = grant.companions.iter().find(|companion| {
-            owner.eq_ignore_ascii_case(companion.owner())
-                && name.is_some_and(|name| name.eq_ignore_ascii_case(companion.name()))
-        }) {
+        } else if let Some(writable) = named(&grant.writable_repositories, owner, name) {
+            (writable, grant.mode)
+        } else if let Some(companion) = named(&grant.companions, owner, name) {
             (companion, ExecutionMode::Audit)
         } else {
             return Err(ProxyError::forbidden(
@@ -202,6 +201,17 @@ async fn run<C: Credentials>(
         .await
         .map_err(|error| ProxyError::Upstream(error.without_url().to_string()))?;
     Ok(forward::relay(upstream, permit))
+}
+
+fn named<'a>(
+    repositories: &'a [RepositoryRef],
+    owner: &str,
+    name: Option<&str>,
+) -> Option<&'a RepositoryRef> {
+    repositories.iter().find(|candidate| {
+        owner.eq_ignore_ascii_case(candidate.owner())
+            && name.is_some_and(|name| name.eq_ignore_ascii_case(candidate.name()))
+    })
 }
 
 async fn upstream_token<C: Credentials>(

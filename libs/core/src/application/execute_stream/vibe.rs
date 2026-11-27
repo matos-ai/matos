@@ -62,6 +62,21 @@ impl VibeParser {
     }
 }
 
+pub(super) fn hit_turn_limit(stopped: &str) -> bool {
+    let stopped = stopped.to_ascii_lowercase();
+    stopped == "limit"
+        || [
+            "iteration_limit",
+            "turn_limit",
+            "max_turns",
+            "max turns",
+            "max_iterations",
+            "turn limit",
+        ]
+        .iter()
+        .any(|marker| stopped.contains(marker))
+}
+
 fn stopped(export: &Value) -> Option<String> {
     if export["outcome"] == "finished" {
         return None;

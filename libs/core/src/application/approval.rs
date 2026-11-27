@@ -6,12 +6,13 @@ use super::{
     execute_stream::truncate_chars,
 };
 use crate::domain::{
-    agent_task::{AgentRunError, RepositoryTarget},
+    agent_task::{AgentRunError, ExtraRepositories, RepositoryTarget},
     approval::{
         Approval, ApprovalKind, ApprovalStatus, SYSTEM_ACTOR, Verdict,
         service::{ApprovalList, ApprovalService},
     },
     authorization::Subject,
+    execution::RepositoryRef,
 };
 
 const ALREADY_ACTIVE: &str = "execution_already_active";
@@ -139,8 +140,16 @@ impl MatosUseCase {
             .repository
             .parse()
             .map_err(|error: CoreError| failure(&error))?;
-        let target = RepositoryTarget::new(repository, Some(change.base_branch))
+        let extras = change
+            .extra_repositories
+            .iter()
+            .map(|extra| extra.parse())
+            .collect::<Result<Vec<RepositoryRef>, CoreError>>()
             .map_err(|error| failure(&error))?;
+        let mut target = RepositoryTarget::new(repository, Some(change.base_branch))
+            .map_err(|error| failure(&error))?;
+        target.extra_repositories = ExtraRepositories::new(&target.repository, extras)
+            .map_err(|refusal| refusal.to_string())?;
         let subject = self.resumed_subject(approval).await?;
         match self
             .start_applied_repository_run(subject, card_id, target, approval.clone())

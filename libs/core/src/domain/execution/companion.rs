@@ -34,6 +34,60 @@ pub fn companion_lines(companions: &[Companion]) -> String {
         .join("\n")
 }
 
+fn same_repository(a: &RepositoryRef, b: &RepositoryRef) -> bool {
+    a.owner().eq_ignore_ascii_case(b.owner()) && a.name().eq_ignore_ascii_case(b.name())
+}
+
+/// Where each extra repository is cloned, in order. A companion that declares
+/// an extra keeps its path and leaves `companions`; the rest of them are cut
+/// so that extras and companions together stay within `MAX_COMPANIONS`.
+pub fn place_extras(
+    extras: &[RepositoryRef],
+    companions: &mut Vec<Companion>,
+) -> (Vec<String>, Vec<SkippedCompanion>) {
+    let mut declared: Vec<Option<String>> = vec![None; extras.len()];
+    companions.retain(|companion| {
+        match extras
+            .iter()
+            .position(|extra| same_repository(extra, &companion.repository))
+        {
+            Some(index) => {
+                declared[index].get_or_insert_with(|| companion.path.clone());
+                false
+            }
+            None => true,
+        }
+    });
+    let mut paths: Vec<String> = Vec::with_capacity(extras.len());
+    for (index, extra) in extras.iter().enumerate() {
+        let path = declared[index].clone().unwrap_or_else(|| {
+            let shared_name = extras.iter().any(|other| {
+                !same_repository(other, extra) && other.name().eq_ignore_ascii_case(extra.name())
+            });
+            let plain = format!("{WORKSPACE}/{}", extra.name());
+            let taken = plain == CHECKOUT
+                || companions.iter().any(|companion| companion.path == plain)
+                || declared.iter().flatten().any(|path| *path == plain);
+            if shared_name || taken {
+                format!("{WORKSPACE}/{}-{}", extra.owner(), extra.name())
+            } else {
+                plain
+            }
+        });
+        paths.push(path);
+    }
+    let room = MAX_COMPANIONS.saturating_sub(extras.len());
+    let skipped = companions
+        .split_off(companions.len().min(room))
+        .into_iter()
+        .map(|companion| SkippedCompanion {
+            label: companion.repository.to_string(),
+            reason: CompanionSkip::TooMany,
+        })
+        .collect();
+    (paths, skipped)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RefSource {
     Default,
@@ -239,6 +293,79 @@ mod tests {
                 .collect::<Vec<_>>(),
         )
         .unwrap()
+    }
+
+    fn repository(name: &str) -> RepositoryRef {
+        name.parse().unwrap()
+    }
+
+    fn companion(name: &str, path: &str) -> Companion {
+        Companion {
+            repository: repository(name),
+            path: path.into(),
+            reference: None,
+        }
+    }
+
+    #[test]
+    fn an_extra_lives_under_its_name_or_owner_and_name_when_names_clash() {
+        let mut companions = Vec::new();
+        let (paths, skipped) = place_extras(
+            &[
+                repository("acme/api"),
+                repository("acme/docs"),
+                repository("other/docs"),
+                repository("acme/repo"),
+            ],
+            &mut companions,
+        );
+        assert_eq!(
+            paths,
+            [
+                "/workspace/api",
+                "/workspace/acme-docs",
+                "/workspace/other-docs",
+                "/workspace/acme-repo"
+            ]
+        );
+        assert!(skipped.is_empty());
+    }
+
+    #[test]
+    fn a_companion_declaring_an_extra_keeps_its_path_and_is_not_cloned_twice() {
+        let mut companions = vec![
+            companion("Acme/API", "/workspace/vendor/api"),
+            companion("acme/sdk", "/workspace/sdk"),
+        ];
+        let (paths, _) = place_extras(&[repository("acme/api")], &mut companions);
+        assert_eq!(paths, ["/workspace/vendor/api"]);
+        assert_eq!(companions, [companion("acme/sdk", "/workspace/sdk")]);
+    }
+
+    #[test]
+    fn an_extra_avoids_the_path_of_another_companion() {
+        let mut companions = vec![companion("acme/sdk", "/workspace/api")];
+        let (paths, _) = place_extras(&[repository("acme/api")], &mut companions);
+        assert_eq!(paths, ["/workspace/acme-api"]);
+    }
+
+    #[test]
+    fn extras_and_companions_together_stay_within_the_limit() {
+        let mut companions: Vec<Companion> = (0..MAX_COMPANIONS)
+            .map(|index| companion(&format!("acme/c{index}"), &format!("/workspace/c{index}")))
+            .collect();
+        let extras: Vec<RepositoryRef> = (0..4)
+            .map(|index| repository(&format!("acme/e{index}")))
+            .collect();
+        let (_, skipped) = place_extras(&extras, &mut companions);
+        assert_eq!(companions.len(), MAX_COMPANIONS - 4);
+        assert_eq!(skipped.len(), 4);
+        assert!(
+            skipped
+                .iter()
+                .all(|skip| skip.reason == CompanionSkip::TooMany)
+        );
+        assert_eq!(skipped[0].label, "acme/c4");
     }
 
     #[test]

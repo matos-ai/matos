@@ -76,9 +76,9 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
             r#"
             INSERT INTO task_grants (
                 token_sha256, run_id, organization_id, repository, branch, model, expires_at,
-                revoked_at, mode, initiated_by, companions, git_identity
+                revoked_at, mode, initiated_by, companions, git_identity, writable_repositories
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             "#,
             token_sha256.as_slice(),
             grant.run_id.0,
@@ -96,6 +96,11 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
             grant.git_identity.as_str(),
+            &grant
+                .writable_repositories
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
         )
         .execute(&mut ***tx)
         .await
@@ -108,7 +113,7 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
         let row = sqlx::query!(
             r#"
             SELECT run_id, organization_id, repository, branch, model, expires_at, revoked_at,
-                   mode, initiated_by, companions, git_identity
+                   mode, initiated_by, companions, git_identity, writable_repositories
             FROM task_grants
             WHERE token_sha256 = $1
             "#,
@@ -129,6 +134,11 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
                     .companions
                     .iter()
                     .map(|companion| companion.parse())
+                    .collect::<Result<_, _>>()?,
+                writable_repositories: row
+                    .writable_repositories
+                    .iter()
+                    .map(|repository| repository.parse())
                     .collect::<Result<_, _>>()?,
                 initiated_by: row.initiated_by,
                 git_identity: GitIdentity::try_from(row.git_identity.as_str())?,

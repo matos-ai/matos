@@ -9,7 +9,9 @@ use matos_common::{CardId, CoreError, RunId};
 use matos_core::{
     RunDelegation,
     domain::{
-        agent_task::{AgentRunError, AgentRunRefusal, RepositoryTarget, StartAgentRun},
+        agent_task::{
+            AgentRunError, AgentRunRefusal, ExtraRepositories, RepositoryTarget, StartAgentRun,
+        },
         authorization::Subject,
         execution::{RepositoryRef, ports::CodeHost},
     },
@@ -43,6 +45,12 @@ pub struct RunAgentRequest {
     /// Ignored without `repository`.
     #[serde(default)]
     pub base_branch: Option<String>,
+    /// `owner/name` of other repositories the run modifies as well, each one
+    /// of the agent's `repository_grants`: at most 4, distinct, and not
+    /// `repository`. Each gets the same branch and its own draft pull
+    /// request. Ignored without `repository`.
+    #[serde(default)]
+    pub extra_repositories: Vec<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -63,6 +71,30 @@ impl From<AgentRunError> for RunAgentError {
             AgentRunError::Refused(refusal) => Self::Refused(refusal),
         }
     }
+}
+
+impl From<ApiError> for RunAgentError {
+    fn from(error: ApiError) -> Self {
+        Self::Api(error)
+    }
+}
+
+impl From<AgentRunRefusal> for RunAgentError {
+    fn from(refusal: AgentRunRefusal) -> Self {
+        Self::Refused(refusal)
+    }
+}
+
+pub(crate) fn with_extra_repositories(
+    mut target: RepositoryTarget,
+    extras: &[String],
+) -> Result<RepositoryTarget, RunAgentError> {
+    let extras = extras
+        .iter()
+        .map(|extra| extra.parse())
+        .collect::<Result<Vec<RepositoryRef>, CoreError>>()?;
+    target.extra_repositories = ExtraRepositories::new(&target.repository, extras)?;
+    Ok(target)
 }
 
 impl From<CoreError> for RunAgentError {
@@ -108,7 +140,7 @@ impl IntoResponse for RunAgentError {
         (status = 403, description = "The policy refused (an agent cannot start an agent run), or repository_not_allowed: the GitHub installation does not reach that repository", body = matos_handlers::errors::ApiErrorResponse),
         (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
         (status = 409, description = "not_connected (the message names the connector slug), agent_identity_not_active (the agent's FerrisKey client is not ready yet), no_provider (neither the caller nor the organization connected an LLM provider; with `repository`, one of the provider of the harness the agent's model runs on, Anthropic when no harness takes it), github_not_connected, executor_disabled, execution_already_active, or the card changed since it was read", body = matos_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "card_without_agent, agent_archived, agent_paused, agent_without_connector (without `repository`), repository_not_granted (the agent may not work on that repository), or an invalid repository or base_branch", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "card_without_agent, agent_archived, agent_paused, agent_without_connector (without `repository`), repository_not_granted (the agent may not work on that repository), too_many_repositories (more than 4 `extra_repositories`, a duplicate, or the primary repository among them), or an invalid repository, extra repository or base_branch", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -126,7 +158,10 @@ pub async fn handler(
     let started = match request.repository {
         None => start_with_connectors(&state, &caller, card_id, command).await?,
         Some(repository) => {
-            let target = RepositoryTarget::new(repository.parse()?, request.base_branch)?;
+            let target = with_extra_repositories(
+                RepositoryTarget::new(repository.parse()?, request.base_branch)?,
+                &request.extra_repositories,
+            )?;
             start_on_repository(&state, &github, caller.subject(), card_id, command, target).await?
         }
     };
@@ -183,7 +218,7 @@ pub(crate) async fn start_on_repository(
 ) -> Result<matos_core::StartedAgentRun, RunAgentError> {
     state
         .usecase
-        .check_agent_repository_run(subject.clone(), card_id, command, target.repository.clone())
+        .check_agent_repository_run(subject.clone(), card_id, command, &target)
         .await?;
     let organization_id = subject.organization_id;
     let not_connected = || RunAgentError::Refused(AgentRunRefusal::GithubNotConnected);
@@ -198,10 +233,14 @@ pub(crate) async fn start_on_repository(
     let reachable = github
         .repositories(organization_id, installation.installation_id)
         .await?;
-    if !reaches(&reachable, &target.repository) {
-        return Err(RunAgentError::Api(ApiError::Forbidden(Some(
-            "repository_not_allowed".into(),
-        ))));
+    for repository in
+        std::iter::once(&target.repository).chain(target.extra_repositories.as_slice())
+    {
+        if !reaches(&reachable, repository) {
+            return Err(RunAgentError::Api(ApiError::Forbidden(Some(
+                "repository_not_allowed".into(),
+            ))));
+        }
     }
     if target.base_branch.is_none() {
         target.base_branch = Some(
@@ -313,6 +352,42 @@ mod tests {
         assert!(!request.allow_writes);
         assert_eq!(request.repository, None);
         assert_eq!(request.base_branch, None);
+        assert!(request.extra_repositories.is_empty());
+    }
+
+    #[test]
+    fn extra_repositories_are_parsed_and_bounded() {
+        let target = || RepositoryTarget::new("acme/web".parse().unwrap(), None).unwrap();
+        let names = |names: &[&str]| {
+            names
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect::<Vec<_>>()
+        };
+        let kept = with_extra_repositories(target(), &names(&["acme/api", "acme/docs"])).unwrap();
+        assert_eq!(kept.extra_repositories.as_slice().len(), 2);
+        for refused in [
+            names(&["acme/a", "acme/b", "acme/c", "acme/d", "acme/e"]),
+            names(&["acme/api", "acme/api"]),
+            names(&["acme/web"]),
+        ] {
+            assert!(matches!(
+                with_extra_repositories(target(), &refused),
+                Err(RunAgentError::Refused(AgentRunRefusal::TooManyRepositories))
+            ));
+        }
+        assert!(matches!(
+            with_extra_repositories(target(), &names(&["not a repository"])),
+            Err(RunAgentError::Api(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn too_many_repositories_is_a_422_with_its_code() {
+        let (status, body) =
+            rendered(AgentRunError::Refused(AgentRunRefusal::TooManyRepositories)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(body["code"], "too_many_repositories");
     }
 
     #[test]

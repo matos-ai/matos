@@ -90,6 +90,7 @@ impl MatosUseCase {
         card_id: CardId,
         repository: RepositoryRef,
         base_branch: String,
+        extra_repositories: Vec<RepositoryRef>,
         expected_version: i32,
     ) -> Result<StartedExecution, CoreError> {
         let mut run_repository = run_repository;
@@ -146,6 +147,7 @@ impl MatosUseCase {
             card_id,
             repository,
             base_branch,
+            extra_repositories,
             subject.id,
             Utc::now(),
         );

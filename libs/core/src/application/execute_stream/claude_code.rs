@@ -11,6 +11,10 @@ pub(super) fn events(line: &Value) -> Vec<AgentEvent> {
     }
 }
 
+pub(super) fn hit_turn_limit(stopped: &str) -> bool {
+    stopped == "error_max_turns"
+}
+
 fn items<'a>(content: &'a Value, kind: &'a str) -> impl Iterator<Item = &'a Value> {
     content
         .as_array()

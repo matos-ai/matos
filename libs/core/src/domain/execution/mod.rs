@@ -383,6 +383,40 @@ pub struct TaskSpec {
     pub commit: CommitSettings,
     pub push_guard: PushGuard,
     pub companions: Vec<Companion>,
+    pub extra_repositories: Vec<ExtraRepository>,
+}
+
+/// A repository a change run modifies beside its primary one, with what the
+/// run needs to clone, guard and push it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExtraRepository {
+    pub repository: RepositoryRef,
+    pub path: String,
+    pub base_branch: String,
+    pub guard: PushGuard,
+}
+
+impl ExtraRepository {
+    /// `owner/name\tpath\tbase_branch\tmax_files\tmax_lines\tallow_paths`.
+    pub fn line(&self) -> String {
+        format!(
+            "{}\t{}\t{}\t{}\t{}\t{}",
+            self.repository,
+            self.path,
+            self.base_branch,
+            self.guard.max_files,
+            self.guard.max_lines,
+            self.guard.allow_paths.join(",")
+        )
+    }
+}
+
+pub fn extra_repository_lines(extras: &[ExtraRepository]) -> String {
+    extras
+        .iter()
+        .map(ExtraRepository::line)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// How a change run commits: as whom, what its message may not contain, and
@@ -431,8 +465,17 @@ pub enum TaskMarker {
         #[serde(default)]
         failed: Vec<String>,
     },
+    ExtraRepositories {
+        #[serde(default)]
+        cloned: Vec<String>,
+        #[serde(default)]
+        failed: Vec<String>,
+    },
+    /// A branch was pushed; `repository` is absent for the primary one.
     Pushed {
         sha: String,
+        #[serde(default)]
+        repository: Option<String>,
     },
     NoChanges,
     /// A piece of the audit report, base64.
@@ -461,6 +504,8 @@ pub enum TaskMarker {
     /// A piece of the title and body a change run wrote, base64.
     ContributionChunk {
         data: String,
+        #[serde(default)]
+        repository: Option<String>,
     },
     /// The contribution text is complete, as `ReportEnd` for the report.
     ContributionEnd {
@@ -468,6 +513,8 @@ pub enum TaskMarker {
         bytes: u64,
         #[serde(default)]
         truncated: bool,
+        #[serde(default)]
+        repository: Option<String>,
     },
     AuditDone,
     /// The checks refused the diff: nothing was committed or pushed.
@@ -479,6 +526,8 @@ pub enum TaskMarker {
         lint: QualityStatus,
         #[serde(default)]
         excerpt: Option<String>,
+        #[serde(default)]
+        repository: Option<String>,
     },
 }
 
@@ -521,6 +570,8 @@ pub struct TaskGrant {
     pub model: String,
     pub mode: ExecutionMode,
     pub companions: Vec<RepositoryRef>,
+    /// The repositories besides `repository` the run may push `branch` to.
+    pub writable_repositories: Vec<RepositoryRef>,
     /// Who started the run, whose own Anthropic key is used before the
     /// organization's; `None` on grants issued before it was recorded.
     pub initiated_by: Option<String>,
@@ -538,6 +589,29 @@ impl TaskGrant {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_extra_repository_reaches_the_executor_as_one_tab_separated_line() {
+        let extra = |name: &str, allow: &[&str]| ExtraRepository {
+            repository: name.parse().unwrap(),
+            path: "/workspace/api".into(),
+            base_branch: "develop".into(),
+            guard: PushGuard {
+                allow_paths: allow.iter().map(|path| (*path).to_owned()).collect(),
+                max_files: 80,
+                max_lines: 9000,
+                ..PushGuard::default()
+            },
+        };
+        assert_eq!(
+            extra("acme/api", &["a/", "b/"]).line(),
+            "acme/api\t/workspace/api\tdevelop\t80\t9000\ta/,b/"
+        );
+        assert_eq!(
+            extra_repository_lines(&[extra("acme/api", &[]), extra("acme/web", &["c/"])]),
+            "acme/api\t/workspace/api\tdevelop\t80\t9000\t\nacme/web\t/workspace/api\tdevelop\t80\t9000\tc/"
+        );
+    }
 
     #[test]
     fn a_repository_is_owner_slash_name() {
@@ -599,6 +673,7 @@ mod tests {
             model: "claude-sonnet-5-5".into(),
             mode: ExecutionMode::Change,
             companions: Vec::new(),
+            writable_repositories: Vec::new(),
             initiated_by: None,
             git_identity: GitIdentity::App,
             expires_at: now + chrono::Duration::minutes(5),
@@ -779,7 +854,45 @@ mod tests {
         assert_eq!(
             marker,
             TaskMarker::Pushed {
-                sha: "abc123".into()
+                sha: "abc123".into(),
+                repository: None
+            }
+        );
+    }
+
+    #[test]
+    fn markers_of_an_extra_repository_carry_its_name() {
+        let pushed: TaskMarker = serde_json::from_str(
+            r#"{"type":"matos","event":"pushed","sha":"abc","repository":"acme/sdk"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            pushed,
+            TaskMarker::Pushed {
+                sha: "abc".into(),
+                repository: Some("acme/sdk".into())
+            }
+        );
+        let extras: TaskMarker = serde_json::from_str(
+            r#"{"event":"extra_repositories","cloned":["acme/sdk"],"failed":["acme/web"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extras,
+            TaskMarker::ExtraRepositories {
+                cloned: vec!["acme/sdk".into()],
+                failed: vec!["acme/web".into()]
+            }
+        );
+        let quality: TaskMarker =
+            serde_json::from_str(r#"{"event":"quality","lint":"passed","repository":"acme/sdk"}"#)
+                .unwrap();
+        assert_eq!(
+            quality,
+            TaskMarker::Quality {
+                lint: QualityStatus::Passed,
+                excerpt: None,
+                repository: Some("acme/sdk".into())
             }
         );
     }

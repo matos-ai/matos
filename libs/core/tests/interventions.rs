@@ -1081,6 +1081,7 @@ async fn the_integrator_does_not_comment_for_the_run_of_an_execution() {
             card.id,
             "acme/web".parse().unwrap(),
             "main".into(),
+            Vec::new(),
             card.version,
         )
         .await

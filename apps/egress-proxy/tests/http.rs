@@ -105,6 +105,7 @@ fn grant() -> TaskGrant {
         model: MODEL.into(),
         mode: ExecutionMode::Change,
         companions: Vec::new(),
+        writable_repositories: Vec::new(),
         initiated_by: Some(INITIATOR.into()),
         git_identity: GitIdentity::App,
         expires_at: Utc::now() + chrono::Duration::minutes(30),
@@ -2152,6 +2153,111 @@ async fn nothing_can_be_pushed_to_a_companion_even_in_a_change_run() {
             "acme/sdk.git/git-receive-pack",
             TASK_TOKEN,
             push_body(&[(OLD, NEW, &format!("refs/heads/{BRANCH}"))]),
+        )
+        .await;
+    assert_eq!(push.status(), 403);
+    assert!(Harness::received(&h.github).is_empty());
+}
+
+fn with_writable(repository: &str) -> Fake {
+    Fake::with(TaskGrant {
+        writable_repositories: vec![repository.parse().unwrap()],
+        ..grant()
+    })
+}
+
+#[tokio::test]
+async fn a_writable_repository_accepts_a_push_to_the_run_branch_with_the_change_token() {
+    let fake = with_writable("acme/api");
+    let modes = fake.token_modes.clone();
+    let h = harness_with(fake).await;
+    let advert = h
+        .git_get(
+            "acme/api.git/info/refs?service=git-receive-pack",
+            TASK_TOKEN,
+        )
+        .await;
+    assert_eq!(advert.status(), 200);
+    let body = push_body(&[(OLD, NEW, &branch_ref())]);
+    let push = h
+        .git_post("acme/api.git/git-receive-pack", TASK_TOKEN, body.clone())
+        .await;
+    assert_eq!(push.status(), 200);
+    let seen = Harness::received(&h.github);
+    assert_eq!(seen.len(), 2);
+    assert_eq!(seen[1].uri, "/acme/api.git/git-receive-pack");
+    assert_eq!(seen[1].body.as_ref(), body.as_slice());
+    for request in &seen {
+        assert_eq!(request.headers["authorization"], basic(INSTALLATION_TOKEN));
+    }
+    assert_eq!(*modes.lock().unwrap(), vec![ExecutionMode::Change; 2]);
+}
+
+#[tokio::test]
+async fn a_writable_repository_refuses_a_push_to_any_other_branch() {
+    let h = harness_with(with_writable("acme/api")).await;
+    for reference in ["refs/heads/main", "refs/tags/v1"] {
+        let push = h
+            .git_post(
+                "acme/api.git/git-receive-pack",
+                TASK_TOKEN,
+                push_body(&[(OLD, NEW, reference)]),
+            )
+            .await;
+        assert_eq!(push.status(), 403, "{reference}");
+    }
+    let deletion = h
+        .git_post(
+            "acme/api.git/git-receive-pack",
+            TASK_TOKEN,
+            push_body(&[(OLD, ZERO, &branch_ref())]),
+        )
+        .await;
+    assert_eq!(deletion.status(), 403);
+    assert!(Harness::received(&h.github).is_empty());
+}
+
+#[tokio::test]
+async fn a_writable_repository_matches_without_case_and_is_pushed_with_the_member_token() {
+    let mut fake = Fake::with(TaskGrant {
+        git_identity: GitIdentity::Member,
+        writable_repositories: vec!["Acme/API".parse().unwrap()],
+        ..grant()
+    });
+    fake.member_tokens.insert(INITIATOR, MEMBER_TOKEN);
+    let h = harness_with(fake).await;
+    let push = h
+        .git_post(
+            "acme/api.git/git-receive-pack",
+            TASK_TOKEN,
+            push_body(&[(OLD, NEW, &branch_ref())]),
+        )
+        .await;
+    assert_eq!(push.status(), 200);
+    let fetch = h
+        .git_get("acme/api.git/info/refs?service=git-upload-pack", TASK_TOKEN)
+        .await;
+    assert_eq!(fetch.status(), 200);
+    let seen = Harness::received(&h.github);
+    assert_eq!(
+        authorizations(&seen),
+        [&basic(MEMBER_TOKEN), &basic(INSTALLATION_TOKEN)]
+    );
+}
+
+#[tokio::test]
+async fn a_companion_stays_read_only_beside_a_writable_repository() {
+    let h = harness_with(Fake::with(TaskGrant {
+        companions: vec!["acme/sdk".parse().unwrap()],
+        writable_repositories: vec!["acme/api".parse().unwrap()],
+        ..grant()
+    }))
+    .await;
+    let push = h
+        .git_post(
+            "acme/sdk.git/git-receive-pack",
+            TASK_TOKEN,
+            push_body(&[(OLD, NEW, &branch_ref())]),
         )
         .await;
     assert_eq!(push.status(), 403);

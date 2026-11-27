@@ -2,7 +2,7 @@ import { Check, ChevronDown, Copy, GitPullRequestDraft } from 'lucide-react'
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Markdown } from '#/components/markdown'
 import { relativeAge } from '#/domain/dashboard/format'
-import { pullRequestLink } from '#/domain/tasks/pull-request'
+import { pullRequestLinks } from '#/domain/tasks/pull-request'
 import { AgentAvatar } from '#/domain/tasks/ui/agent-chip'
 import { useCopyToClipboard } from '#/hooks/use-copy-to-clipboard'
 import { cn } from '#/lib/utils'
@@ -110,19 +110,24 @@ function CopyButton({ text }: { text: string }) {
 	)
 }
 
-function PullRequestChip({ body }: { body: string }) {
-	const pr = pullRequestLink(body)
-	if (!pr) return null
+function PullRequestChips({ body }: { body: string }) {
+	const links = pullRequestLinks(body)
+	if (links.length === 0) return null
 	return (
-		<a
-			href={pr.url}
-			target="_blank"
-			rel="noopener noreferrer"
-			className="mt-2 inline-flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-[13px] font-medium no-underline! hover:bg-secondary"
-		>
-			<GitPullRequestDraft aria-hidden="true" className="size-3.5" />
-			Ouvrir la pull request {pr.repository}#{pr.number}
-		</a>
+		<div className="flex flex-wrap gap-x-2">
+			{links.map((pr) => (
+				<a
+					key={pr.url}
+					href={pr.url}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="mt-2 inline-flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-[13px] font-medium no-underline! hover:bg-secondary"
+				>
+					<GitPullRequestDraft aria-hidden="true" className="size-3.5" />
+					Ouvrir la pull request {pr.repository}#{pr.number}
+				</a>
+			))}
+		</div>
 	)
 }
 
@@ -172,7 +177,7 @@ export function ThreadMessage({
 							<Markdown source={body} />
 						)}
 					</Foldable>
-					<PullRequestChip body={body} />
+					<PullRequestChips body={body} />
 				</div>
 				<div className="mt-0.5 flex h-7 items-center">
 					<CopyButton text={body} />

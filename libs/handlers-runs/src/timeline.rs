@@ -70,6 +70,9 @@ pub struct ExecutionResponse {
     pub branch: Option<String>,
     pub sha: Option<String>,
     pub pull_request: Option<String>,
+    /// The pull request each repository got, by `owner/name`.
+    #[serde(default)]
+    pub pull_requests: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     pub no_changes: bool,
     #[serde(default)]
@@ -241,6 +244,10 @@ mod tests {
             "branch": "matos/0a1b2c3d4e5f",
             "sha": "abc123",
             "pull_request": "https://github.com/acme/web/pull/7",
+            "pull_requests": {
+                "acme/web": "https://github.com/acme/web/pull/7",
+                "acme/sdk": "https://github.com/acme/sdk/pull/2"
+            },
             "no_changes": false,
             "job_started": true,
             "error": null
@@ -252,6 +259,10 @@ mod tests {
         assert_eq!(
             execution.pull_request.as_deref(),
             Some("https://github.com/acme/web/pull/7")
+        );
+        assert_eq!(
+            execution.pull_requests["acme/sdk"],
+            "https://github.com/acme/sdk/pull/2"
         );
         assert_eq!(execution.dropped_tool_calls, 3);
         assert!(!execution.no_changes);

@@ -19,7 +19,7 @@ pub const DEFAULT_DENY_PATHS: [&str; 13] = [
 pub const DEFAULT_MAX_FILES: u32 = 50;
 pub const DEFAULT_MAX_LINES: u32 = 2000;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PushGuard {
     pub deny_paths: Vec<String>,
     pub allow_paths: Vec<String>,

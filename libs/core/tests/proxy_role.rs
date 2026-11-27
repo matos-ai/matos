@@ -120,6 +120,7 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         model: "claude-sonnet-5-5".into(),
         mode: ExecutionMode::Change,
         companions: Vec::new(),
+        writable_repositories: Vec::new(),
         initiated_by: None,
         git_identity: GitIdentity::App,
         expires_at: Utc::now() + chrono::Duration::minutes(1),

@@ -1,4 +1,5 @@
 import type { Schemas } from '#/api/api.client'
+import { TOO_MANY_REPOSITORIES } from '#/domain/tasks/run-agent'
 
 export type AgentRunOutcome = Schemas.AgentRunOutcome
 
@@ -12,6 +13,9 @@ export function handoffNotice(
 		outcome.skipped === 'choose_repository'
 	)
 		return outcome.message ?? null
+	if (outcome.skipped === 'too_many_repositories') {
+		return `L'agent n'a pas démarré : ${TOO_MANY_REPOSITORIES}`
+	}
 	return `L'agent n'a pas démarré : ${outcome.message ?? 'raison inconnue'}`
 }
 

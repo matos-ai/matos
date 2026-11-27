@@ -3,13 +3,19 @@ use std::sync::Arc;
 use axum::{Extension, Json, extract::State, http::StatusCode};
 use axum_extra::routing::TypedPath;
 use matos_common::{CardId, CoreError, RunId};
-use matos_core::domain::execution::ports::CodeHost;
+use matos_core::domain::{
+    agent_task::RepositoryTarget,
+    execution::{RepositoryRef, ports::CodeHost},
+};
 use matos_github::GithubApps;
 use matos_handlers::{ApiError, AppState, Caller};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::response::CardResponse;
+use crate::{
+    response::CardResponse,
+    run_agent::{RunAgentError, with_extra_repositories},
+};
 
 #[derive(Clone)]
 pub struct CodeHostHandle(pub Arc<GithubApps>);
@@ -24,6 +30,12 @@ pub struct ExecuteCardPath {
 pub struct ExecuteCardRequest {
     /// `owner/name`, one of the repositories of the organization's installation.
     pub repository: String,
+    /// `owner/name` of other repositories the run modifies as well, each one
+    /// reachable by the installation: at most 4, distinct, and not
+    /// `repository`. Each gets the same branch and its own draft pull
+    /// request.
+    #[serde(default)]
+    pub extra_repositories: Vec<String>,
     /// The version the caller last read; a stale one is refused with 409.
     pub expected_version: i32,
 }
@@ -47,7 +59,7 @@ pub struct ExecuteCardResponse {
         (status = 403, description = "The policy refused, or repository_not_allowed: the installation does not reach that repository", body = matos_handlers::errors::ApiErrorResponse),
         (status = 404, description = "No such card in the caller's organization", body = matos_handlers::errors::ApiErrorResponse),
         (status = 409, description = "card_not_executable, execution_already_active, github_not_connected, or the card changed since it was read", body = matos_handlers::errors::ApiErrorResponse),
-        (status = 422, description = "Not an owner/name repository", body = matos_handlers::errors::ApiErrorResponse),
+        (status = 422, description = "Not an owner/name repository, or too_many_repositories (more than 4 `extra_repositories`, a duplicate, or the primary repository among them)", body = matos_handlers::errors::ApiErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
@@ -57,8 +69,14 @@ pub async fn handler(
     Extension(caller): Extension<Caller>,
     Extension(CodeHostHandle(github)): Extension<CodeHostHandle>,
     Json(request): Json<ExecuteCardRequest>,
-) -> Result<(StatusCode, Json<ExecuteCardResponse>), ApiError> {
-    let repository = request.repository.parse()?;
+) -> Result<(StatusCode, Json<ExecuteCardResponse>), RunAgentError> {
+    let repository: RepositoryRef = request.repository.parse()?;
+    let extras = with_extra_repositories(
+        RepositoryTarget::new(repository.clone(), None)?,
+        &request.extra_repositories,
+    )?
+    .extra_repositories
+    .into_vec();
     let subject = caller.subject();
     state
         .usecase
@@ -67,7 +85,7 @@ pub async fn handler(
     let organization_id = subject.organization_id;
     let not_connected = || CoreError::Conflict("github_not_connected".into());
     if github.client(organization_id).await?.is_none() {
-        return Err(not_connected().into());
+        return Err(RunAgentError::from(not_connected()));
     }
     let installation = state
         .usecase
@@ -77,8 +95,10 @@ pub async fn handler(
     let reachable = github
         .repositories(organization_id, installation.installation_id)
         .await?;
-    if !reachable.contains(&repository) {
-        return Err(ApiError::Forbidden(Some("repository_not_allowed".into())));
+    for wanted in std::iter::once(&repository).chain(&extras) {
+        if !reachable.contains(wanted) {
+            return Err(ApiError::Forbidden(Some("repository_not_allowed".into())).into());
+        }
     }
     let base_branch = github
         .default_branch(organization_id, installation.installation_id, &repository)
@@ -90,6 +110,7 @@ pub async fn handler(
             card_id,
             repository,
             base_branch,
+            extras,
             request.expected_version,
         )
         .await?;

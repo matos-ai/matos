@@ -59,6 +59,43 @@ pub struct RepositoryTarget {
     pub repository: RepositoryRef,
     /// `None` until the code host told the default branch.
     pub base_branch: Option<String>,
+    pub extra_repositories: ExtraRepositories,
+}
+
+pub const MAX_EXTRA_REPOSITORIES: usize = 4;
+
+/// The repositories a change run modifies besides its primary one: at most
+/// `MAX_EXTRA_REPOSITORIES`, distinct, and never the primary.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExtraRepositories(Vec<RepositoryRef>);
+
+impl ExtraRepositories {
+    pub fn new(
+        primary: &RepositoryRef,
+        repositories: Vec<RepositoryRef>,
+    ) -> Result<Self, AgentRunRefusal> {
+        let same = |a: &RepositoryRef, b: &RepositoryRef| {
+            a.owner().eq_ignore_ascii_case(b.owner()) && a.name().eq_ignore_ascii_case(b.name())
+        };
+        let distinct = repositories.iter().enumerate().all(|(index, repository)| {
+            !same(repository, primary)
+                && repositories[..index]
+                    .iter()
+                    .all(|earlier| !same(earlier, repository))
+        });
+        if repositories.len() > MAX_EXTRA_REPOSITORIES || !distinct {
+            return Err(AgentRunRefusal::TooManyRepositories);
+        }
+        Ok(Self(repositories))
+    }
+
+    pub fn as_slice(&self) -> &[RepositoryRef] {
+        &self.0
+    }
+
+    pub fn into_vec(self) -> Vec<RepositoryRef> {
+        self.0
+    }
 }
 
 impl RepositoryTarget {
@@ -76,6 +113,7 @@ impl RepositoryTarget {
         Ok(Self {
             repository,
             base_branch,
+            extra_repositories: ExtraRepositories::default(),
         })
     }
 }
@@ -100,6 +138,8 @@ pub enum AgentRunRefusal {
     GithubNotConnected,
     #[error("les exécutions sur un dépôt sont désactivées : {0}")]
     ExecutorDisabled(String),
+    #[error("au plus 4 dépôts supplémentaires, distincts du dépôt principal et entre eux")]
+    TooManyRepositories,
     #[error("l'identité FerrisKey de l'agent n'est pas encore active : réessayez dans une minute")]
     IdentityNotActive,
 }
@@ -116,6 +156,7 @@ impl AgentRunRefusal {
             Self::RepositoryNotGranted(_) => "repository_not_granted",
             Self::GithubNotConnected => "github_not_connected",
             Self::ExecutorDisabled(_) => "executor_disabled",
+            Self::TooManyRepositories => "too_many_repositories",
             Self::IdentityNotActive => "agent_identity_not_active",
         }
     }
@@ -151,7 +192,36 @@ mod tests {
     }
 
     #[test]
+    fn extra_repositories_are_at_most_four_distinct_and_not_the_primary() {
+        let primary: RepositoryRef = "acme/web".parse().unwrap();
+        let named = |names: &[&str]| -> Vec<RepositoryRef> {
+            names.iter().map(|name| name.parse().unwrap()).collect()
+        };
+        let four = named(&["acme/a", "acme/b", "acme/c", "acme/d"]);
+        assert_eq!(
+            ExtraRepositories::new(&primary, four.clone())
+                .unwrap()
+                .as_slice(),
+            four
+        );
+        let refused = |names: &[&str]| {
+            assert_eq!(
+                ExtraRepositories::new(&primary, named(names)),
+                Err(AgentRunRefusal::TooManyRepositories)
+            );
+        };
+        refused(&["acme/a", "acme/b", "acme/c", "acme/d", "acme/e"]);
+        refused(&["acme/a", "Acme/A"]);
+        refused(&["ACME/web"]);
+        assert!(ExtraRepositories::new(&primary, Vec::new()).is_ok());
+    }
+
+    #[test]
     fn refusals_have_stable_codes() {
+        assert_eq!(
+            AgentRunRefusal::TooManyRepositories.code(),
+            "too_many_repositories"
+        );
         assert_eq!(AgentRunRefusal::NoAssignee.code(), "card_without_agent");
         assert_eq!(AgentRunRefusal::AgentArchived.code(), "agent_archived");
         assert_eq!(AgentRunRefusal::AgentPaused.code(), "agent_paused");

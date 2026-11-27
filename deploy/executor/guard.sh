@@ -182,9 +182,12 @@ guard_lint() {
 }
 
 guard_quality_marker() {
-  local excerpt=""
+  local repository="${1:-}" excerpt="" tag=""
+  if [ -n "$repository" ]; then
+    tag=",\"repository\":\"$repository\""
+  fi
   if [ -n "$quality_excerpt" ]; then
     excerpt=",\"excerpt\":\"$(printf '%s\n' "$quality_excerpt" | guard_json)\""
   fi
-  printf '{"type":"matos","event":"quality","lint":"%s"%s}\n' "$quality_status" "$excerpt"
+  printf '{"type":"matos","event":"quality","lint":"%s"%s%s}\n' "$quality_status" "$tag" "$excerpt"
 }
