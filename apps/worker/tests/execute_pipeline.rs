@@ -2697,3 +2697,231 @@ async fn a_pushed_repository_the_run_does_not_list_fails_the_run_before_any_pull
     assert!(failure.unwrap().contains("acme/other"));
     assert!(seen.pull_requests.lock().unwrap().is_empty());
 }
+
+const EXIT_THREE: &str = "container exited with code 3: Error";
+const LIMIT_NOTE: &str =
+    "L'agent s'est arrêté à la limite de 50 tours : ce changement est partiel.";
+const RESUME_ON_CARD: &str = "Réponds sur la carte pour qu'il reprenne.";
+
+fn stopped_on_limit(mut lines: Vec<TaskLine>) -> Vec<TaskLine> {
+    for line in &mut lines {
+        if let TaskLine::Agent(value) = line
+            && value["type"] == "result"
+        {
+            value["subtype"] = serde_json::json!("error_max_turns");
+        }
+    }
+    lines
+}
+
+fn exited_with_three() -> TaskOutcome {
+    TaskOutcome::Failed {
+        reason: EXIT_THREE.into(),
+    }
+}
+
+#[tokio::test]
+async fn an_agent_stopped_on_its_turn_limit_after_pushing_still_opens_the_pull_request_with_a_note()
+{
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = runner_ending(
+        &seen,
+        stopped_on_limit(lines_of(SAMPLE)),
+        exited_with_three(),
+    );
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let (status, failure) = run_row(&world.pool, world.run_id).await;
+    assert_eq!((status.as_str(), failure), ("succeeded", None));
+    let opened = seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    let body = &opened[0].body;
+    let section = body.find("## Travail incomplet").unwrap();
+    assert!(body.contains(LIMIT_NOTE));
+    assert!(section < body.find("## Checks").unwrap());
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["stopped"], "error_max_turns");
+    assert_eq!(output["incomplete"], LIMIT_NOTE);
+    assert_eq!(output["pull_request"], PR_URL);
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains(PR_URL));
+    assert!(
+        posted[0]
+            .2
+            .contains(&format!("{LIMIT_NOTE} {RESUME_ON_CARD}"))
+    );
+    assert!(!posted[0].2.contains("L'exécution a échoué"));
+    assert_closed(&world).await;
+}
+
+#[tokio::test]
+async fn an_agent_that_exited_in_error_after_pushing_opens_the_pull_request_and_says_why() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = runner_ending(&seen, lines_of(SAMPLE), exited_with_three());
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    let note = format!(
+        "L'agent s'est arrêté en erreur ({EXIT_THREE}) : ce changement est peut-être partiel."
+    );
+    let opened = seen.pull_requests.lock().unwrap().clone();
+    assert!(
+        opened[0]
+            .body
+            .contains(&format!("## Travail incomplet\n\n{note}"))
+    );
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains(&format!("{note} {RESUME_ON_CARD}")));
+}
+
+#[tokio::test]
+async fn a_turn_limit_with_nothing_pushed_fails_the_run_with_the_limit_as_reason() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = deleting(runner_ending(
+        &seen,
+        stopped_on_limit(no_changes_lines()),
+        exited_with_three(),
+    ));
+    let pipeline = pipeline(&world, runner, without_config());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let (status, failure) = run_row(&world.pool, world.run_id).await;
+    assert_eq!(status, "failed");
+    assert_eq!(
+        failure.as_deref(),
+        Some("L'agent a atteint la limite de 50 tours sans terminer.")
+    );
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains("limite de 50 tours sans terminer"));
+    assert!(!posted[0].2.contains("container exited"));
+}
+
+#[tokio::test]
+async fn a_failure_without_a_push_nor_a_limit_keeps_the_container_reason() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = deleting(runner_ending(
+        &seen,
+        no_changes_lines(),
+        exited_with_three(),
+    ));
+    let pipeline = pipeline(&world, runner, without_config());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let (status, failure) = run_row(&world.pool, world.run_id).await;
+    assert_eq!(status, "failed");
+    assert_eq!(failure.as_deref(), Some(EXIT_THREE));
+}
+
+#[tokio::test]
+async fn a_blocked_diff_on_a_failed_exit_stays_blocked_even_with_a_pushed_marker() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let mut lines = stopped_on_limit(lines_of(SAMPLE));
+    lines.push(TaskLine::Matos(TaskMarker::GuardBlocked {
+        reasons: vec!["chemin sensible : .github/workflows/ci.yml".into()],
+    }));
+    let runner = deleting(runner_ending(&seen, lines, exited_with_three()));
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let (status, failure) = run_row(&world.pool, world.run_id).await;
+    assert_eq!(status, "failed");
+    let failure = failure.unwrap();
+    assert!(failure.contains("chemin sensible : .github/workflows/ci.yml"));
+    assert!(!failure.contains("limite de 50 tours"));
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_resumed_run_keeps_the_incomplete_note_for_the_pull_request_it_still_opens() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    crashed_attempt(
+        &world,
+        &format!("first-{}", world.run_id),
+        Some(serde_json::json!({
+            "job_started": true,
+            "branch": branch_of(world.run_id),
+            "sha": PUSHED_SHA,
+            "pull_request": PR_URL,
+            "pull_requests": {"acme/web": PR_URL},
+            "incomplete": LIMIT_NOTE,
+        })),
+    )
+    .await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_attach()
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(true))));
+    following(both_pushed_lines(), &mut runner);
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert!(body_of(&seen, "acme/api").contains(&format!("## Travail incomplet\n\n{LIMIT_NOTE}")));
+    let updates = linking.updates.lock().unwrap().clone();
+    assert!(updates.iter().all(|update| update.2.contains(LIMIT_NOTE)));
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["incomplete"], LIMIT_NOTE);
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(
+        posted[0]
+            .2
+            .contains(&format!("{LIMIT_NOTE} {RESUME_ON_CARD}"))
+    );
+}
+
+#[tokio::test]
+async fn a_multi_repository_run_that_failed_after_pushing_puts_the_note_in_every_pull_request() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let runner = runner_ending(
+        &seen,
+        stopped_on_limit(both_pushed_lines()),
+        exited_with_three(),
+    );
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    for repository in ["acme/web", "acme/api"] {
+        assert!(
+            body_of(&seen, repository).contains(LIMIT_NOTE),
+            "{repository}"
+        );
+    }
+    assert_eq!(linking.updates.lock().unwrap().len(), 2);
+}

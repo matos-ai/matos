@@ -196,6 +196,19 @@ impl StreamReader {
         })
     }
 
+    /// Whether the harness said it stopped on its turn limit. Only the
+    /// harnesses the executor gives a turn limit can say so.
+    pub(super) fn hit_turn_limit(&self) -> bool {
+        self.digest
+            .stopped
+            .as_deref()
+            .is_some_and(|stopped| match self.harness {
+                Harness::ClaudeCode => claude_code::hit_turn_limit(stopped),
+                Harness::MistralVibe => vibe::hit_turn_limit(stopped),
+                Harness::Codex | Harness::Antigravity => false,
+            })
+    }
+
     /// The branches the task pushed, in the order it reported them.
     pub(super) fn pushed(&self) -> &[PushedBranch] {
         &self.pushed
@@ -783,6 +796,58 @@ mod tests {
         let digest = read(&sample, "");
         let summary = &digest.tool_calls[0].summary;
         assert!(summary.chars().count() <= INPUT_MAX_CHARS + OUTPUT_MAX_CHARS + 3);
+    }
+
+    fn stopped_on(harness: Harness, stopped: Option<&str>) -> StreamReader {
+        let mut reader = StreamReader::new(harness, Redactor::new(""));
+        reader.digest.stopped = stopped.map(str::to_owned);
+        reader
+    }
+
+    #[test]
+    fn claude_code_stops_on_its_turn_limit_with_error_max_turns_only() {
+        for (stopped, limit) in [
+            (Some("error_max_turns"), true),
+            (Some("error_during_execution"), false),
+            (Some("success"), false),
+            (Some("limit"), false),
+            (None, false),
+        ] {
+            assert_eq!(
+                stopped_on(Harness::ClaudeCode, stopped).hit_turn_limit(),
+                limit,
+                "{stopped:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn mistral_vibe_stops_on_its_turn_limit_when_its_export_says_limit() {
+        for (stopped, limit) in [
+            (Some("limit"), true),
+            (Some("Limit"), true),
+            (Some("iteration_limit"), true),
+            (Some("max_turns"), true),
+            (Some("max turns reached"), true),
+            (Some("rate limited"), false),
+            (Some("quota"), false),
+            (Some("aborted"), false),
+            (None, false),
+        ] {
+            assert_eq!(
+                stopped_on(Harness::MistralVibe, stopped).hit_turn_limit(),
+                limit,
+                "{stopped:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn harnesses_without_a_turn_limit_never_report_one() {
+        for harness in [Harness::Codex, Harness::Antigravity] {
+            assert!(!stopped_on(harness, Some("limit")).hit_turn_limit());
+            assert!(!stopped_on(harness, Some("error_max_turns")).hit_turn_limit());
+        }
     }
 
     #[test]

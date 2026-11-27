@@ -62,6 +62,9 @@ const TASK_TOKEN_SLOT: &str = "matos-task-token";
 const GRANT_GRACE: Duration = Duration::from_secs(5 * 60);
 const MEMBER_TOKEN_MARGIN: Duration = Duration::from_secs(10 * 60);
 const APP_PULL_REQUEST_NOTE: &str = "Pull request ouverte par l'application GitHub : connecte ton compte GitHub dans Matos (Paramètres › Intégrations › GitHub) pour qu'elle soit ouverte à ton nom.";
+const INCOMPLETE_HEADING: &str = "## Travail incomplet";
+const RESUME_ON_CARD: &str = "Réponds sur la carte pour qu'il reprenne.";
+const INCOMPLETE_REASON_MAX_CHARS: usize = 300;
 const LINKED_HEADING: &str = "## Pull requests liées";
 const PULL_REQUEST_EXISTS: &str = "already exists";
 const COMMENT_MAX_CHARS: usize = 5_000;
@@ -361,6 +364,7 @@ struct Extras {
     companions: Option<String>,
     app_note: bool,
     extra_repositories: Vec<ExtraRepository>,
+    incomplete: Option<String>,
 }
 
 impl Extras {
@@ -383,6 +387,7 @@ impl Extras {
             job_started: output.is_some_and(|output| output["job_started"] == true),
             app_note: output.is_some_and(|output| output["app_note"] == true),
             extra_repositories: carried_extra_repositories(output),
+            incomplete: text("incomplete"),
             ..Self::default()
         }
     }
@@ -420,6 +425,7 @@ struct ExecuteOutput<'a> {
     companions: Option<&'a str>,
     app_note: bool,
     extra_repositories: &'a [ExtraRepository],
+    incomplete: Option<&'a str>,
 }
 
 fn carried_pull_requests(output: Option<&serde_json::Value>) -> BTreeMap<String, String> {
@@ -462,6 +468,7 @@ fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, Core
         companions: extras.companions.as_deref(),
         app_note: extras.app_note,
         extra_repositories: &extras.extra_repositories,
+        incomplete: extras.incomplete.as_deref(),
     })
     .map_err(|error| CoreError::Internal(format!("encoding the execution report: {error}")))
 }
@@ -1254,6 +1261,17 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             TaskOutcome::DeadlineExceeded => Err(CoreError::Internal(DEADLINE_REASON.into())),
             TaskOutcome::Failed { reason } => match progress.reader.blocked() {
                 Some(reasons) => Err(CoreError::Invalid(blocked_reason(&reasons))),
+                None if !progress.reader.pushed().is_empty() => {
+                    if progress.extras.incomplete.is_none() {
+                        progress.extras.incomplete =
+                            Some(self.incomplete_note(prepared, &progress.reader, &reason));
+                    }
+                    self.open_pull_requests(context, host, prepared, &mut progress)
+                        .await
+                }
+                None if progress.reader.hit_turn_limit() => Err(CoreError::Internal(
+                    turn_limit_reason(self.config.max_turns),
+                )),
                 None => {
                     let reason = prepared.redactor.apply(&reason);
                     Err(CoreError::Internal(
@@ -1291,6 +1309,17 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 )),
             },
         }
+    }
+
+    fn incomplete_note(&self, prepared: &Prepared, reader: &StreamReader, reason: &str) -> String {
+        if reader.hit_turn_limit() {
+            return incomplete_at_limit(self.config.max_turns);
+        }
+        let reason = truncate_chars(
+            &prepared.redactor.apply(reason),
+            INCOMPLETE_REASON_MAX_CHARS,
+        );
+        incomplete_on_error(&reason)
     }
 
     async fn follow_once(
@@ -1415,8 +1444,9 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             texts.push(PullRequestText {
                 title: prepared.redactor.apply(&contribution.title),
                 body: defang_mentions(&format!(
-                    "{}{}",
+                    "{}{}{}",
                     prepared.redactor.apply(&contribution.body).trim_end(),
+                    incomplete_section(progress.extras.incomplete.as_deref()),
                     quality_section(&quality)
                 )),
                 source,
@@ -1677,15 +1707,24 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 finished.extras.companions.as_deref(),
             ),
         };
-        let note = (finished.extras.app_note
-            && matches!(finished.result, Ok(Finish::Pushed { .. })))
-        .then_some(APP_PULL_REQUEST_NOTE);
-        let room =
-            COMMENT_MAX_CHARS.saturating_sub(note.map_or(0, |note| note.chars().count() + 2));
-        let body = with_companion_note(
-            defang_mentions(&truncate_chars(&finished.redactor.apply(&body), room)),
-            note,
+        let pushed = matches!(finished.result, Ok(Finish::Pushed { .. }));
+        let incomplete = finished
+            .extras
+            .incomplete
+            .as_deref()
+            .filter(|_| pushed)
+            .map(|note| format!("{note} {RESUME_ON_CARD}"));
+        let app_note = (finished.extras.app_note && pushed).then_some(APP_PULL_REQUEST_NOTE);
+        let room = COMMENT_MAX_CHARS.saturating_sub(
+            [incomplete.as_deref(), app_note]
+                .into_iter()
+                .flatten()
+                .map(|note| note.chars().count() + 2)
+                .sum::<usize>(),
         );
+        let body = defang_mentions(&truncate_chars(&finished.redactor.apply(&body), room));
+        let body = with_companion_note(body, incomplete.as_deref());
+        let body = with_companion_note(body, app_note);
         let actor = finished.actor.clone();
         self.comment(context, actor, body, &mut finished.extras)
             .await;
@@ -2046,6 +2085,24 @@ fn comment_body(
         ),
     };
     body.trim_end().to_owned()
+}
+
+fn turn_limit_reason(max_turns: u32) -> String {
+    format!("L'agent a atteint la limite de {max_turns} tours sans terminer.")
+}
+
+fn incomplete_at_limit(max_turns: u32) -> String {
+    format!("L'agent s'est arrêté à la limite de {max_turns} tours : ce changement est partiel.")
+}
+
+fn incomplete_on_error(reason: &str) -> String {
+    format!("L'agent s'est arrêté en erreur ({reason}) : ce changement est peut-être partiel.")
+}
+
+fn incomplete_section(note: Option<&str>) -> String {
+    note.map_or_else(String::new, |note| {
+        format!("\n\n{INCOMPLETE_HEADING}\n\n{note}")
+    })
 }
 
 fn linked_section(others: &[&str]) -> String {
