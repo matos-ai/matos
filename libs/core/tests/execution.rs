@@ -524,6 +524,7 @@ async fn a_task_grant_is_found_by_hash_and_revoked_with_its_run() {
         branch: "matos/0a1b2c3d4e5f".into(),
         model: "claude-sonnet-5-5".into(),
         mode: ExecutionMode::Change,
+        companions: vec!["acme/sdk".parse().unwrap(), "acme/docs".parse().unwrap()],
         initiated_by: None,
         expires_at: Utc::now() + chrono::Duration::minutes(40),
         revoked_at: None,
@@ -543,6 +544,7 @@ async fn a_task_grant_is_found_by_hash_and_revoked_with_its_run() {
     assert_eq!(found.repository, grant.repository);
     assert_eq!(found.branch, grant.branch);
     assert_eq!(found.model, "claude-sonnet-5-5");
+    assert_eq!(found.companions, grant.companions);
     assert!(found.is_usable(Utc::now()));
     assert_eq!(unknown, None);
     assert!(revoked.revoked_at.is_some());
@@ -579,6 +581,7 @@ async fn deleting_a_run_deletes_its_grants() {
                 branch: "matos/x".into(),
                 model: "claude-sonnet-5-5".into(),
                 mode: ExecutionMode::Change,
+                companions: Vec::new(),
                 initiated_by: None,
                 expires_at: Utc::now() + chrono::Duration::minutes(1),
                 revoked_at: None,

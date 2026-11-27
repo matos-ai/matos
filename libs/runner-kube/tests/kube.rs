@@ -45,6 +45,7 @@ fn spec(deadline: Duration) -> TaskSpec {
             fallback_message: "test".into(),
         },
         push_guard: PushGuard::default(),
+        companions: Vec::new(),
     }
 }
 

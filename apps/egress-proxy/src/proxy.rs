@@ -17,7 +17,11 @@ use matos_core::domain::{
 };
 
 use crate::{
-    anthropic, auth, credentials::Credentials, error::ProxyError, git, google, mistral, openai,
+    anthropic, auth,
+    credentials::Credentials,
+    error::ProxyError,
+    git, google, mistral, openai,
+    registry::{self, RegistryConfig},
 };
 
 const GRANT_CACHE_TTL: Duration = Duration::from_secs(10);
@@ -52,6 +56,7 @@ pub struct ProxyConfig {
     pub google_base: String,
     pub mistral_base: String,
     pub github_base: String,
+    pub registries: RegistryConfig,
 }
 
 pub struct Proxy<C> {
@@ -82,6 +87,7 @@ impl<C: Credentials> Proxy<C> {
                 google_base: config.google_base.trim_end_matches('/').to_owned(),
                 mistral_base: config.mistral_base.trim_end_matches('/').to_owned(),
                 github_base: config.github_base.trim_end_matches('/').to_owned(),
+                registries: config.registries.trimmed(),
             },
             cache: Mutex::new(HashMap::new()),
             unknown: Mutex::new(HashMap::new()),
@@ -194,5 +200,8 @@ pub fn router<C: Credentials>(proxy: Proxy<C>) -> Router {
         .route("/google/{*path}", any(google::handle::<C>))
         .route("/mistral/{*path}", any(mistral::handle::<C>))
         .route("/git/{owner}/{repo}/{*rest}", any(git::handle::<C>))
+        .route("/crates-index/{*path}", get(registry::crates_index::<C>))
+        .route("/crates/{*path}", get(registry::crates::<C>))
+        .route("/npm/{*path}", get(registry::npm::<C>))
         .with_state(Arc::new(proxy))
 }

@@ -110,6 +110,7 @@ pub(super) struct StreamReader {
     contribution: ReportAssembler,
     blocked: Option<Vec<String>>,
     quality: Option<Quality>,
+    companions: Option<CompanionOutcome>,
     pending: HashMap<String, PendingCall>,
     order: Vec<String>,
     dirty: bool,
@@ -119,6 +120,12 @@ pub(super) struct StreamReader {
 pub(super) struct Quality {
     pub(super) lint: QualityStatus,
     pub(super) excerpt: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct CompanionOutcome {
+    pub(super) cloned: Vec<String>,
+    pub(super) failed: Vec<String>,
 }
 
 impl StreamReader {
@@ -133,6 +140,7 @@ impl StreamReader {
             contribution: ReportAssembler::default(),
             blocked: None,
             quality: None,
+            companions: None,
             pending: HashMap::new(),
             order: Vec::new(),
             dirty: false,
@@ -147,6 +155,7 @@ impl StreamReader {
         self.contribution = ReportAssembler::default();
         self.blocked = None;
         self.quality = None;
+        self.companions = None;
         self.pending.clear();
         self.order.clear();
         self.dirty = true;
@@ -182,6 +191,21 @@ impl StreamReader {
                 .excerpt
                 .as_deref()
                 .map(|excerpt| self.redactor.apply(excerpt)),
+        })
+    }
+
+    pub(super) fn companions(&self) -> Option<CompanionOutcome> {
+        self.companions.as_ref().map(|outcome| CompanionOutcome {
+            cloned: outcome
+                .cloned
+                .iter()
+                .map(|name| self.redactor.apply(name))
+                .collect(),
+            failed: outcome
+                .failed
+                .iter()
+                .map(|name| self.redactor.apply(name))
+                .collect(),
         })
     }
 
@@ -260,6 +284,13 @@ impl StreamReader {
                 self.quality = Some(Quality {
                     lint: *lint,
                     excerpt: excerpt.clone(),
+                });
+                self.dirty = true;
+            }
+            TaskLine::Matos(TaskMarker::Companions { cloned, failed }) => {
+                self.companions = Some(CompanionOutcome {
+                    cloned: cloned.clone(),
+                    failed: failed.clone(),
                 });
                 self.dirty = true;
             }
@@ -816,6 +847,26 @@ mod tests {
             reader.marker(),
             Some(&TaskMarker::Pushed { sha: "abc".into() })
         );
+    }
+
+    #[test]
+    fn the_companions_marker_is_kept_apart_from_the_final_marker() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new("tok-secret"));
+        reader.accept(&TaskLine::Matos(TaskMarker::Companions {
+            cloned: vec!["acme/sdk".into()],
+            failed: vec!["acme/tok-secret".into()],
+        }));
+        reader.accept(&TaskLine::Matos(TaskMarker::NoChanges));
+        assert_eq!(
+            reader.companions(),
+            Some(CompanionOutcome {
+                cloned: vec!["acme/sdk".into()],
+                failed: vec!["acme/***".into()]
+            })
+        );
+        assert_eq!(reader.marker(), Some(&TaskMarker::NoChanges));
+        reader.reset();
+        assert_eq!(reader.companions(), None);
     }
 
     #[test]

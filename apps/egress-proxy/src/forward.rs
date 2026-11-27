@@ -2,8 +2,8 @@ use std::io;
 
 use axum::{
     body::{Body, Bytes},
-    http::{HeaderMap, HeaderName, header},
-    response::Response,
+    http::{HeaderMap, HeaderName, StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use futures_util::{Stream, StreamExt};
 
@@ -88,6 +88,27 @@ pub fn relay(upstream: reqwest::Response, permit: Permit) -> Response {
         chunk
     });
     let mut response = Response::new(Body::from_stream(held));
+    *response.status_mut() = status;
+    *response.headers_mut() = headers;
+    response
+}
+
+pub fn relay_bounded(upstream: reqwest::Response, kept: &[HeaderName]) -> Response {
+    let status = upstream.status();
+    let headers = copy_allowed(upstream.headers(), kept);
+    if declared_length(&headers).is_some_and(|length| length > MAX_BODY) {
+        return (StatusCode::BAD_GATEWAY, "upstream body too large").into_response();
+    }
+    let mut seen = 0u64;
+    let bounded = upstream.bytes_stream().map(move |chunk| {
+        let chunk = chunk.map_err(io::Error::other)?;
+        seen += chunk.len() as u64;
+        if seen > MAX_BODY {
+            return Err(io::Error::other("upstream body too large"));
+        }
+        Ok(chunk)
+    });
+    let mut response = Response::new(Body::from_stream(bounded));
     *response.status_mut() = status;
     *response.headers_mut() = headers;
     response

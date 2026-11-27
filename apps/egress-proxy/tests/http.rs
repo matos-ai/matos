@@ -26,7 +26,9 @@ use matos_core::domain::{
     execution::{ExecutionMode, RepositoryRef, TaskGrant},
     provider::ProviderKind,
 };
-use matos_egress_proxy::{Credentials, CredentialsError, Proxy, ProxyConfig, router};
+use matos_egress_proxy::{
+    Credentials, CredentialsError, Proxy, ProxyConfig, RegistryConfig, router,
+};
 use tokio::{net::TcpListener, sync::mpsc};
 
 const TASK_TOKEN: &str = "task-token-0001";
@@ -53,6 +55,15 @@ const OLD: &str = "1111111111111111111111111111111111111111";
 const NEW: &str = "2222222222222222222222222222222222222222";
 const MESSAGE: &str = r#"{"model":"claude-sonnet-5-5","max_tokens":1024}"#;
 const ZERO: &str = "0000000000000000000000000000000000000000";
+
+fn no_registries() -> RegistryConfig {
+    RegistryConfig {
+        crates_index_base: "http://127.0.0.1:1".into(),
+        crates_static_base: "http://127.0.0.1:1".into(),
+        npm_base: "http://127.0.0.1:1".into(),
+        public_base: None,
+    }
+}
 
 fn sha256(token: &str) -> [u8; 32] {
     let mut out = [0u8; 32];
@@ -91,6 +102,7 @@ fn grant() -> TaskGrant {
         branch: BRANCH.into(),
         model: MODEL.into(),
         mode: ExecutionMode::Change,
+        companions: Vec::new(),
         initiated_by: Some(INITIATOR.into()),
         expires_at: Utc::now() + chrono::Duration::minutes(30),
         revoked_at: None,
@@ -285,6 +297,7 @@ async fn start_with(
             google_base: google_url,
             mistral_base: mistral_url,
             github_base: github_url,
+            registries: no_registries(),
         },
         plain_client(),
     );
@@ -1855,6 +1868,7 @@ async fn the_vibe_stream_is_relayed() {
             google_base: google_url,
             mistral_base: mistral_url,
             github_base: github_url,
+            registries: no_registries(),
         },
         plain_client(),
     );
@@ -2045,4 +2059,398 @@ async fn an_organization_without_a_mistral_key_gets_a_clear_403() {
     assert_eq!(response.status(), 403);
     assert!(response.text().await.unwrap().contains("Mistral key"));
     assert!(Harness::received(&h.mistral).is_empty());
+}
+
+fn with_companion(companion: &str) -> Fake {
+    Fake::with(TaskGrant {
+        companions: vec![companion.parse().unwrap()],
+        ..grant()
+    })
+}
+
+#[tokio::test]
+async fn a_companion_is_fetched_with_a_read_only_token_over_its_own_repository() {
+    let fake = with_companion("acme/sdk");
+    let modes = fake.token_modes.clone();
+    let h = harness_with(fake).await;
+    let refs = h
+        .git_get("acme/sdk.git/info/refs?service=git-upload-pack", TASK_TOKEN)
+        .await;
+    assert_eq!(refs.status(), 200);
+    let pack = h
+        .git_post("acme/sdk.git/git-upload-pack", TASK_TOKEN, b"0000".to_vec())
+        .await;
+    assert_eq!(pack.status(), 200);
+    let seen = Harness::received(&h.github);
+    assert_eq!(seen.len(), 2);
+    assert!(seen[0].uri.starts_with("/acme/sdk.git/info/refs"));
+    assert_eq!(seen[1].uri, "/acme/sdk.git/git-upload-pack");
+    for request in &seen {
+        assert_eq!(request.headers["authorization"], basic(READ_ONLY_TOKEN));
+        assert!(
+            !request.headers["authorization"]
+                .to_str()
+                .unwrap()
+                .contains(INSTALLATION_TOKEN)
+        );
+    }
+    assert_eq!(*modes.lock().unwrap(), vec![ExecutionMode::Audit; 2]);
+}
+
+#[tokio::test]
+async fn a_companion_matches_without_case_and_the_run_repository_keeps_its_own_token() {
+    let fake = with_companion("Acme/SDK");
+    let modes = fake.token_modes.clone();
+    let h = harness_with(fake).await;
+    assert_eq!(
+        h.git_get("acme/sdk.git/info/refs?service=git-upload-pack", TASK_TOKEN)
+            .await
+            .status(),
+        200
+    );
+    assert_eq!(
+        h.git_get("acme/web.git/info/refs?service=git-upload-pack", TASK_TOKEN)
+            .await
+            .status(),
+        200
+    );
+    assert_eq!(
+        *modes.lock().unwrap(),
+        vec![ExecutionMode::Audit, ExecutionMode::Change]
+    );
+}
+
+#[tokio::test]
+async fn nothing_can_be_pushed_to_a_companion_even_in_a_change_run() {
+    let h = harness_with(with_companion("acme/sdk")).await;
+    let advert = h
+        .git_get(
+            "acme/sdk.git/info/refs?service=git-receive-pack",
+            TASK_TOKEN,
+        )
+        .await;
+    assert_eq!(advert.status(), 403);
+    let push = h
+        .git_post(
+            "acme/sdk.git/git-receive-pack",
+            TASK_TOKEN,
+            push_body(&[(OLD, NEW, &format!("refs/heads/{BRANCH}"))]),
+        )
+        .await;
+    assert_eq!(push.status(), 403);
+    assert!(Harness::received(&h.github).is_empty());
+}
+
+#[tokio::test]
+async fn a_repository_that_is_neither_the_run_nor_a_companion_is_refused() {
+    let h = harness_with(with_companion("acme/sdk")).await;
+    for path in [
+        "acme/other.git/info/refs?service=git-upload-pack",
+        "other/sdk.git/info/refs?service=git-upload-pack",
+        "acme/sdk-extra.git/info/refs?service=git-upload-pack",
+    ] {
+        assert_eq!(h.git_get(path, TASK_TOKEN).await.status(), 403, "{path}");
+    }
+    assert!(Harness::received(&h.github).is_empty());
+}
+
+#[tokio::test]
+async fn a_grant_without_companions_refuses_any_other_repository() {
+    let h = harness().await;
+    assert_eq!(
+        h.git_get("acme/sdk.git/info/refs?service=git-upload-pack", TASK_TOKEN)
+            .await
+            .status(),
+        403
+    );
+}
+
+const PUBLIC: &str = "http://matos-egress-proxy.matos.svc:4130";
+
+struct Registries {
+    url: String,
+    index: Log,
+    crates: Log,
+    npm: Log,
+    client: reqwest::Client,
+}
+
+async fn registries_with(
+    index: Router,
+    crates: Router,
+    npm: Router,
+    public_base: Option<&str>,
+) -> Registries {
+    let (index_url, index_log) = logged(index).await;
+    let (crates_url, crates_log) = logged(crates).await;
+    let (npm_url, npm_log) = logged(npm).await;
+    let proxy = Proxy::with_http(
+        Fake::with(grant()),
+        ProxyConfig {
+            anthropic_base: "http://127.0.0.1:1".into(),
+            openai_base: "http://127.0.0.1:1".into(),
+            google_base: "http://127.0.0.1:1".into(),
+            mistral_base: "http://127.0.0.1:1".into(),
+            github_base: "http://127.0.0.1:1".into(),
+            registries: RegistryConfig {
+                crates_index_base: format!("{index_url}/"),
+                crates_static_base: format!("{crates_url}/crates"),
+                npm_base: npm_url,
+                public_base: public_base.map(str::to_owned),
+            },
+        },
+        plain_client(),
+    );
+    Registries {
+        url: serve(router(proxy)).await,
+        index: index_log,
+        crates: crates_log,
+        npm: npm_log,
+        client: plain_client(),
+    }
+}
+
+async fn logged(app: Router) -> (String, Log) {
+    let log = Log::default();
+    let recorder = axum::middleware::from_fn_with_state(
+        log.clone(),
+        |State(log): State<Log>, request: Request, next: axum::middleware::Next| async move {
+            log.lock().unwrap().push(Captured {
+                method: request.method().clone(),
+                uri: request.uri().to_string(),
+                headers: request.headers().clone(),
+                body: Bytes::new(),
+            });
+            next.run(request).await
+        },
+    );
+    (serve(app.layer(recorder)).await, log)
+}
+
+const CONFIG_JSON: &str =
+    r#"{"dl":"https://static.crates.io/crates","api":"https://crates.io","auth-required":false}"#;
+
+async fn registries() -> Registries {
+    registries_with(
+        Router::new()
+            .route("/config.json", axum::routing::get(|| async { CONFIG_JSON }))
+            .route(
+                "/se/rd/serde",
+                axum::routing::get(|| async { "index-line" }),
+            ),
+        Router::new()
+            .route(
+                "/crates/serde/1.0.0/download",
+                axum::routing::get(|| async { "crate-bytes" }),
+            )
+            .route(
+                "/crates/moved/1.0.0/download",
+                axum::routing::get(|| async {
+                    (
+                        StatusCode::FOUND,
+                        [("location", "/crates/serde/1.0.0/download")],
+                    )
+                }),
+            )
+            .route(
+                "/crates/away/1.0.0/download",
+                axum::routing::get(|| async {
+                    (
+                        StatusCode::FOUND,
+                        [("location", "http://127.0.0.1:1/elsewhere")],
+                    )
+                }),
+            ),
+        Router::new()
+            .route("/left-pad", axum::routing::get(|| async { "packument" }))
+            .route(
+                "/@babel/core",
+                axum::routing::get(|| async { "scoped-packument" }),
+            )
+            .route(
+                "/-/v1/search",
+                axum::routing::get(|request: Request| async move {
+                    request.uri().query().unwrap_or_default().to_owned()
+                }),
+            ),
+        Some(PUBLIC),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn the_cargo_index_configuration_points_downloads_back_at_the_proxy() {
+    let r = registries().await;
+    let response = r
+        .client
+        .get(format!("{}/crates-index/config.json", r.url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let config: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(config["dl"], format!("{PUBLIC}/crates"));
+    assert!(config.get("api").is_none());
+    assert_eq!(config["auth-required"], false);
+}
+
+#[tokio::test]
+async fn without_a_public_base_the_index_configuration_is_unavailable() {
+    let r = registries_with(
+        Router::new().route("/config.json", axum::routing::get(|| async { CONFIG_JSON })),
+        Router::new(),
+        Router::new(),
+        None,
+    )
+    .await;
+    let response = r
+        .client
+        .get(format!("{}/crates-index/config.json", r.url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 503);
+}
+
+#[tokio::test]
+async fn the_index_and_the_crates_come_from_their_fixed_upstreams_without_a_token() {
+    let r = registries().await;
+    let index = r
+        .client
+        .get(format!("{}/crates-index/se/rd/serde", r.url))
+        .header("if-none-match", "\"abc\"")
+        .header("authorization", "Bearer should-not-travel")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(index.status(), 200);
+    assert_eq!(index.text().await.unwrap(), "index-line");
+    let seen = Harness::received(&r.index);
+    assert_eq!(seen[0].uri, "/se/rd/serde");
+    assert_eq!(seen[0].headers["if-none-match"], "\"abc\"");
+    assert!(!seen[0].headers.contains_key("authorization"));
+
+    let krate = r
+        .client
+        .get(format!("{}/crates/serde/1.0.0/download", r.url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(krate.status(), 200);
+    assert_eq!(krate.text().await.unwrap(), "crate-bytes");
+    assert_eq!(
+        Harness::received(&r.crates)[0].uri,
+        "/crates/serde/1.0.0/download"
+    );
+}
+
+#[tokio::test]
+async fn a_crate_redirect_is_followed_by_the_proxy_inside_the_allowlist_only() {
+    let r = registries().await;
+    let moved = r
+        .client
+        .get(format!("{}/crates/moved/1.0.0/download", r.url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(moved.status(), 200);
+    assert_eq!(moved.text().await.unwrap(), "crate-bytes");
+    let away = r
+        .client
+        .get(format!("{}/crates/away/1.0.0/download", r.url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(away.status(), 502);
+    assert!(away.headers().get("location").is_none());
+}
+
+#[tokio::test]
+async fn npm_packages_scoped_ones_and_queries_reach_the_registry() {
+    let r = registries().await;
+    let get = |path: &'static str| {
+        let url = format!("{}/npm/{path}", r.url);
+        let client = r.client.clone();
+        async move { client.get(url).send().await.unwrap() }
+    };
+    assert_eq!(get("left-pad").await.text().await.unwrap(), "packument");
+    assert_eq!(
+        get("@babel/core").await.text().await.unwrap(),
+        "scoped-packument"
+    );
+    assert_eq!(
+        get("-/v1/search?text=left&size=1")
+            .await
+            .text()
+            .await
+            .unwrap(),
+        "text=left&size=1"
+    );
+    let missing = get("no-such-package").await;
+    assert_eq!(missing.status(), 404);
+    assert_eq!(Harness::received(&r.npm).len(), 4);
+}
+
+#[tokio::test]
+async fn the_registries_serve_head_and_refuse_anything_else() {
+    let r = registries().await;
+    for path in [
+        "crates-index/se/rd/serde",
+        "crates/serde/1.0.0/download",
+        "npm/left-pad",
+    ] {
+        let url = format!("{}/{path}", r.url);
+        assert_eq!(
+            r.client.head(&url).send().await.unwrap().status(),
+            200,
+            "{path}"
+        );
+        for request in [
+            r.client.post(&url).body("x"),
+            r.client.put(&url).body("x"),
+            r.client.delete(&url),
+            r.client.patch(&url).body("x"),
+        ] {
+            assert_eq!(request.send().await.unwrap().status(), 405, "{path}");
+        }
+    }
+    assert!(
+        Harness::received(&r.npm)
+            .iter()
+            .all(|request| request.method == Method::HEAD)
+    );
+}
+
+#[tokio::test]
+async fn a_registry_path_cannot_climb_out_of_its_upstream() {
+    let r = registries().await;
+    for path in [
+        "npm/a%2f..%2fb",
+        "npm/%2e%2e%2fx",
+        "crates/a%2f..%2f..%2fetc",
+        "crates-index/a%5cb",
+    ] {
+        let response = r
+            .client
+            .get(format!("{}/{path}", r.url))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 400, "{path}");
+    }
+    assert!(Harness::received(&r.npm).is_empty());
+    assert!(Harness::received(&r.crates).is_empty());
+    assert!(Harness::received(&r.index).is_empty());
+}
+
+#[tokio::test]
+async fn an_unreachable_registry_is_a_502() {
+    let h = harness().await;
+    let response = h
+        .client
+        .get(format!("{}/npm/left-pad", h.url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 502);
 }
