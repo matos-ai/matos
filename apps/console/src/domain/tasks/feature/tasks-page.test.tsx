@@ -294,6 +294,49 @@ describe('TasksPage', () => {
 		)
 	})
 
+	it('offers extra repositories and posts them', async () => {
+		const fetchMock = mockApi({
+			...BASE,
+			'GET /api/v1/team/agents': {
+				items: [
+					agent(AGENT_LEAD, 'Auditeur', {
+						repository_grants: ['acme/web', 'acme/api', 'acme/docs'],
+					}),
+				],
+			},
+			'POST /api/v1/cards': {
+				status: 201,
+				body: card('44444444-dddd-4000-8000-000000000004'),
+			},
+		})
+		await render()
+		fireEvent.click(
+			await screen.findByRole('button', { name: 'Nouvelle tâche' }),
+		)
+		fireEvent.change(await screen.findByLabelText('Titre'), {
+			target: { value: 'Auditer' },
+		})
+		await waitFor(() =>
+			expect(screen.getByRole('option', { name: 'Auditeur' })).toBeTruthy(),
+		)
+		fireEvent.change(screen.getByLabelText('Assigner à'), {
+			target: { value: AGENT_LEAD },
+		})
+		expect(screen.queryByText(/Autres dépôts à modifier/)).toBeNull()
+		fireEvent.change(screen.getByLabelText('Dépôt'), {
+			target: { value: 'acme/api' },
+		})
+		expect(screen.queryByRole('checkbox', { name: 'acme/api' })).toBeNull()
+		fireEvent.click(screen.getByRole('checkbox', { name: 'acme/docs' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Créer et lancer' }))
+		await waitFor(() =>
+			expect(jsonBody(fetchMock, 'POST', '/api/v1/cards')).toMatchObject({
+				repository: 'acme/api',
+				extra_repositories: ['acme/docs'],
+			}),
+		)
+	})
+
 	it('shows the API error when the creation fails', async () => {
 		mockApi({
 			...BASE,

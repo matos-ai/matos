@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    collections::BTreeMap,
+    time::{Duration, Instant},
+};
 
 use aws_lc_rs::{
     digest,
@@ -30,10 +33,10 @@ use crate::{
         event::ports::EventEmitter,
         execution::{
             CommitAuthor, CommitSettings, Companion, DraftPullRequest, EXECUTOR_AGENT,
-            ExecutionMode, ExecutorModel, PLAN_PATH, PushGuard, QualityStatus, REPORT_PATH,
-            RepositoryRef, TaskGrant, TaskLine, TaskMarker, TaskOutcome, TaskSpec,
-            agent_executor_model, agent_harness,
-            companion::{CompanionPlan, CompanionSkip, RefSource, SkippedCompanion},
+            ExecutionMode, ExecutorModel, ExtraRepository, PLAN_PATH, PullRequestUrl, PushGuard,
+            QualityStatus, REPORT_PATH, RepositoryRef, TaskGrant, TaskLine, TaskMarker,
+            TaskOutcome, TaskSpec, agent_executor_model, agent_harness,
+            companion::{CompanionPlan, CompanionSkip, RefSource, SkippedCompanion, place_extras},
             contribution::{
                 CONTRIBUTION_PATH, Contribution, LeakGuard, RunTraces, change_branch,
                 fallback_contribution,
@@ -59,6 +62,7 @@ const TASK_TOKEN_SLOT: &str = "matos-task-token";
 const GRANT_GRACE: Duration = Duration::from_secs(5 * 60);
 const MEMBER_TOKEN_MARGIN: Duration = Duration::from_secs(10 * 60);
 const APP_PULL_REQUEST_NOTE: &str = "Pull request ouverte par l'application GitHub : connecte ton compte GitHub dans Matos (Paramètres › Intégrations › GitHub) pour qu'elle soit ouverte à ton nom.";
+const LINKED_HEADING: &str = "## Pull requests liées";
 const PULL_REQUEST_EXISTS: &str = "already exists";
 const COMMENT_MAX_CHARS: usize = 5_000;
 const FIELD_MAX_CHARS: usize = 8_000;
@@ -106,6 +110,7 @@ pub struct ExecutionContext {
     pub card_id: CardId,
     pub repository: RepositoryRef,
     pub base_branch: String,
+    pub extra_repositories: Vec<RepositoryRef>,
     pub steps: Vec<Step>,
     pub resumed: bool,
 }
@@ -127,6 +132,7 @@ impl MatosUseCase {
             card_id,
             repository,
             base_branch,
+            extra_repositories,
         } = run.subject.clone()
         else {
             return Ok(None);
@@ -157,6 +163,7 @@ impl MatosUseCase {
             card_id,
             repository,
             base_branch,
+            extra_repositories,
             steps,
             resumed,
         }))
@@ -228,7 +235,11 @@ pub struct ExecutePipeline<T, H> {
 #[derive(Debug)]
 enum Finish {
     Pushed {
-        pull_request: String,
+        /// The pull requests, by repository, the primary one first.
+        pull_requests: Vec<(String, String)>,
+        /// Whether the run had extra repositories: each pull request is then
+        /// named by its repository.
+        named: bool,
         /// Why the pull request's text is the fallback, when it is.
         fallback: Option<String>,
     },
@@ -249,6 +260,7 @@ struct Rules {
     config_invalid: bool,
     companions: Vec<Companion>,
     skipped: Vec<SkippedCompanion>,
+    extras: Vec<ExtraRepository>,
 }
 
 enum GitAccess {
@@ -274,6 +286,19 @@ impl GitAccess {
             (access, _) => access,
         }
     }
+}
+
+struct PushedTarget {
+    repository: RepositoryRef,
+    base: String,
+    sha: String,
+    primary: bool,
+}
+
+struct PullRequestText {
+    title: String,
+    body: String,
+    source: String,
 }
 
 struct OpenedPullRequest {
@@ -318,6 +343,8 @@ struct Extras {
     branch: Option<String>,
     sha: Option<String>,
     pull_request: Option<String>,
+    pull_requests: BTreeMap<String, String>,
+    linked: bool,
     no_changes: bool,
     comment: Option<String>,
     comment_id: Option<String>,
@@ -333,6 +360,7 @@ struct Extras {
     config_invalid: bool,
     companions: Option<String>,
     app_note: bool,
+    extra_repositories: Vec<ExtraRepository>,
 }
 
 impl Extras {
@@ -346,12 +374,15 @@ impl Extras {
             branch: text("branch"),
             sha: text("sha"),
             pull_request: text("pull_request"),
+            pull_requests: carried_pull_requests(output),
+            linked: output.is_some_and(|output| output["linked"] == true),
             comment: text("comment"),
             comment_id: text("comment_id"),
             contribution: text("contribution"),
             companions: text("companions"),
             job_started: output.is_some_and(|output| output["job_started"] == true),
             app_note: output.is_some_and(|output| output["app_note"] == true),
+            extra_repositories: carried_extra_repositories(output),
             ..Self::default()
         }
     }
@@ -374,6 +405,8 @@ struct ExecuteOutput<'a> {
     branch: Option<&'a str>,
     sha: Option<&'a str>,
     pull_request: Option<&'a str>,
+    pull_requests: &'a BTreeMap<String, String>,
+    linked: bool,
     no_changes: bool,
     job_started: bool,
     comment: Option<&'a str>,
@@ -386,6 +419,21 @@ struct ExecuteOutput<'a> {
     contribution: Option<&'a str>,
     companions: Option<&'a str>,
     app_note: bool,
+    extra_repositories: &'a [ExtraRepository],
+}
+
+fn carried_pull_requests(output: Option<&serde_json::Value>) -> BTreeMap<String, String> {
+    output
+        .and_then(|output| output.get("pull_requests"))
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default()
+}
+
+fn carried_extra_repositories(output: Option<&serde_json::Value>) -> Vec<ExtraRepository> {
+    output
+        .and_then(|output| output.get("extra_repositories"))
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default()
 }
 
 fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, CoreError> {
@@ -399,6 +447,8 @@ fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, Core
         branch: extras.branch.as_deref(),
         sha: extras.sha.as_deref(),
         pull_request: extras.pull_request.as_deref(),
+        pull_requests: &extras.pull_requests,
+        linked: extras.linked,
         no_changes: extras.no_changes,
         job_started: extras.job_started,
         comment: extras.comment.as_deref(),
@@ -411,6 +461,7 @@ fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, Core
         contribution: extras.contribution.as_deref(),
         companions: extras.companions.as_deref(),
         app_note: extras.app_note,
+        extra_repositories: &extras.extra_repositories,
     })
     .map_err(|error| CoreError::Internal(format!("encoding the execution report: {error}")))
 }
@@ -621,6 +672,9 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         step.usage.model = prepared.spec.model.as_str().to_owned();
         extras.mode = prepared.spec.mode;
         extras.config_invalid = prepared.config_invalid;
+        extras
+            .extra_repositories
+            .clone_from(&prepared.spec.extra_repositories);
         if prepared.spec.mode == ExecutionMode::Change {
             extras.branch = Some(prepared.spec.branch.clone());
         }
@@ -748,12 +802,13 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 mode,
             )
             .await?;
+        let prompt = with_extra_repositories(prompt, &rules.extras);
         let member = self
             .usecase
             .member_of(organization_id, &context.run.initiated_by)
             .await?;
         let access = self
-            .git_access(host, context, mode, member.is_some())
+            .git_access(host, context, mode, &rules.extras, member.is_some())
             .await?;
         let (token, branch, granted) = self
             .task_token(
@@ -761,7 +816,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 &model,
                 mode,
                 branch,
-                &rules.companions,
+                (&rules.companions, &rules.extras),
                 access.identity(),
             )
             .await?;
@@ -784,6 +839,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             commit,
             push_guard: rules.push_guard,
             companions: rules.companions,
+            extra_repositories: rules.extras,
         };
         Ok(Prepared {
             spec,
@@ -799,10 +855,115 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         })
     }
 
+    /// The rules of the primary repository, and where the extra repositories
+    /// go: modifiable with their own base branch and guard in a change run,
+    /// read-only companions in an audit.
+    async fn repository_rules(
+        &self,
+        host: &H,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        context: &ExecutionContext,
+        agent: Option<&ExecutionAgentSource>,
+        mode: ExecutionMode,
+    ) -> Result<Rules, CoreError> {
+        let mut rules = self
+            .primary_rules(host, organization_id, installation_id, context, agent, mode)
+            .await?;
+        if context.extra_repositories.is_empty() {
+            return Ok(rules);
+        }
+        let (paths, cut) = place_extras(&context.extra_repositories, &mut rules.companions);
+        rules.skipped.extend(cut);
+        if mode == ExecutionMode::Audit {
+            rules
+                .companions
+                .extend(
+                    context
+                        .extra_repositories
+                        .iter()
+                        .zip(paths)
+                        .map(|(repository, path)| Companion {
+                            repository: repository.clone(),
+                            path,
+                            reference: None,
+                        }),
+                );
+            return Ok(rules);
+        }
+        let carried = carried_extra_repositories(
+            context
+                .steps
+                .iter()
+                .find(|step| step.seq == EXECUTE_SEQ)
+                .and_then(|step| step.output.as_ref()),
+        );
+        for (repository, path) in context.extra_repositories.iter().zip(paths) {
+            let kept = carried
+                .iter()
+                .find(|extra| &extra.repository == repository)
+                .cloned();
+            rules.extras.push(match kept {
+                Some(extra) => extra,
+                None => {
+                    self.read_extra(
+                        host,
+                        organization_id,
+                        installation_id,
+                        context,
+                        repository,
+                        path,
+                    )
+                    .await?
+                }
+            });
+        }
+        Ok(rules)
+    }
+
+    async fn read_extra(
+        &self,
+        host: &H,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        context: &ExecutionContext,
+        repository: &RepositoryRef,
+        path: String,
+    ) -> Result<ExtraRepository, CoreError> {
+        let base_branch = retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
+            host.default_branch(organization_id, installation_id, repository)
+        })
+        .await?;
+        let text = retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
+            host.file_at(
+                organization_id,
+                installation_id,
+                repository,
+                &base_branch,
+                REPOSITORY_CONFIG_PATH,
+            )
+        })
+        .await?;
+        let guard = match text.as_deref().map(RepositoryConfig::parse) {
+            None => PushGuard::default(),
+            Some(Ok(config)) => PushGuard::from_config(&config.guard),
+            Some(Err(error)) => {
+                tracing::warn!(run_id = %context.run.id, %repository, %error, "the repository configuration is invalid");
+                PushGuard::default()
+            }
+        };
+        Ok(ExtraRepository {
+            repository: repository.clone(),
+            path,
+            base_branch,
+            guard,
+        })
+    }
+
     /// The rules of the repository's `.matos.toml`, read from the base
     /// branch: the push guard of a change run and the companions to clone.
     /// An invalid file gives the defaults, flagged, and no companion.
-    async fn repository_rules(
+    async fn primary_rules(
         &self,
         host: &H,
         organization_id: OrganizationId,
@@ -830,6 +991,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                     config_invalid: true,
                     companions: Vec::new(),
                     skipped: Vec::new(),
+                    extras: Vec::new(),
                 });
             }
         };
@@ -862,6 +1024,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             config_invalid: false,
             companions,
             skipped,
+            extras: Vec::new(),
         })
     }
 
@@ -890,6 +1053,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         host: &H,
         context: &ExecutionContext,
         mode: ExecutionMode,
+        extras: &[ExtraRepository],
         initiated_by_member: bool,
     ) -> Result<GitAccess, CoreError> {
         if mode != ExecutionMode::Change || !initiated_by_member {
@@ -911,17 +1075,22 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 return Ok(GitAccess::App { note: true });
             }
         };
-        match host
-            .member_can_push(run.organization_id, &token, &context.repository)
-            .await
+        for repository in
+            std::iter::once(&context.repository).chain(extras.iter().map(|extra| &extra.repository))
         {
-            Ok(true) => Ok(GitAccess::Member(token)),
-            Ok(false) => Ok(GitAccess::App { note: true }),
-            Err(error) => {
-                tracing::warn!(run_id = %run.id, %error, "the member's push access could not be checked, the App is used");
-                Ok(GitAccess::App { note: true })
+            match host
+                .member_can_push(run.organization_id, &token, repository)
+                .await
+            {
+                Ok(true) => {}
+                Ok(false) => return Ok(GitAccess::App { note: true }),
+                Err(error) => {
+                    tracing::warn!(run_id = %run.id, %repository, %error, "the member's push access could not be checked, the App is used");
+                    return Ok(GitAccess::App { note: true });
+                }
             }
         }
+        Ok(GitAccess::Member(token))
     }
 
     /// The model the agent's run keeps from its first attempt on: the
@@ -975,7 +1144,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         model: &ExecutorModel,
         mode: ExecutionMode,
         branch: String,
-        companions: &[Companion],
+        (companions, extras): (&[Companion], &[ExtraRepository]),
         identity: GitIdentity,
     ) -> Result<(String, String, GitIdentity), CoreError> {
         let run_id = context.run.id;
@@ -1011,6 +1180,10 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                     companions: companions
                         .iter()
                         .map(|companion| companion.repository.clone())
+                        .collect(),
+                    writable_repositories: extras
+                        .iter()
+                        .map(|extra| extra.repository.clone())
                         .collect(),
                     initiated_by: Some(context.run.initiated_by.clone()),
                     git_identity: identity,
@@ -1081,7 +1254,18 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             TaskOutcome::DeadlineExceeded => Err(CoreError::Internal(DEADLINE_REASON.into())),
             TaskOutcome::Failed { reason } => match progress.reader.blocked() {
                 Some(reasons) => Err(CoreError::Invalid(blocked_reason(&reasons))),
-                None => Err(CoreError::Internal(prepared.redactor.apply(&reason))),
+                None => {
+                    let reason = prepared.redactor.apply(&reason);
+                    Err(CoreError::Internal(
+                        match progress.reader.extra_repositories() {
+                            Some(outcome) if !outcome.failed.is_empty() => format!(
+                                "{reason} (dépôts supplémentaires non clonés : {})",
+                                outcome.failed.join(", ")
+                            ),
+                            _ => reason,
+                        },
+                    ))
+                }
             },
             TaskOutcome::Succeeded if prepared.spec.mode == ExecutionMode::Audit => {
                 match progress.reader.marker() {
@@ -1090,39 +1274,9 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 }
             }
             TaskOutcome::Succeeded => match progress.reader.marker().cloned() {
-                Some(TaskMarker::Pushed { sha }) => {
-                    progress.extras.sha = Some(sha.clone());
-                    let pull_request = match progress.extras.pull_request.clone() {
-                        Some(url) => url,
-                        None => {
-                            self.verify_branch(host, prepared, &sha).await?;
-                            let (contribution, source) = pull_request_text(
-                                &prepared.guard,
-                                prepared.card.title.as_str(),
-                                progress.reader.contribution().as_deref(),
-                                progress.reader.snapshot().summary.as_deref(),
-                            );
-                            let quality = quality_of(&prepared.guard, progress.reader.quality());
-                            let opened = self
-                                .open_pull_request(host, prepared, &contribution, &quality)
-                                .await?;
-                            progress.extras.contribution = Some(source);
-                            progress.extras.app_note |= opened.app_note;
-                            progress.extras.pull_request = Some(opened.url.clone());
-                            self.persist_progress(context, &mut progress, true).await?;
-                            opened.url
-                        }
-                    };
-                    let fallback = progress
-                        .extras
-                        .contribution
-                        .as_deref()
-                        .and_then(|source| source.strip_prefix("fallback: "))
-                        .map(str::to_owned);
-                    Ok(Finish::Pushed {
-                        pull_request,
-                        fallback,
-                    })
+                Some(TaskMarker::Pushed { .. }) => {
+                    self.open_pull_requests(context, host, prepared, &mut progress)
+                        .await
                 }
                 Some(TaskMarker::NoChanges) => {
                     progress.extras.no_changes = true;
@@ -1201,13 +1355,14 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         &self,
         host: &H,
         prepared: &Prepared,
+        repository: &RepositoryRef,
         sha: &str,
     ) -> Result<(), CoreError> {
         let head = retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
             host.branch_head(
                 prepared.organization_id,
                 prepared.installation_id,
-                &prepared.spec.repository,
+                repository,
                 &prepared.spec.branch,
             )
         })
@@ -1218,30 +1373,226 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         }
     }
 
+    async fn open_pull_requests(
+        &self,
+        context: &ExecutionContext,
+        host: &H,
+        prepared: &Prepared,
+        progress: &mut Progress,
+    ) -> Result<Finish, CoreError> {
+        let targets = self.pushed_targets(prepared, progress)?;
+        if let Some(first) = targets.first() {
+            progress.extras.sha = Some(first.sha.clone());
+        }
+        if progress.extras.pull_requests.is_empty()
+            && let (Some(url), Some(primary)) = (
+                progress.extras.pull_request.clone(),
+                targets.iter().find(|target| target.primary),
+            )
+        {
+            progress
+                .extras
+                .pull_requests
+                .insert(primary.repository.to_string(), url);
+        }
+        let mut texts = Vec::with_capacity(targets.len());
+        for target in &targets {
+            let key = target.repository.to_string();
+            let written = progress
+                .reader
+                .contribution_of(&key)
+                .or_else(|| progress.reader.contribution());
+            let (contribution, source) = pull_request_text(
+                &prepared.guard,
+                prepared.card.title.as_str(),
+                written.as_deref(),
+                progress.reader.snapshot().summary.as_deref(),
+            );
+            let quality = quality_of(
+                &prepared.guard,
+                progress.reader.quality(&key, target.primary),
+            );
+            texts.push(PullRequestText {
+                title: prepared.redactor.apply(&contribution.title),
+                body: defang_mentions(&format!(
+                    "{}{}",
+                    prepared.redactor.apply(&contribution.body).trim_end(),
+                    quality_section(&quality)
+                )),
+                source,
+            });
+        }
+        for target in &targets {
+            if !progress
+                .extras
+                .pull_requests
+                .contains_key(&target.repository.to_string())
+            {
+                self.verify_branch(host, prepared, &target.repository, &target.sha)
+                    .await?;
+            }
+        }
+        for (target, text) in targets.iter().zip(&texts) {
+            let key = target.repository.to_string();
+            if progress.extras.pull_requests.contains_key(&key) {
+                continue;
+            }
+            let opened = self.open_pull_request(host, prepared, target, text).await?;
+            if progress.extras.pull_request.is_none() {
+                progress.extras.contribution = Some(text.source.clone());
+                progress.extras.pull_request = Some(opened.url.clone());
+            }
+            progress.extras.app_note |= opened.app_note;
+            progress.extras.pull_requests.insert(key, opened.url);
+            self.persist_progress(context, progress, true).await?;
+        }
+        let opened: Vec<(String, String)> = targets
+            .iter()
+            .filter_map(|target| {
+                let key = target.repository.to_string();
+                progress
+                    .extras
+                    .pull_requests
+                    .get(&key)
+                    .map(|url| (key, url.clone()))
+            })
+            .collect();
+        if opened.len() > 1 && !progress.extras.linked {
+            let mut linked = true;
+            for ((target, text), (_, url)) in targets.iter().zip(&texts).zip(&opened) {
+                let others: Vec<&str> = opened
+                    .iter()
+                    .map(|(_, other)| other.as_str())
+                    .filter(|other| other != url)
+                    .collect();
+                if let Err(error) = self
+                    .link_pull_request(host, prepared, target, url, &text.body, &others)
+                    .await
+                {
+                    tracing::warn!(repository = %target.repository, %error, "the pull requests were not linked");
+                    linked = false;
+                }
+            }
+            if linked {
+                progress.extras.linked = true;
+                self.persist_progress(context, progress, true).await?;
+            }
+        }
+        let fallback = progress
+            .extras
+            .contribution
+            .as_deref()
+            .and_then(|source| source.strip_prefix("fallback: "))
+            .map(str::to_owned);
+        Ok(Finish::Pushed {
+            pull_requests: opened,
+            named: !context.extra_repositories.is_empty(),
+            fallback,
+        })
+    }
+
+    /// The repositories the task pushed, the primary one first and then the
+    /// extra ones in the order the run lists them.
+    fn pushed_targets(
+        &self,
+        prepared: &Prepared,
+        progress: &Progress,
+    ) -> Result<Vec<PushedTarget>, CoreError> {
+        let spec = &prepared.spec;
+        let pushed = progress.reader.pushed();
+        let primary = spec.repository.to_string();
+        let known = |name: &str| {
+            name == primary
+                || spec
+                    .extra_repositories
+                    .iter()
+                    .any(|extra| extra.repository.to_string() == name)
+        };
+        if let Some(name) = pushed
+            .iter()
+            .filter_map(|branch| branch.repository.as_deref())
+            .find(|name| !known(name))
+        {
+            return Err(CoreError::Internal(format!(
+                "l'exécution a poussé un dépôt inattendu : {}",
+                prepared.redactor.apply(name)
+            )));
+        }
+        let sha_of = |name: &str, primary_slot: bool| {
+            pushed
+                .iter()
+                .find(|branch| {
+                    branch.repository.as_deref() == Some(name)
+                        || (primary_slot && branch.repository.is_none())
+                })
+                .map(|branch| branch.sha.clone())
+        };
+        let mut targets = Vec::new();
+        if let Some(sha) = sha_of(&primary, true) {
+            targets.push(PushedTarget {
+                repository: spec.repository.clone(),
+                base: spec.base_branch.clone(),
+                sha,
+                primary: true,
+            });
+        }
+        for extra in &spec.extra_repositories {
+            if let Some(sha) = sha_of(&extra.repository.to_string(), false) {
+                targets.push(PushedTarget {
+                    repository: extra.repository.clone(),
+                    base: extra.base_branch.clone(),
+                    sha,
+                    primary: false,
+                });
+            }
+        }
+        Ok(targets)
+    }
+
+    /// The edit goes through the App whoever opened the pull request: its
+    /// installation token may change any pull request of the repository.
+    async fn link_pull_request(
+        &self,
+        host: &H,
+        prepared: &Prepared,
+        target: &PushedTarget,
+        url: &str,
+        body: &str,
+        others: &[&str],
+    ) -> Result<(), CoreError> {
+        let linked = format!("{body}{}", linked_section(others));
+        let url = PullRequestUrl(url.to_owned());
+        retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
+            host.update_pull_request_body(
+                prepared.organization_id,
+                prepared.installation_id,
+                &target.repository,
+                &url,
+                &linked,
+            )
+        })
+        .await
+    }
+
     async fn open_pull_request(
         &self,
         host: &H,
         prepared: &Prepared,
-        contribution: &Contribution,
-        quality: &Quality,
+        target: &PushedTarget,
+        text: &PullRequestText,
     ) -> Result<OpenedPullRequest, CoreError> {
-        let title = prepared.redactor.apply(&contribution.title);
-        let body = defang_mentions(&format!(
-            "{}{}",
-            prepared.redactor.apply(&contribution.body).trim_end(),
-            quality_section(quality)
-        ));
         let request = || DraftPullRequest {
-            repository: prepared.spec.repository.clone(),
-            base: prepared.spec.base_branch.clone(),
+            repository: target.repository.clone(),
+            base: target.base.clone(),
             head: prepared.spec.branch.clone(),
-            title: title.clone(),
-            body: body.clone(),
+            title: text.title.clone(),
+            body: text.body.clone(),
         };
         let unopened = |error: &CoreError| {
             CoreError::Internal(format!(
-                "la branche {} est poussée mais la pull request n'a pas pu être ouverte : {}",
+                "la branche {} est poussée sur {} mais la pull request n'a pas pu être ouverte : {}",
                 prepared.spec.branch,
+                target.repository,
                 reason_of(error)
             ))
         };
@@ -1383,6 +1734,11 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         let change = PlannedChange {
             repository: context.repository.to_string(),
             base_branch: context.base_branch.clone(),
+            extra_repositories: context
+                .extra_repositories
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
             plan: plan.to_owned(),
         };
         let filed = retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
@@ -1655,16 +2011,25 @@ fn comment_body(
     };
     let body = match result {
         Ok(Finish::Pushed {
-            pull_request,
+            pull_requests,
+            named,
             fallback,
         }) => {
             let fallback = fallback
                 .as_deref()
                 .map(|why| format!("\n\nTitre et description de secours : {why}."))
                 .unwrap_or_default();
-            format!(
-                "Pull request ouverte en brouillon : {pull_request}{fallback}\n\n{note}{summary}"
-            )
+            let opened = match pull_requests.as_slice() {
+                [(_, url)] if !named => format!("Pull request ouverte en brouillon : {url}"),
+                listed => listed
+                    .iter()
+                    .map(|(repository, url)| {
+                        format!("Pull request ouverte en brouillon sur {repository} : {url}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            };
+            format!("{opened}{fallback}\n\n{note}{summary}")
         }
         Ok(Finish::NoChanges) => {
             format!("Aucun changement : rien n'a été modifié dans le dépôt.\n\n{note}{summary}")
@@ -1681,6 +2046,14 @@ fn comment_body(
         ),
     };
     body.trim_end().to_owned()
+}
+
+fn linked_section(others: &[&str]) -> String {
+    let listed = others
+        .iter()
+        .map(|url| format!("\n- {url}"))
+        .collect::<String>();
+    format!("\n\n{LINKED_HEADING}\n{listed}")
 }
 
 fn blocked_reason(reasons: &[String]) -> String {
@@ -1843,6 +2216,22 @@ fn card_fields(card: &Card) -> String {
     fields
         .replace("</card", "<\\/card")
         .replace("<card", "<\\card")
+}
+
+fn with_extra_repositories(mut prompt: String, extras: &[ExtraRepository]) -> String {
+    if extras.is_empty() {
+        return prompt;
+    }
+    prompt.push_str(
+        "\n\nYou also modify these other repositories, each cloned on its own base branch at the path shown. Edit, build and test them together with the main one; a repository you leave unchanged gets no pull request. Do not commit or push in any of them:",
+    );
+    for extra in extras {
+        prompt.push_str(&format!(
+            "\n- {} at {} (base branch {})",
+            extra.repository, extra.path, extra.base_branch
+        ));
+    }
+    prompt
 }
 
 fn build_prompt(
@@ -2422,6 +2811,7 @@ mod tests {
         source.plan = Some(PlannedChange {
             repository: "acme/web".into(),
             base_branch: "main".into(),
+            extra_repositories: Vec::new(),
             plan: "1. Retirer SLOT_PITCHOUT de menus.rs".into(),
         });
         let prompt = build_agent_prompt(

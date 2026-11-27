@@ -46,6 +46,7 @@ fn spec(deadline: Duration) -> TaskSpec {
         },
         push_guard: PushGuard::default(),
         companions: Vec::new(),
+        extra_repositories: Vec::new(),
     }
 }
 

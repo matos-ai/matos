@@ -3,7 +3,7 @@
 
 use matos_common::{CardId, CoreError, RunId};
 use matos_core::domain::{
-    agent_task::{RepositoryTarget, StartAgentRun},
+    agent_task::{ExtraRepositories, RepositoryTarget, StartAgentRun},
     card::Column,
     crew::CrewAgent,
     execution::RepositoryRef,
@@ -21,6 +21,7 @@ pub enum Handoff {
     /// A new card; `repository` picks one when the agent has several.
     Created {
         repository: Option<RepositoryRef>,
+        extra_repositories: Vec<RepositoryRef>,
     },
     Assigned,
     Replied,
@@ -115,26 +116,38 @@ async fn try_hand_off(
             .runs
             .iter()
             .find_map(|overview| match &overview.run.subject {
-                RunSubject::AgentTask { .. } => Some(Plan::Connectors),
+                RunSubject::AgentTask { .. } => Some(Ok(Plan::Connectors)),
                 RunSubject::Card {
                     repository,
                     base_branch,
+                    extra_repositories,
                     ..
-                } => Some(Plan::Repository(RepositoryTarget {
-                    repository: repository.clone(),
-                    base_branch: Some(base_branch.clone()),
-                })),
+                } => Some(
+                    with_extras(
+                        RepositoryTarget {
+                            repository: repository.clone(),
+                            base_branch: Some(base_branch.clone()),
+                            extra_repositories: ExtraRepositories::default(),
+                        },
+                        extra_repositories.clone(),
+                    )
+                    .map(Plan::Repository),
+                ),
                 _ => None,
             }),
         _ => None,
     };
-    let requested = match handoff {
-        Handoff::Created { repository } => repository,
-        _ => None,
+    let (requested, extras) = match handoff {
+        Handoff::Created {
+            repository,
+            extra_repositories,
+        } => (repository, extra_repositories),
+        _ => (None, Vec::new()),
     };
     let plan = match previous {
-        Some(plan) => plan,
-        None => match plan_of(&agent, requested) {
+        Some(Ok(plan)) => plan,
+        Some(Err(outcome)) => return Ok(Some(outcome)),
+        None => match plan_of(&agent, requested, extras) {
             Ok(plan) => plan,
             Err(outcome) => return Ok(Some(outcome)),
         },
@@ -169,25 +182,48 @@ async fn try_hand_off(
 
 /// Where the agent works when nothing says otherwise: its connectors, or its
 /// only repository; with several, the one the person named.
-fn plan_of(agent: &CrewAgent, requested: Option<RepositoryRef>) -> Result<Plan, AgentRunOutcome> {
+fn plan_of(
+    agent: &CrewAgent,
+    requested: Option<RepositoryRef>,
+    extras: Vec<RepositoryRef>,
+) -> Result<Plan, AgentRunOutcome> {
     let repositories = agent.repository_grants.as_slice();
     if let Some(repository) = requested {
-        return Ok(Plan::Repository(RepositoryTarget {
-            repository,
-            base_branch: None,
-        }));
+        return with_extras(
+            RepositoryTarget {
+                repository,
+                base_branch: None,
+                extra_repositories: ExtraRepositories::default(),
+            },
+            extras,
+        )
+        .map(Plan::Repository);
     }
     if !agent.connector_grants.as_slice().is_empty() || repositories.is_empty() {
         return Ok(Plan::Connectors);
     }
     match repositories {
-        [only] => Ok(Plan::Repository(RepositoryTarget {
-            repository: only.clone(),
-            base_branch: None,
-        })),
+        [only] => with_extras(
+            RepositoryTarget {
+                repository: only.clone(),
+                base_branch: None,
+                extra_repositories: ExtraRepositories::default(),
+            },
+            extras,
+        )
+        .map(Plan::Repository),
         _ => Err(AgentRunOutcome::skipped(
             "choose_repository",
             "L'agent a accès à plusieurs dépôts : choisis-en un pour le lancer.",
         )),
     }
+}
+
+fn with_extras(
+    mut target: RepositoryTarget,
+    extras: Vec<RepositoryRef>,
+) -> Result<RepositoryTarget, AgentRunOutcome> {
+    target.extra_repositories = ExtraRepositories::new(&target.repository, extras)
+        .map_err(|refusal| AgentRunOutcome::skipped(refusal.code(), refusal.to_string()))?;
+    Ok(target)
 }

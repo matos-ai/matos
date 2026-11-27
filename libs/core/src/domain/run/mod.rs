@@ -36,6 +36,7 @@ pub enum RunSubject {
         card_id: CardId,
         repository: RepositoryRef,
         base_branch: String,
+        extra_repositories: Vec<RepositoryRef>,
     },
     Intervention {
         card_id: CardId,
@@ -115,6 +116,7 @@ impl Run {
         card_id: CardId,
         repository: RepositoryRef,
         base_branch: String,
+        extra_repositories: Vec<RepositoryRef>,
         initiated_by: String,
         now: DateTime<Utc>,
     ) -> (Self, RunQueued) {
@@ -124,6 +126,7 @@ impl Run {
                 card_id,
                 repository,
                 base_branch,
+                extra_repositories,
             },
             initiated_by,
             Self::EXECUTION_PIPELINE.to_vec(),
@@ -420,10 +423,15 @@ mod tests {
             card_id,
             "acme/web".parse().unwrap(),
             "main".into(),
+            vec!["acme/api".parse().unwrap()],
             "user-1".into(),
             Utc::now(),
         );
         assert_eq!(run.status, RunStatus::Queued);
+        assert!(matches!(
+            &run.subject,
+            RunSubject::Card { extra_repositories, .. } if extra_repositories.len() == 1
+        ));
         assert_eq!(run.pipeline, [StepKind::Execute]);
         assert_eq!(run.subject.card_id(), Some(card_id));
         assert_eq!(run.subject.transcript_id(), None);

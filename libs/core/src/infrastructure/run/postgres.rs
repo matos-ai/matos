@@ -38,27 +38,32 @@ impl RunRepository for PgRunRepository<'_> {
             .map(serde_json::to_value)
             .transpose()
             .map_err(|error| CoreError::Internal(format!("encoding run models: {error}")))?;
-        let (transcript_id, card_id, repository, base_branch) = match &run.subject {
-            RunSubject::Transcript(id) => (Some(id.0), None, None, None),
+        let (transcript_id, card_id, repository, base_branch, extras) = match &run.subject {
+            RunSubject::Transcript(id) => (Some(id.0), None, None, None, Vec::new()),
             RunSubject::Card {
                 card_id,
                 repository,
                 base_branch,
+                extra_repositories,
             } => (
                 None,
                 Some(card_id.0),
                 Some(repository.to_string()),
                 Some(base_branch.as_str()),
+                extra_repositories
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>(),
             ),
             RunSubject::Intervention { card_id } | RunSubject::AgentTask { card_id } => {
-                (None, Some(card_id.0), None, None)
+                (None, Some(card_id.0), None, None, Vec::new())
             }
         };
         let mut tx = self.tx.lock().await;
         sqlx::query!(
             r#"
-            INSERT INTO runs (id, organization_id, transcript_id, card_id, repository, base_branch, initiated_by, status, pipeline, failure, created_at, started_at, finished_at, trace_id, models)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            INSERT INTO runs (id, organization_id, transcript_id, card_id, repository, base_branch, extra_repositories, initiated_by, status, pipeline, failure, created_at, started_at, finished_at, trace_id, models)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             "#,
             run.id.0,
             run.organization_id.0,
@@ -66,6 +71,7 @@ impl RunRepository for PgRunRepository<'_> {
             card_id,
             repository,
             base_branch,
+            &extras,
             run.initiated_by,
             run.status.as_str(),
             &pipeline,
@@ -98,7 +104,7 @@ impl RunRepository for PgRunRepository<'_> {
         let rows = sqlx::query_as!(
             RunOverviewRow,
             r#"
-            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.initiated_by, r.status, r.pipeline,
+            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.extra_repositories, r.initiated_by, r.status, r.pipeline,
                    r.failure, r.created_at, r.started_at, r.finished_at, r.trace_id, r.models, COALESCE(t.title, c.title) AS title,
                    COALESCE(t.repository, p.repository) AS "repository_hint?",
                    COALESCE(t.client_id, c.client_id) AS "client_id?", cl.name AS "client_name?",
@@ -159,7 +165,7 @@ impl RunRepository for PgRunRepository<'_> {
         sqlx::query_as!(
             RunOverviewRow,
             r#"
-            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.initiated_by, r.status, r.pipeline,
+            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.extra_repositories, r.initiated_by, r.status, r.pipeline,
                    r.failure, r.created_at, r.started_at, r.finished_at, r.trace_id, r.models, COALESCE(t.title, c.title) AS title,
                    COALESCE(t.repository, p.repository) AS "repository_hint?",
                    COALESCE(t.client_id, c.client_id) AS "client_id?", cl.name AS "client_name?",
@@ -193,7 +199,7 @@ impl RunRepository for PgRunRepository<'_> {
         sqlx::query_as!(
             RunOverviewRow,
             r#"
-            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.initiated_by, r.status, r.pipeline,
+            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.extra_repositories, r.initiated_by, r.status, r.pipeline,
                    r.failure, r.created_at, r.started_at, r.finished_at, r.trace_id, r.models, COALESCE(t.title, c.title) AS title,
                    COALESCE(t.repository, p.repository) AS "repository_hint?",
                    COALESCE(t.client_id, c.client_id) AS "client_id?", cl.name AS "client_name?",
@@ -229,7 +235,7 @@ impl RunRepository for PgRunRepository<'_> {
         sqlx::query_as!(
             RunOverviewRow,
             r#"
-            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.initiated_by, r.status, r.pipeline,
+            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.extra_repositories, r.initiated_by, r.status, r.pipeline,
                    r.failure, r.created_at, r.started_at, r.finished_at, r.trace_id, r.models, COALESCE(t.title, c.title) AS title,
                    COALESCE(t.repository, p.repository) AS "repository_hint?",
                    COALESCE(t.client_id, c.client_id) AS "client_id?", cl.name AS "client_name?",
@@ -262,7 +268,7 @@ impl RunRepository for PgRunRepository<'_> {
         sqlx::query_as!(
             RunOverviewRow,
             r#"
-            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.initiated_by, r.status, r.pipeline,
+            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.extra_repositories, r.initiated_by, r.status, r.pipeline,
                    r.failure, r.created_at, r.started_at, r.finished_at, r.trace_id, r.models, COALESCE(t.title, c.title) AS title,
                    COALESCE(t.repository, p.repository) AS "repository_hint?",
                    COALESCE(t.client_id, c.client_id) AS "client_id?", cl.name AS "client_name?",

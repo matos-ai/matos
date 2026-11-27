@@ -1012,6 +1012,27 @@ mod tests {
     }
 
     #[test]
+    fn the_three_launch_requests_take_optional_extra_repositories() {
+        let spec = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        for schema in ["RunAgentRequest", "ExecuteCardRequest", "CreateCardRequest"] {
+            let request = &spec["components"]["schemas"][schema];
+            assert_eq!(
+                request["properties"]["extra_repositories"]["type"], "array",
+                "{schema}"
+            );
+            assert_eq!(
+                request["properties"]["extra_repositories"]["items"]["type"], "string",
+                "{schema}"
+            );
+            let required = request["required"].as_array().cloned().unwrap_or_default();
+            assert!(
+                !required.iter().any(|field| field == "extra_repositories"),
+                "{schema}"
+            );
+        }
+    }
+
+    #[test]
     fn the_intervention_and_journal_endpoints_are_documented_without_a_snapshot() {
         let spec = serde_json::to_value(ApiDoc::openapi()).unwrap();
         let paths = &spec["paths"];

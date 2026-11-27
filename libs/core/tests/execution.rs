@@ -124,6 +124,7 @@ async fn execute(
             card.id,
             "acme/web".parse().unwrap(),
             "main".into(),
+            Vec::new(),
             card.version,
         )
         .await
@@ -526,6 +527,7 @@ async fn a_task_grant_is_found_by_hash_and_revoked_with_its_run() {
         model: "claude-sonnet-5-5".into(),
         mode: ExecutionMode::Change,
         companions: vec!["acme/sdk".parse().unwrap(), "acme/docs".parse().unwrap()],
+        writable_repositories: vec!["acme/api".parse().unwrap()],
         initiated_by: None,
         git_identity: GitIdentity::Member,
         expires_at: Utc::now() + chrono::Duration::minutes(40),
@@ -547,6 +549,7 @@ async fn a_task_grant_is_found_by_hash_and_revoked_with_its_run() {
     assert_eq!(found.branch, grant.branch);
     assert_eq!(found.model, "claude-sonnet-5-5");
     assert_eq!(found.companions, grant.companions);
+    assert_eq!(found.writable_repositories, grant.writable_repositories);
     assert_eq!(found.git_identity, GitIdentity::Member);
     let stored_identity: String =
         sqlx::query_scalar("SELECT git_identity FROM task_grants WHERE run_id = $1")
@@ -592,6 +595,7 @@ async fn deleting_a_run_deletes_its_grants() {
                 model: "claude-sonnet-5-5".into(),
                 mode: ExecutionMode::Change,
                 companions: Vec::new(),
+                writable_repositories: Vec::new(),
                 initiated_by: None,
                 git_identity: GitIdentity::App,
                 expires_at: Utc::now() + chrono::Duration::minutes(1),

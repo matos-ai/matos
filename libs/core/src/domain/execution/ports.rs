@@ -31,6 +31,8 @@ pub trait TaskRunner: Send + Sync {
     fn delete(&self, run_id: RunId) -> impl Future<Output = Result<(), CoreError>> + Send;
 }
 
+const NO_DEFAULT_BRANCH: &str = "ce dépôt de code ne donne pas la branche par défaut";
+const NO_PULL_REQUEST_UPDATE: &str = "ce dépôt de code ne met pas à jour les pull requests";
 const NO_MEMBER_IDENTITY: &str = "ce dépôt de code ne gère pas l'identité des membres";
 
 /// The code host the organization connected (GitHub).
@@ -55,6 +57,15 @@ pub trait CodeHost: Send + Sync {
         installation_id: i64,
         repository: &RepositoryRef,
     ) -> impl Future<Output = Result<Vec<RepositoryIssue>, CoreError>> + Send;
+
+    fn default_branch(
+        &self,
+        _organization_id: OrganizationId,
+        _installation_id: i64,
+        _repository: &RepositoryRef,
+    ) -> impl Future<Output = Result<String, CoreError>> + Send {
+        std::future::ready(Err(CoreError::Invalid(NO_DEFAULT_BRANCH.into())))
+    }
 
     /// The commit `refs/heads/<branch>` points to, `None` if the branch does
     /// not exist.
@@ -90,6 +101,19 @@ pub trait CodeHost: Send + Sync {
         _pull_request: DraftPullRequest,
     ) -> impl Future<Output = Result<PullRequestUrl, CoreError>> + Send {
         std::future::ready(Err(CoreError::Invalid(NO_MEMBER_IDENTITY.into())))
+    }
+
+    /// Replaces the body of a pull request the run opened; `pull_request` is
+    /// its URL.
+    fn update_pull_request_body(
+        &self,
+        _organization_id: OrganizationId,
+        _installation_id: i64,
+        _repository: &RepositoryRef,
+        _pull_request: &PullRequestUrl,
+        _body: &str,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send {
+        std::future::ready(Err(CoreError::Invalid(NO_PULL_REQUEST_UPDATE.into())))
     }
 
     fn member_can_push(

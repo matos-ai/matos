@@ -162,6 +162,7 @@ impl MatosUseCase {
                 card.id,
                 repository.clone(),
                 base_branch.clone(),
+                Vec::new(),
                 subject.id.clone(),
                 Utc::now(),
             );

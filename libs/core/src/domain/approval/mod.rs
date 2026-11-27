@@ -70,6 +70,8 @@ pub struct PlannedChange {
     /// `owner/name`.
     pub repository: String,
     pub base_branch: String,
+    /// `owner/name` of the other repositories the change run modifies.
+    pub extra_repositories: Vec<String>,
     /// Markdown, written by the agent.
     pub plan: String,
 }
@@ -228,6 +230,7 @@ impl Approval {
             detail: json!({
                 "repository": change.repository,
                 "base_branch": change.base_branch,
+                "extra_repositories": change.extra_repositories,
                 "plan": plan,
                 "truncated": truncated,
             }),
@@ -252,6 +255,15 @@ impl Approval {
         Some(PlannedChange {
             repository: self.detail["repository"].as_str()?.to_owned(),
             base_branch: self.detail["base_branch"].as_str()?.to_owned(),
+            extra_repositories: self.detail["extra_repositories"]
+                .as_array()
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default(),
             plan: self.detail["plan"].as_str()?.to_owned(),
         })
     }
@@ -583,8 +595,33 @@ mod tests {
         PlannedChange {
             repository: "Hypolia/lobby".into(),
             base_branch: "main".into(),
+            extra_repositories: vec!["Hypolia/api".into()],
             plan: plan.into(),
         }
+    }
+
+    #[test]
+    fn a_plan_stored_without_extra_repositories_reads_as_none() {
+        let mut approval = Approval::repository_change(
+            OrganizationId::new(),
+            (AgentId::new(), "Sébastien"),
+            CardId::new(),
+            RunId::new(),
+            &change("- x"),
+            Utc::now(),
+        );
+        approval
+            .detail
+            .as_object_mut()
+            .unwrap()
+            .remove("extra_repositories");
+        assert!(
+            approval
+                .planned_change()
+                .unwrap()
+                .extra_repositories
+                .is_empty()
+        );
     }
 
     #[test]

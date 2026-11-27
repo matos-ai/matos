@@ -28,6 +28,7 @@ RUN userdel -r node \
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=0644 guard.sh /usr/local/bin/guard.sh
 COPY --chmod=0644 companions.sh /usr/local/bin/companions.sh
+COPY --chmod=0644 repositories.sh /usr/local/bin/repositories.sh
 
 ENV HOME=/home/executor
 WORKDIR /workspace
@@ -82,6 +83,7 @@ COPY --from=mistral-vibe-build /usr/local/bin/vibe /usr/local/bin/vibe-app-serve
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=0644 guard.sh /usr/local/bin/guard.sh
 COPY --chmod=0644 companions.sh /usr/local/bin/companions.sh
+COPY --chmod=0644 repositories.sh /usr/local/bin/repositories.sh
 ENV HOME=/home/executor
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

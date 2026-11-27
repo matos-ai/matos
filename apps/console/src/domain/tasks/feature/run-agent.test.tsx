@@ -289,6 +289,107 @@ describe('run agent', () => {
 			})
 		})
 
+		describe('extra repositories', () => {
+			const many = (grants: string[]) => ({
+				...repoBase(),
+				'GET /api/v1/team/agents': {
+					items: [
+						agent(AGENT_LEAD, 'Veille légale (lead)', {
+							repository_grants: grants,
+						}),
+					],
+				},
+				[POST]: { status: 202, body: { run_id: RUN } },
+				[`GET /api/v1/runs/${RUN}`]: run('running'),
+			})
+
+			it('lists the other repositories, never the primary', async () => {
+				mockApi(many(['acme/web', 'acme/api', 'acme/docs']))
+				const dialog = await openDialog()
+				expect(
+					within(dialog).queryByRole('checkbox', { name: 'acme/api' }),
+				).toBeNull()
+				expect(
+					within(dialog).getByRole('checkbox', { name: 'acme/web' }),
+				).toBeTruthy()
+				expect(
+					within(dialog).getByRole('checkbox', { name: 'acme/docs' }),
+				).toBeTruthy()
+				expect(within(dialog).getByText(/4 au plus/)).toBeTruthy()
+				fireEvent.click(
+					within(dialog).getByRole('checkbox', { name: 'acme/web' }),
+				)
+				fireEvent.change(
+					within(dialog).getByRole('combobox', { name: 'Dépôt' }),
+					{
+						target: { value: 'acme/web' },
+					},
+				)
+				expect(
+					within(dialog).queryByRole('checkbox', { name: 'acme/web' }),
+				).toBeNull()
+			})
+
+			it('sends the chosen extras, and omits them when none', async () => {
+				const fetchMock = mockApi(many(['acme/web', 'acme/api', 'acme/docs']))
+				const dialog = await openDialog()
+				fireEvent.click(
+					within(dialog).getByRole('checkbox', { name: 'acme/web' }),
+				)
+				fireEvent.click(
+					within(dialog).getByRole('checkbox', { name: 'acme/docs' }),
+				)
+				fireEvent.click(
+					within(dialog).getByRole('button', { name: 'Confirmer' }),
+				)
+				await waitFor(() =>
+					expect(
+						jsonBody(fetchMock, 'POST', `/api/v1/cards/${ID}/agent-runs`),
+					).toMatchObject({ extra_repositories: ['acme/web', 'acme/docs'] }),
+				)
+			})
+
+			it('is hidden with a single grant', async () => {
+				mockApi(many(['acme/api']))
+				const dialog = await openDialog()
+				expect(
+					within(dialog).queryByText(/Autres dépôts à modifier/),
+				).toBeNull()
+			})
+
+			it('stops at four extras', async () => {
+				mockApi(many(['acme/api', 'o/1', 'o/2', 'o/3', 'o/4', 'o/5']))
+				const dialog = await openDialog()
+				for (const name of ['o/1', 'o/2', 'o/3', 'o/4']) {
+					fireEvent.click(within(dialog).getByRole('checkbox', { name }))
+				}
+				expect(
+					(
+						within(dialog).getByRole('checkbox', {
+							name: 'o/5',
+						}) as HTMLButtonElement
+					).disabled,
+				).toBe(true)
+			})
+
+			it('shows the too_many_repositories refusal', async () => {
+				mockApi({
+					...many(['acme/web', 'acme/api']),
+					[POST]: {
+						status: 422,
+						body: { code: 'too_many_repositories', message: 'x', status: 422 },
+					},
+				})
+				const dialog = await openDialog()
+				fireEvent.click(
+					within(dialog).getByRole('button', { name: 'Confirmer' }),
+				)
+				expect(
+					await screen.findByText(/Trop de dépôts : 4 dépôts supplémentaires/),
+				).toBeTruthy()
+			})
+		})
+
 		it('explains a change run when writes are allowed', async () => {
 			const fetchMock = mockApi({
 				...repoBase(),
@@ -406,6 +507,34 @@ describe('run agent', () => {
 				name: "Ouvrir les accès de l'agent",
 			})
 			expect(link.getAttribute('href')).toBe(`/agents/${AGENT_LEAD}/connectors`)
+		})
+
+		it('shows one link per pull request a run comment cites', async () => {
+			mockApi(
+				base(
+					detail({}, [
+						{
+							id: 'c1',
+							card_id: ID,
+							author_subject: 'u',
+							author_actor: 'agent:veille légale (lead)',
+							body: 'Deux PR : https://github.com/acme/api/pull/12 et https://github.com/acme/web/pull/4',
+							created_at: new Date().toISOString(),
+						},
+					]),
+				),
+			)
+			await open()
+			expect(
+				await screen.findByRole('link', {
+					name: /Ouvrir la pull request acme\/api#12/,
+				}),
+			).toBeTruthy()
+			expect(
+				screen.getByRole('link', {
+					name: /Ouvrir la pull request acme\/web#4/,
+				}),
+			).toBeTruthy()
 		})
 
 		it('shows the pull request a run comment cites', async () => {

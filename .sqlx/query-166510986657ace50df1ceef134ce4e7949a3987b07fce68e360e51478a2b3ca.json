@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.initiated_by, r.status, r.pipeline,\n                   r.failure, r.created_at, r.started_at, r.finished_at, r.trace_id, r.models, COALESCE(t.title, c.title) AS title,\n                   COALESCE(t.repository, p.repository) AS \"repository_hint?\",\n                   COALESCE(t.client_id, c.client_id) AS \"client_id?\", cl.name AS \"client_name?\",\n                   COALESCE(t.project_id, c.project_id) AS \"project_id?\", p.name AS \"project_name?\",\n                   atk.agent_id AS \"agent_id?\", ag.name AS \"agent_name?\"\n            FROM runs r\n            LEFT JOIN transcripts t ON t.id = r.transcript_id\n            LEFT JOIN cards c ON c.id = r.card_id\n            LEFT JOIN projects p ON p.id = COALESCE(t.project_id, c.project_id)\n            LEFT JOIN clients cl ON cl.id = COALESCE(t.client_id, c.client_id)\n            LEFT JOIN agent_tasks atk ON atk.run_id = r.id\n            LEFT JOIN agents ag ON ag.id = atk.agent_id\n            WHERE r.organization_id = $1\n              AND ($4::text IS NULL OR r.status = $4)\n              AND ($5::uuid IS NULL OR atk.agent_id = $5)\n            ORDER BY r.created_at DESC, r.id DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT r.id, r.organization_id, r.transcript_id, r.card_id, r.repository, r.base_branch, r.extra_repositories, r.initiated_by, r.status, r.pipeline,\n                   r.failure, r.created_at, r.started_at, r.finished_at, r.trace_id, r.models, COALESCE(t.title, c.title) AS title,\n                   COALESCE(t.repository, p.repository) AS \"repository_hint?\",\n                   COALESCE(t.client_id, c.client_id) AS \"client_id?\", cl.name AS \"client_name?\",\n                   COALESCE(t.project_id, c.project_id) AS \"project_id?\", p.name AS \"project_name?\",\n                   atk.agent_id AS \"agent_id?\", ag.name AS \"agent_name?\"\n            FROM runs r\n            LEFT JOIN transcripts t ON t.id = r.transcript_id\n            LEFT JOIN cards c ON c.id = r.card_id\n            LEFT JOIN projects p ON p.id = COALESCE(t.project_id, c.project_id)\n            LEFT JOIN clients cl ON cl.id = COALESCE(t.client_id, c.client_id)\n            LEFT JOIN agent_tasks atk ON atk.run_id = r.id\n            LEFT JOIN agents ag ON ag.id = atk.agent_id\n            WHERE r.id = $1\n            FOR UPDATE OF r SKIP LOCKED\n            ",
   "describe": {
     "columns": [
       {
@@ -35,96 +35,97 @@
       },
       {
         "ordinal": 6,
+        "name": "extra_repositories",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 7,
         "name": "initiated_by",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "pipeline",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "failure",
         "type_info": "Text"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "finished_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "trace_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "models",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "title",
         "type_info": "Text"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "repository_hint?",
         "type_info": "Text"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "client_id?",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "client_name?",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "project_id?",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "project_name?",
         "type_info": "Text"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "agent_id?",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "agent_name?",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int8",
-        "Int8",
-        "Text",
         "Uuid"
       ]
     },
@@ -135,6 +136,7 @@
       true,
       true,
       true,
+      false,
       false,
       false,
       false,
@@ -154,5 +156,5 @@
       false
     ]
   },
-  "hash": "be3af4c915b7bd8421bb5124f949f63a8a01753bfd23f7ff31270a607673b26b"
+  "hash": "166510986657ace50df1ceef134ce4e7949a3987b07fce68e360e51478a2b3ca"
 }

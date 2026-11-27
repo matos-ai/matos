@@ -26,8 +26,10 @@ import {
 	type RunPlan,
 	type RunTarget,
 	runRequest,
+	withoutPrimary,
 	writesHint,
 } from '#/domain/tasks/run-agent'
+import { ExtraRepositories } from '#/domain/tasks/ui/extra-repositories'
 
 interface Props {
 	cardId: string
@@ -110,6 +112,12 @@ export function RunAgentDialog({
 	const onRepository = plan.target === 'repository'
 	const withRepositories = repositoryGrants.length > 0
 
+	const setPrimary = (repository: string) =>
+		patch({
+			repository,
+			extraRepositories: withoutPrimary(plan.extraRepositories, repository),
+		})
+
 	const patch = (change: Partial<RunPlan>) => {
 		run.reset()
 		setPlan((current) => ({ ...current, ...change }))
@@ -178,7 +186,7 @@ export function RunAgentDialog({
 								id={repositoryId}
 								className="font-mono"
 								value={plan.repository}
-								onChange={(event) => patch({ repository: event.target.value })}
+								onChange={(event) => setPrimary(event.target.value)}
 							>
 								{repositoryGrants.map((name) => (
 									<option key={name} value={name}>
@@ -201,6 +209,14 @@ export function RunAgentDialog({
 							/>
 						</Field>
 					</div>
+				) : null}
+				{withRepositories && onRepository ? (
+					<ExtraRepositories
+						grants={repositoryGrants}
+						primary={plan.repository}
+						value={plan.extraRepositories}
+						onChange={(extraRepositories) => patch({ extraRepositories })}
+					/>
 				) : null}
 				<Checkbox
 					label="Autoriser les écritures"

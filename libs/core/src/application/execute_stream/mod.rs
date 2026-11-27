@@ -22,6 +22,7 @@ const INPUT_MAX_CHARS: usize = 200;
 const OUTPUT_MAX_CHARS: usize = 300;
 const SUMMARY_MAX_CHARS: usize = 4_000;
 pub(super) const TOOL_CALLS_MAX: usize = 500;
+const CONTRIBUTIONS_MAX: usize = 16;
 
 #[derive(Debug, Clone)]
 pub(super) struct Redactor {
@@ -107,10 +108,12 @@ pub(super) struct StreamReader {
     digest: Digest,
     report: ReportAssembler,
     plan: ReportAssembler,
-    contribution: ReportAssembler,
+    contributions: HashMap<Option<String>, ReportAssembler>,
     blocked: Option<Vec<String>>,
-    quality: Option<Quality>,
+    qualities: HashMap<Option<String>, Quality>,
+    pushed: Vec<PushedBranch>,
     companions: Option<CompanionOutcome>,
+    extra_outcome: Option<CompanionOutcome>,
     pending: HashMap<String, PendingCall>,
     order: Vec<String>,
     dirty: bool,
@@ -120,6 +123,12 @@ pub(super) struct StreamReader {
 pub(super) struct Quality {
     pub(super) lint: QualityStatus,
     pub(super) excerpt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct PushedBranch {
+    pub(super) repository: Option<String>,
+    pub(super) sha: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -137,10 +146,12 @@ impl StreamReader {
             digest: Digest::default(),
             report: ReportAssembler::default(),
             plan: ReportAssembler::default(),
-            contribution: ReportAssembler::default(),
+            contributions: HashMap::new(),
             blocked: None,
-            quality: None,
+            qualities: HashMap::new(),
+            pushed: Vec::new(),
             companions: None,
+            extra_outcome: None,
             pending: HashMap::new(),
             order: Vec::new(),
             dirty: false,
@@ -152,10 +163,12 @@ impl StreamReader {
         self.digest = Digest::default();
         self.report = ReportAssembler::default();
         self.plan = ReportAssembler::default();
-        self.contribution = ReportAssembler::default();
+        self.contributions.clear();
         self.blocked = None;
-        self.quality = None;
+        self.qualities.clear();
+        self.pushed.clear();
         self.companions = None;
+        self.extra_outcome = None;
         self.pending.clear();
         self.order.clear();
         self.dirty = true;
@@ -183,14 +196,40 @@ impl StreamReader {
         })
     }
 
-    /// The linter's result the task reported, redacted.
-    pub(super) fn quality(&self) -> Option<Quality> {
-        self.quality.as_ref().map(|quality| Quality {
-            lint: quality.lint,
-            excerpt: quality
-                .excerpt
-                .as_deref()
-                .map(|excerpt| self.redactor.apply(excerpt)),
+    /// The branches the task pushed, in the order it reported them.
+    pub(super) fn pushed(&self) -> &[PushedBranch] {
+        &self.pushed
+    }
+
+    /// The linter's result the task reported for a repository, redacted. The
+    /// primary repository is the one a result without a name belongs to.
+    pub(super) fn quality(&self, repository: &str, primary: bool) -> Option<Quality> {
+        let key = Some(repository.to_owned());
+        self.qualities
+            .get(&key)
+            .or_else(|| primary.then(|| self.qualities.get(&None)).flatten())
+            .map(|quality| Quality {
+                lint: quality.lint,
+                excerpt: quality
+                    .excerpt
+                    .as_deref()
+                    .map(|excerpt| self.redactor.apply(excerpt)),
+            })
+    }
+
+    /// The extra repositories the task cloned and could not clone, redacted.
+    pub(super) fn extra_repositories(&self) -> Option<CompanionOutcome> {
+        self.extra_outcome.as_ref().map(|outcome| CompanionOutcome {
+            cloned: outcome
+                .cloned
+                .iter()
+                .map(|name| self.redactor.apply(name))
+                .collect(),
+            failed: outcome
+                .failed
+                .iter()
+                .map(|name| self.redactor.apply(name))
+                .collect(),
         })
     }
 
@@ -229,7 +268,25 @@ impl StreamReader {
     /// The title and body the change run wrote, redacted; `None` without a
     /// complete and intact text.
     pub(super) fn contribution(&self) -> Option<String> {
-        self.document(&self.contribution, "contribution text")
+        self.contributions
+            .get(&None)
+            .and_then(|assembler| self.document(assembler, "contribution text"))
+    }
+
+    /// The title and body the change run wrote for one repository alone.
+    pub(super) fn contribution_of(&self, repository: &str) -> Option<String> {
+        self.contributions
+            .get(&Some(repository.to_owned()))
+            .and_then(|assembler| self.document(assembler, "contribution text"))
+    }
+
+    fn contribution_slot(&mut self, repository: &Option<String>) -> Option<&mut ReportAssembler> {
+        if !self.contributions.contains_key(repository)
+            && self.contributions.len() >= CONTRIBUTIONS_MAX
+        {
+            return None;
+        }
+        Some(self.contributions.entry(repository.clone()).or_default())
     }
 
     fn document(&self, assembler: &ReportAssembler, what: &str) -> Option<String> {
@@ -247,15 +304,20 @@ impl StreamReader {
 
     pub(super) fn accept(&mut self, line: &TaskLine) {
         match line {
-            TaskLine::Matos(TaskMarker::ContributionChunk { data }) => {
-                self.contribution.chunk(data)
+            TaskLine::Matos(TaskMarker::ContributionChunk { data, repository }) => {
+                if let Some(slot) = self.contribution_slot(repository) {
+                    slot.chunk(data);
+                }
             }
             TaskLine::Matos(TaskMarker::ContributionEnd {
                 sha256,
                 bytes,
                 truncated,
+                repository,
             }) => {
-                self.contribution.end(sha256, *bytes, *truncated);
+                if let Some(slot) = self.contribution_slot(repository) {
+                    slot.end(sha256, *bytes, *truncated);
+                }
                 self.dirty = true;
             }
             TaskLine::Matos(TaskMarker::PlanChunk { data }) => self.plan.chunk(data),
@@ -280,11 +342,33 @@ impl StreamReader {
                 self.blocked = Some(reasons.clone());
                 self.dirty = true;
             }
-            TaskLine::Matos(TaskMarker::Quality { lint, excerpt }) => {
-                self.quality = Some(Quality {
-                    lint: *lint,
-                    excerpt: excerpt.clone(),
+            TaskLine::Matos(TaskMarker::Quality {
+                lint,
+                excerpt,
+                repository,
+            }) => {
+                self.qualities.insert(
+                    repository.clone(),
+                    Quality {
+                        lint: *lint,
+                        excerpt: excerpt.clone(),
+                    },
+                );
+                self.dirty = true;
+            }
+            TaskLine::Matos(TaskMarker::ExtraRepositories { cloned, failed }) => {
+                self.extra_outcome = Some(CompanionOutcome {
+                    cloned: cloned.clone(),
+                    failed: failed.clone(),
                 });
+                self.dirty = true;
+            }
+            TaskLine::Matos(marker @ TaskMarker::Pushed { sha, repository }) => {
+                self.pushed.push(PushedBranch {
+                    repository: repository.clone(),
+                    sha: sha.clone(),
+                });
+                self.digest.marker = Some(marker.clone());
                 self.dirty = true;
             }
             TaskLine::Matos(TaskMarker::Companions { cloned, failed }) => {
@@ -472,7 +556,8 @@ mod tests {
         assert_eq!(
             digest.marker,
             Some(TaskMarker::Pushed {
-                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into()
+                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into(),
+                repository: None,
             })
         );
     }
@@ -533,7 +618,8 @@ mod tests {
         assert_eq!(
             digest.marker,
             Some(TaskMarker::Pushed {
-                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into()
+                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into(),
+                repository: None,
             })
         );
         assert_eq!(digest.cached_usage().fresh_input, 6_500);
@@ -568,7 +654,8 @@ mod tests {
         assert_eq!(
             digest.marker,
             Some(TaskMarker::Pushed {
-                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into()
+                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into(),
+                repository: None,
             })
         );
         assert_eq!(digest.cached_usage().fresh_input, 800);
@@ -605,7 +692,8 @@ mod tests {
         assert_eq!(
             digest.marker,
             Some(TaskMarker::Pushed {
-                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into()
+                sha: "3f9c2a7d1e5b48a6c0d7e9f1a2b3c4d5e6f70812".into(),
+                repository: None,
             })
         );
         assert_eq!(digest.cached_usage().fresh_input, 1_200);
@@ -824,7 +912,10 @@ mod tests {
             .into_iter()
             .filter_map(|line| match line {
                 TaskLine::Matos(TaskMarker::ReportChunk { data }) => {
-                    Some(TaskLine::Matos(TaskMarker::ContributionChunk { data }))
+                    Some(TaskLine::Matos(TaskMarker::ContributionChunk {
+                        data,
+                        repository: None,
+                    }))
                 }
                 TaskLine::Matos(TaskMarker::ReportEnd {
                     sha256,
@@ -834,18 +925,25 @@ mod tests {
                     sha256,
                     bytes,
                     truncated,
+                    repository: None,
                 })),
                 _ => None,
             })
         {
             reader.accept(&line);
         }
-        reader.accept(&TaskLine::Matos(TaskMarker::Pushed { sha: "abc".into() }));
+        reader.accept(&TaskLine::Matos(TaskMarker::Pushed {
+            sha: "abc".into(),
+            repository: None,
+        }));
         assert_eq!(reader.contribution().as_deref(), Some("feat: x (***)"));
         assert_eq!(reader.plan(), None);
         assert_eq!(
             reader.marker(),
-            Some(&TaskMarker::Pushed { sha: "abc".into() })
+            Some(&TaskMarker::Pushed {
+                sha: "abc".into(),
+                repository: None,
+            })
         );
     }
 
@@ -875,10 +973,14 @@ mod tests {
         reader.accept(&TaskLine::Matos(TaskMarker::Quality {
             lint: QualityStatus::Failed,
             excerpt: Some("error tok-secret".into()),
+            repository: None,
         }));
-        reader.accept(&TaskLine::Matos(TaskMarker::Pushed { sha: "abc".into() }));
+        reader.accept(&TaskLine::Matos(TaskMarker::Pushed {
+            sha: "abc".into(),
+            repository: None,
+        }));
         assert_eq!(
-            reader.quality(),
+            reader.quality("acme/api", true),
             Some(Quality {
                 lint: QualityStatus::Failed,
                 excerpt: Some("error ***".into())
@@ -887,14 +989,137 @@ mod tests {
         assert_eq!(reader.blocked(), None);
         assert_eq!(
             reader.marker(),
-            Some(&TaskMarker::Pushed { sha: "abc".into() })
+            Some(&TaskMarker::Pushed {
+                sha: "abc".into(),
+                repository: None,
+            })
         );
         reader.accept(&TaskLine::Matos(TaskMarker::GuardBlocked {
             reasons: vec!["chemin sensible : tok-secret".into()],
         }));
         assert_eq!(reader.blocked(), Some(vec!["chemin sensible : ***".into()]));
         reader.reset();
-        assert_eq!((reader.blocked(), reader.quality()), (None, None));
+        assert_eq!(
+            (reader.blocked(), reader.quality("acme/api", true)),
+            (None, None)
+        );
+    }
+
+    fn contribution_lines(text: &str, repository: Option<&str>) -> Vec<TaskLine> {
+        report_lines(text, 4, None)
+            .into_iter()
+            .filter_map(|line| match line {
+                TaskLine::Matos(TaskMarker::ReportChunk { data }) => {
+                    Some(TaskLine::Matos(TaskMarker::ContributionChunk {
+                        data,
+                        repository: repository.map(str::to_owned),
+                    }))
+                }
+                TaskLine::Matos(TaskMarker::ReportEnd {
+                    sha256,
+                    bytes,
+                    truncated,
+                }) => Some(TaskLine::Matos(TaskMarker::ContributionEnd {
+                    sha256,
+                    bytes,
+                    truncated,
+                    repository: repository.map(str::to_owned),
+                })),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_pushed_marker_is_kept_in_order_and_the_last_one_stays_the_marker() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new(""));
+        reader.accept(&TaskLine::Matos(TaskMarker::Pushed {
+            sha: "aaa".into(),
+            repository: None,
+        }));
+        reader.accept(&TaskLine::Matos(TaskMarker::Pushed {
+            sha: "bbb".into(),
+            repository: Some("acme/sdk".into()),
+        }));
+        assert_eq!(
+            reader.pushed(),
+            [
+                PushedBranch {
+                    repository: None,
+                    sha: "aaa".into()
+                },
+                PushedBranch {
+                    repository: Some("acme/sdk".into()),
+                    sha: "bbb".into()
+                }
+            ]
+        );
+        assert!(matches!(reader.marker(), Some(TaskMarker::Pushed { .. })));
+        reader.reset();
+        assert!(reader.pushed().is_empty());
+    }
+
+    #[test]
+    fn contributions_are_kept_per_repository_beside_the_shared_one() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new("tok-secret"));
+        for line in contribution_lines("shared", None)
+            .into_iter()
+            .chain(contribution_lines("sdk only tok-secret", Some("acme/sdk")))
+        {
+            reader.accept(&line);
+        }
+        assert_eq!(reader.contribution().as_deref(), Some("shared"));
+        assert_eq!(
+            reader.contribution_of("acme/sdk").as_deref(),
+            Some("sdk only ***")
+        );
+        assert_eq!(reader.contribution_of("acme/web"), None);
+        reader.reset();
+        assert_eq!(reader.contribution_of("acme/sdk"), None);
+    }
+
+    #[test]
+    fn a_quality_without_a_name_is_the_primary_s_and_a_named_one_is_its_own() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new(""));
+        reader.accept(&TaskLine::Matos(TaskMarker::Quality {
+            lint: QualityStatus::Passed,
+            excerpt: None,
+            repository: None,
+        }));
+        reader.accept(&TaskLine::Matos(TaskMarker::Quality {
+            lint: QualityStatus::Failed,
+            excerpt: Some("boom".into()),
+            repository: Some("acme/sdk".into()),
+        }));
+        assert_eq!(
+            reader.quality("acme/api", true).map(|quality| quality.lint),
+            Some(QualityStatus::Passed)
+        );
+        assert_eq!(
+            reader
+                .quality("acme/sdk", false)
+                .map(|quality| quality.lint),
+            Some(QualityStatus::Failed)
+        );
+        assert_eq!(reader.quality("acme/web", false), None);
+    }
+
+    #[test]
+    fn the_extra_repositories_marker_is_kept_apart_from_the_final_marker() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new("tok-secret"));
+        reader.accept(&TaskLine::Matos(TaskMarker::ExtraRepositories {
+            cloned: vec!["acme/sdk".into()],
+            failed: vec!["acme/tok-secret".into()],
+        }));
+        reader.accept(&TaskLine::Matos(TaskMarker::NoChanges));
+        assert_eq!(
+            reader.extra_repositories(),
+            Some(CompanionOutcome {
+                cloned: vec!["acme/sdk".into()],
+                failed: vec!["acme/***".into()]
+            })
+        );
+        assert_eq!(reader.marker(), Some(&TaskMarker::NoChanges));
     }
 
     #[test]

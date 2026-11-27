@@ -930,6 +930,34 @@ impl GithubClient {
         self.open_draft_pr(access_token, pull_request).await
     }
 
+    pub async fn update_pull_request_body(
+        &self,
+        installation_id: i64,
+        repository: &RepositoryRef,
+        pull_request: &PullRequestUrl,
+        body: &str,
+    ) -> Result<(), GithubError> {
+        let number = pull_request_number(&pull_request.0).ok_or_else(|| GithubError::Status {
+            status: 422,
+            message: "pull request URL without a number".to_owned(),
+        })?;
+        let token = self.token_for(installation_id, Some(repository)).await?;
+        Self::send(
+            self.request(
+                self.http
+                    .patch(self.url(&format!(
+                        "/repos/{}/{}/pulls/{number}",
+                        repository.owner(),
+                        repository.name()
+                    )))
+                    .header(AUTHORIZATION, format!("Bearer {}", token.token.expose()))
+                    .json(&json!({"body": body})),
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn open_draft_pr(
         &self,
         bearer: &str,
@@ -1005,6 +1033,12 @@ impl GithubClient {
             .next()
             .map(|entry| PullRequestUrl(entry.html_url)))
     }
+}
+
+fn pull_request_number(url: &str) -> Option<u64> {
+    let path = url.split(['?', '#']).next()?;
+    let (_, number) = path.trim_end_matches('/').rsplit_once('/')?;
+    number.parse().ok()
 }
 
 fn origin(url: &str) -> Option<(String, String, u16)> {
@@ -1120,6 +1154,8 @@ mod tests {
         pull_auth: Vec<String>,
         grant_requests: Vec<(String, Value)>,
         grant_status: Option<u16>,
+        patched: Vec<(String, String, Value)>,
+        patch_status: Option<u16>,
     }
 
     type Shared = Arc<StdMutex<Recorded>>;
@@ -1194,6 +1230,29 @@ mod tests {
             .push(headers["authorization"].to_str().unwrap().to_owned());
         recorded.pull_bodies.push(body);
         Json(json!({"html_url": "https://github.com/acme/api/pull/9"})).into_response()
+    }
+
+    async fn patch_pull(
+        State(shared): State<Shared>,
+        axum::extract::Path((owner, repo, number)): axum::extract::Path<(String, String, String)>,
+        headers: HeaderMap,
+        Json(body): Json<Value>,
+    ) -> impl IntoResponse {
+        let mut recorded = shared.lock().unwrap();
+        if let Some(status) = recorded.patch_status {
+            return (
+                AxumStatus::from_u16(status).unwrap(),
+                Json(json!({"message": "Forbidden"})),
+            )
+                .into_response();
+        }
+        recorded.patched.push((
+            format!("{owner}/{repo}#{number}"),
+            headers["authorization"].to_str().unwrap().to_owned(),
+            body,
+        ));
+        Json(json!({"html_url": format!("https://github.com/{owner}/{repo}/pull/{number}")}))
+            .into_response()
     }
 
     async fn list_pulls(
@@ -1373,6 +1432,10 @@ mod tests {
                 axum::routing::delete(revoke_grant),
             )
             .route("/repos/{owner}/{repo}/pulls", post(pulls).get(list_pulls))
+            .route(
+                "/repos/{owner}/{repo}/pulls/{number}",
+                axum::routing::patch(patch_pull),
+            )
             .with_state(Arc::clone(&shared));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
@@ -2047,6 +2110,66 @@ mod tests {
         assert_eq!(recorded.pull_auth, ["Bearer ghu_member"]);
         assert!(recorded.token_bodies.is_empty());
         assert_eq!(recorded.pull_bodies[0]["draft"], true);
+    }
+
+    #[tokio::test]
+    async fn a_pull_request_body_is_replaced_by_its_number_with_an_installation_token() {
+        let shared = Shared::default();
+        let client = serve(Arc::clone(&shared)).await;
+        client
+            .update_pull_request_body(
+                5,
+                &repo_ref("acme/sdk"),
+                &PullRequestUrl("https://github.com/acme/sdk/pull/12".into()),
+                "new body",
+            )
+            .await
+            .unwrap();
+        let recorded = shared.lock().unwrap();
+        assert_eq!(
+            recorded.patched,
+            [(
+                "acme/sdk#12".to_owned(),
+                "Bearer ghs_secret1".to_owned(),
+                json!({"body": "new body"})
+            )]
+        );
+        assert_eq!(recorded.token_bodies[0]["repositories"], json!(["sdk"]));
+    }
+
+    #[tokio::test]
+    async fn a_pull_request_url_without_a_number_is_refused_before_any_call() {
+        let shared = Shared::default();
+        let client = serve(Arc::clone(&shared)).await;
+        let error = client
+            .update_pull_request_body(
+                5,
+                &repo_ref("acme/sdk"),
+                &PullRequestUrl("https://github.com/acme/sdk/pulls".into()),
+                "x",
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, GithubError::Status { status: 422, .. }));
+        let recorded = shared.lock().unwrap();
+        assert!(recorded.token_bodies.is_empty() && recorded.patched.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_refused_body_update_is_an_error() {
+        let shared = Shared::default();
+        shared.lock().unwrap().patch_status = Some(403);
+        let client = serve(Arc::clone(&shared)).await;
+        let error = client
+            .update_pull_request_body(
+                5,
+                &repo_ref("acme/sdk"),
+                &PullRequestUrl("https://github.com/acme/sdk/pull/12".into()),
+                "x",
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, GithubError::Status { status: 403, .. }));
     }
 
     #[tokio::test]

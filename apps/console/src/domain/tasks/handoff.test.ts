@@ -26,6 +26,12 @@ describe('handoff', () => {
 		).toBe("L'agent n'a pas démarré : aucun fournisseur")
 	})
 
+	it('explains too many repositories', () => {
+		expect(handoffNotice({ skipped: 'too_many_repositories' })).toBe(
+			"L'agent n'a pas démarré : Trop de dépôts : 4 dépôts supplémentaires au plus, sans doublon.",
+		)
+	})
+
 	it('hands the outcome over once', () => {
 		rememberHandoff('c1', { run_id: 'r1' })
 		expect(takeHandoff('c1')).toEqual({ run_id: 'r1' })

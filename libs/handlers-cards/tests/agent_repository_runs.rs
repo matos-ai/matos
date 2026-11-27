@@ -480,6 +480,119 @@ async fn a_granted_repository_queues_an_execute_run_linked_to_the_agent() {
 }
 
 #[tokio::test]
+async fn an_extra_repository_outside_the_grants_is_a_422_before_github_is_asked() {
+    let Some(fixture) = fixture().await else {
+        return;
+    };
+    fixture.connect_github().await;
+    let agent = fixture.agent("auditrice", &["acme/web"]).await;
+    let card = fixture.card(&agent).await;
+
+    let (status, code, message) = failure(
+        fixture
+            .run(
+                &card,
+                json!({"repository": "acme/web", "extra_repositories": ["acme/api"]}),
+            )
+            .await,
+    )
+    .await;
+
+    assert_eq!((status, code.as_str()), (422, "repository_not_granted"));
+    assert!(message.contains("acme/api"), "{message}");
+    assert_eq!(fixture.runs(card.id).await, 0);
+    assert_eq!(fixture.github_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn more_than_four_duplicate_or_primary_extra_repositories_are_a_422() {
+    let Some(fixture) = fixture().await else {
+        return;
+    };
+    fixture.connect_github().await;
+    let agent = fixture.agent("auditrice", &["acme/web", "acme/api"]).await;
+    let card = fixture.card(&agent).await;
+    for extras in [
+        json!(["acme/a", "acme/b", "acme/c", "acme/d", "acme/e"]),
+        json!(["acme/api", "acme/api"]),
+        json!(["acme/web"]),
+    ] {
+        let (status, code, _) = failure(
+            fixture
+                .run(
+                    &card,
+                    json!({"repository": "acme/web", "extra_repositories": extras}),
+                )
+                .await,
+        )
+        .await;
+        assert_eq!(
+            (status, code.as_str()),
+            (422, "too_many_repositories"),
+            "{extras}"
+        );
+    }
+    assert_eq!(fixture.runs(card.id).await, 0);
+    assert_eq!(fixture.github_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_granted_extra_repository_is_stored_with_the_run_and_a_reply_keeps_it() {
+    let Some(fixture) = fixture().await else {
+        return;
+    };
+    fixture.connect_github().await;
+    let agent = fixture.agent("auditrice", &["acme/web", "acme/api"]).await;
+    let card = fixture.card(&agent).await;
+
+    let response = fixture
+        .run(
+            &card,
+            json!({"repository": "acme/web", "extra_repositories": ["acme/api"], "allow_writes": true}),
+        )
+        .await;
+    assert_eq!(response.status(), 202);
+    let extras = |card_id: CardId| {
+        let pool = fixture.pool.clone();
+        async move {
+            sqlx::query_scalar::<_, Vec<String>>(
+                "SELECT extra_repositories FROM runs WHERE card_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1",
+            )
+            .bind(card_id.0)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        }
+    };
+    assert_eq!(extras(card.id).await, ["acme/api"]);
+
+    sqlx::query("UPDATE runs SET status = 'succeeded' WHERE card_id = $1")
+        .bind(card.id.0)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    sqlx::query(r#"UPDATE cards SET "column" = 'todo' WHERE id = $1"#)
+        .bind(card.id.0)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    let reply = reqwest::Client::new()
+        .post(format!(
+            "{}/api/v1/cards/{}/comments",
+            fixture.base, card.id
+        ))
+        .json(&json!({"body": "Et aussi la doc"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reply.status(), 201);
+    let body: Value = reply.json().await.unwrap();
+    assert!(body["agent_run"]["run_id"].is_string(), "{body}");
+    assert_eq!(fixture.runs(card.id).await, 2);
+    assert_eq!(extras(card.id).await, ["acme/api"]);
+}
+
+#[tokio::test]
 async fn an_agent_on_a_mistral_model_needs_a_mistral_key_not_an_anthropic_one() {
     let Some(fixture) = fixture().await else {
         return;

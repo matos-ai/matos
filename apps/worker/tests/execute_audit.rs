@@ -748,6 +748,7 @@ async fn a_newer_plan_replaces_the_one_still_waiting() {
             PlannedChange {
                 repository: "acme/web".into(),
                 base_branch: "main".into(),
+                extra_repositories: Vec::new(),
                 plan: "autre plan".into(),
             },
         )
@@ -946,4 +947,81 @@ async fn an_audit_reads_the_repository_config_and_a_missing_file_means_no_compan
             .1
             .contains("compagnons")
     );
+}
+
+#[tokio::test]
+async fn an_audit_reads_its_extra_repositories_as_companions_and_the_plan_carries_them_to_the_change_run()
+ {
+    let Some(world) = world(false).await else {
+        return;
+    };
+    world
+        .usecase
+        .update_crew_agent(
+            human(world.organization_id, false),
+            AgentId(world.agent_id),
+            matos_core::domain::crew::service::UpdateAgent {
+                repository_grants: Some(vec!["acme/web".into(), "acme/api".into()]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    sqlx::query("UPDATE runs SET extra_repositories = ARRAY['acme/api'] WHERE id = $1")
+        .bind(world.run_id.0)
+        .execute(&world.pool)
+        .await
+        .unwrap();
+
+    let specs = audit_with_plan(&world).await;
+
+    let audit = specs.lock().unwrap()[0].clone();
+    assert!(audit.extra_repositories.is_empty());
+    assert_eq!(
+        audit
+            .companions
+            .iter()
+            .map(matos_core::domain::execution::Companion::line)
+            .collect::<Vec<_>>(),
+        vec!["acme/api\t/workspace/api\t".to_owned()]
+    );
+    let granted: (Vec<String>, Vec<String>) = sqlx::query_as(
+        "SELECT companions, writable_repositories FROM task_grants WHERE run_id = $1",
+    )
+    .bind(world.run_id.0)
+    .fetch_one(&world.pool)
+    .await
+    .unwrap();
+    assert_eq!(granted, (vec!["acme/api".to_owned()], Vec::new()));
+    let detail: serde_json::Value =
+        sqlx::query_scalar("SELECT detail FROM approvals WHERE run_id = $1")
+            .bind(world.run_id.0)
+            .fetch_one(&world.pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        detail["extra_repositories"],
+        serde_json::json!(["acme/api"])
+    );
+
+    let approval_id = pending_plan(&world).await;
+    let decided = world
+        .usecase
+        .decide_approval(
+            human(world.organization_id, false),
+            approval_id,
+            Verdict::Approve,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(decided.resume_error, None);
+    let change_run = decided.approval.resumed_run_id.unwrap();
+    let extras: Vec<String> =
+        sqlx::query_scalar("SELECT extra_repositories FROM runs WHERE id = $1")
+            .bind(change_run.0)
+            .fetch_one(&world.pool)
+            .await
+            .unwrap();
+    assert_eq!(extras, ["acme/api"]);
 }

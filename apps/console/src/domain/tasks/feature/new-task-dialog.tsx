@@ -9,7 +9,9 @@ import { MAX_SUBTASK_DEPTH } from '#/domain/tasks/delegation'
 import { rememberHandoff } from '#/domain/tasks/handoff'
 import { useCards, useCreateCard } from '#/domain/tasks/hooks/use-tasks'
 import { ancestorCount, toTask } from '#/domain/tasks/model'
+import { withoutPrimary } from '#/domain/tasks/run-agent'
 import { shortTaskId, taskPathId } from '#/domain/tasks/task-ids'
+import { ExtraRepositories } from '#/domain/tasks/ui/extra-repositories'
 
 interface Props {
 	open: boolean
@@ -56,6 +58,7 @@ export function NewTaskDialog({
 	const [priority, setPriority] = useState<Schemas.PriorityDto>('normal')
 	const [parentId, setParentId] = useState(NONE)
 	const [repository, setRepository] = useState(NONE)
+	const [extras, setExtras] = useState<ReadonlyArray<string>>([])
 	const [error, setError] = useState<string | null>(null)
 	const parents = useMemo(() => {
 		const tasks = (cards ?? []).map((card) => toTask(card))
@@ -80,6 +83,7 @@ export function NewTaskDialog({
 		setPriority('normal')
 		setParentId(NONE)
 		setRepository(NONE)
+		setExtras([])
 		setError(null)
 		create.reset()
 		onOpenChange(false)
@@ -92,6 +96,8 @@ export function NewTaskDialog({
 			return
 		}
 		setError(null)
+		const extraRepositories =
+			choosesRepository && repository ? withoutPrimary(extras, repository) : []
 		create.mutate(
 			{
 				body: {
@@ -102,6 +108,9 @@ export function NewTaskDialog({
 					project_id: projectId || null,
 					parent_id: parentId || null,
 					repository: (choosesRepository && repository) || null,
+					...(extraRepositories.length > 0
+						? { extra_repositories: [...extraRepositories] }
+						: {}),
 				},
 			},
 			{
@@ -177,6 +186,7 @@ export function NewTaskDialog({
 									onChange={(event) => {
 										setAgentId(event.target.value)
 										setRepository(NONE)
+										setExtras([])
 									}}
 									className={CONTROL}
 								>
@@ -259,7 +269,10 @@ export function NewTaskDialog({
 								<select
 									id="nt-repository"
 									value={repository}
-									onChange={(event) => setRepository(event.target.value)}
+									onChange={(event) => {
+										setRepository(event.target.value)
+										setExtras(withoutPrimary(extras, event.target.value))
+									}}
 									className={CONTROL}
 								>
 									<option value={NONE}>Choisir plus tard</option>
@@ -270,6 +283,14 @@ export function NewTaskDialog({
 									))}
 								</select>
 							</label>
+						) : null}
+						{choosesRepository && repository ? (
+							<ExtraRepositories
+								grants={repositories}
+								primary={repository}
+								value={extras}
+								onChange={setExtras}
+							/>
 						) : null}
 						{agent ? (
 							<p className="m-0 text-xs text-muted-foreground">

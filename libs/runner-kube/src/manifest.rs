@@ -17,7 +17,7 @@ use k8s_openapi::{
 use matos_common::RunId;
 use matos_core::domain::execution::{
     PLAN_PATH, REPORT_PATH, TaskSpec, companion::companion_lines, contribution::CONTRIBUTION_PATH,
-    harness::Harness,
+    extra_repository_lines, harness::Harness,
 };
 
 use crate::{config::KubeRunnerConfig, error::RunnerError};
@@ -95,6 +95,10 @@ fn environment(config: &KubeRunnerConfig, spec: &TaskSpec, secret: &str) -> Vec<
         plain("CARGO_REGISTRY_INDEX", format!("{proxy}/crates-index/")),
         plain("NPM_REGISTRY", format!("{proxy}/npm/")),
         plain("COMPANIONS", companion_lines(&spec.companions)),
+        plain(
+            "EXTRA_REPOSITORIES",
+            extra_repository_lines(&spec.extra_repositories),
+        ),
         plain("REPOSITORY", spec.repository.to_string()),
         plain("BASE_BRANCH", &spec.base_branch),
         plain("BRANCH", &spec.branch),
@@ -306,8 +310,8 @@ mod tests {
     use matos_core::domain::{
         agent::SecretToken,
         execution::{
-            CommitAuthor, CommitSettings, Companion, ExecutionMode, ExecutorModel, PushGuard,
-            RepositoryRef,
+            CommitAuthor, CommitSettings, Companion, ExecutionMode, ExecutorModel, ExtraRepository,
+            PushGuard, RepositoryRef,
         },
     };
 
@@ -342,6 +346,7 @@ mod tests {
                 max_lines: 3000,
             },
             companions: Vec::new(),
+            extra_repositories: Vec::new(),
         }
     }
 
@@ -661,6 +666,41 @@ mod tests {
         );
         let none = build_job(&config(), &self::spec(), Some(&proxy())).unwrap();
         assert_eq!(env(&none, "COMPANIONS").value.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn the_extra_repositories_reach_the_container_one_per_line() {
+        let spec = TaskSpec {
+            extra_repositories: vec![
+                ExtraRepository {
+                    repository: "acme/api".parse().unwrap(),
+                    path: "/workspace/api".into(),
+                    base_branch: "develop".into(),
+                    guard: PushGuard {
+                        allow_paths: vec!["deploy/".into(), "charts/".into()],
+                        max_files: 80,
+                        max_lines: 3000,
+                        ..PushGuard::default()
+                    },
+                },
+                ExtraRepository {
+                    repository: "acme/docs".parse().unwrap(),
+                    path: "/workspace/docs".into(),
+                    base_branch: "main".into(),
+                    guard: PushGuard::default(),
+                },
+            ],
+            ..spec()
+        };
+        let job = build_job(&config(), &spec, Some(&proxy())).unwrap();
+        assert_eq!(
+            env(&job, "EXTRA_REPOSITORIES").value.as_deref(),
+            Some(
+                "acme/api\t/workspace/api\tdevelop\t80\t3000\tdeploy/,charts/\nacme/docs\t/workspace/docs\tmain\t50\t2000\t"
+            )
+        );
+        let none = build_job(&config(), &self::spec(), Some(&proxy())).unwrap();
+        assert_eq!(env(&none, "EXTRA_REPOSITORIES").value.as_deref(), Some(""));
     }
 
     #[test]

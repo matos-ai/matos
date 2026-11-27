@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { pullRequestLink } from '#/domain/tasks/pull-request'
+import { pullRequestLink, pullRequestLinks } from '#/domain/tasks/pull-request'
 import {
 	canRunAgent,
 	describeRunError,
+	extraCandidates,
 	initialRunPlan,
 	mentionedRepository,
 	runRequest,
+	toggleExtra,
 	writesHint,
 } from '#/domain/tasks/run-agent'
 import { ApiRequestError } from '#/lib/api-error'
@@ -32,6 +34,7 @@ describe('initialRunPlan', () => {
 			repository: 'acme/web-admin',
 			baseBranch: '',
 			allowWrites: false,
+			extraRepositories: [],
 		})
 	})
 
@@ -187,5 +190,57 @@ describe('pullRequestLink', () => {
 			number: 12,
 		})
 		expect(pullRequestLink('Aucun changement.')).toBeNull()
+	})
+})
+
+describe('pullRequestLinks', () => {
+	it('lists every distinct pull request in order', () => {
+		const links = pullRequestLinks(
+			'https://github.com/acme/web/pull/12 puis https://github.com/acme/api/pull/3 et encore https://github.com/acme/web/pull/12',
+		)
+		expect(links.map((l) => `${l.repository}#${l.number}`)).toEqual([
+			'acme/web#12',
+			'acme/api#3',
+		])
+		expect(pullRequestLinks('rien')).toEqual([])
+	})
+})
+
+describe('extra repositories', () => {
+	const plan = {
+		target: 'repository' as const,
+		repository: 'acme/web',
+		baseBranch: '',
+		allowWrites: true,
+		extraRepositories: [] as string[],
+	}
+
+	it('sends extra_repositories only when non-empty', () => {
+		expect(runRequest(plan, 2)).not.toHaveProperty('extra_repositories')
+		expect(
+			runRequest({ ...plan, extraRepositories: ['acme/api'] }, 2),
+		).toMatchObject({ extra_repositories: ['acme/api'] })
+	})
+
+	it('drops the primary from the extras', () => {
+		expect(
+			runRequest({ ...plan, extraRepositories: ['acme/web'] }, 2),
+		).not.toHaveProperty('extra_repositories')
+		expect(extraCandidates(['acme/web', 'acme/api'], 'acme/web')).toEqual([
+			'acme/api',
+		])
+	})
+
+	it('caps the extras at four', () => {
+		const four = ['a/1', 'a/2', 'a/3', 'a/4']
+		expect(toggleExtra(four, 'a/5', true)).toEqual(four)
+		expect(toggleExtra(four, 'a/4', false)).toEqual(['a/1', 'a/2', 'a/3'])
+	})
+
+	it('explains too_many_repositories', () => {
+		expect(
+			describeRunError(new ApiRequestError(422, 'too_many_repositories', 'x'))
+				.message,
+		).toBe('Trop de dépôts : 4 dépôts supplémentaires au plus, sans doublon.')
 	})
 })

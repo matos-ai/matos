@@ -31,6 +31,11 @@ pub struct CreateCardRequest {
     /// has several. Ignored without an agent.
     #[serde(default)]
     pub repository: Option<String>,
+    /// `owner/name` of other repositories the agent modifies as well, each
+    /// one of its repositories: at most 4, distinct, and not `repository`.
+    /// Ignored when the agent works with its connectors.
+    #[serde(default)]
+    pub extra_repositories: Vec<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -67,6 +72,11 @@ pub async fn handler(
         .as_deref()
         .map(str::parse::<RepositoryRef>)
         .transpose()?;
+    let extra_repositories = request
+        .extra_repositories
+        .iter()
+        .map(|extra| extra.parse())
+        .collect::<Result<Vec<RepositoryRef>, _>>()?;
     let card = state
         .usecase
         .create_task(
@@ -89,7 +99,10 @@ pub async fn handler(
                 &github,
                 &caller,
                 card.id,
-                Handoff::Created { repository },
+                Handoff::Created {
+                    repository,
+                    extra_repositories,
+                },
             )
             .await
         }

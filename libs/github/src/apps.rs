@@ -279,6 +279,15 @@ impl GithubApps {
 }
 
 impl CodeHost for GithubApps {
+    async fn default_branch(
+        &self,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        repository: &RepositoryRef,
+    ) -> Result<String, CoreError> {
+        GithubApps::default_branch(self, organization_id, installation_id, repository).await
+    }
+
     async fn repositories(
         &self,
         organization_id: OrganizationId,
@@ -373,6 +382,21 @@ impl CodeHost for GithubApps {
             .required(organization_id)
             .await?
             .create_draft_pr_as_user(token.expose(), &pull_request)
+            .await?)
+    }
+
+    async fn update_pull_request_body(
+        &self,
+        organization_id: OrganizationId,
+        installation_id: i64,
+        repository: &RepositoryRef,
+        pull_request: &PullRequestUrl,
+        body: &str,
+    ) -> Result<(), CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .update_pull_request_body(installation_id, repository, pull_request, body)
             .await?)
     }
 

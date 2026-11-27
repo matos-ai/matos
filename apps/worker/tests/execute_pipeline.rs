@@ -169,6 +169,7 @@ async fn world() -> Option<World> {
             todo.id,
             "acme/web".parse().unwrap(),
             "main".into(),
+            Vec::new(),
             todo.version,
         )
         .await
@@ -660,6 +661,7 @@ fn lines_with_contribution(text: &str) -> Vec<TaskLine> {
     for chunk in STANDARD.encode(text).as_bytes().chunks(12) {
         lines.push(TaskLine::Matos(TaskMarker::ContributionChunk {
             data: String::from_utf8(chunk.to_vec()).unwrap(),
+            repository: None,
         }));
     }
     let hash = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, text.as_bytes());
@@ -667,6 +669,7 @@ fn lines_with_contribution(text: &str) -> Vec<TaskLine> {
         sha256: hash.as_ref().iter().map(|b| format!("{b:02x}")).collect(),
         bytes: text.len() as u64,
         truncated: false,
+        repository: None,
     }));
     lines.push(pushed);
     lines
@@ -960,6 +963,7 @@ async fn crashed_attempt(world: &World, token: &str, output: Option<serde_json::
                 model: "claude-sonnet-5-5".into(),
                 mode: ExecutionMode::Change,
                 companions: Vec::new(),
+                writable_repositories: Vec::new(),
                 initiated_by: None,
                 git_identity: GitIdentity::App,
                 expires_at,
@@ -1594,6 +1598,7 @@ async fn the_pull_request_states_the_lint_result() {
         with_markers(vec![TaskMarker::Quality {
             lint: matos_core::domain::execution::QualityStatus::Failed,
             excerpt: Some("error: unused variable `x`".into()),
+            repository: None,
         }]),
         Arc::new(Mutex::new(Vec::new())),
     );
@@ -1641,6 +1646,7 @@ async fn a_lint_excerpt_naming_the_model_is_dropped() {
         with_markers(vec![TaskMarker::Quality {
             lint: matos_core::domain::execution::QualityStatus::Failed,
             excerpt: Some("warning from claude-sonnet-5-5".into()),
+            repository: None,
         }]),
         Arc::new(Mutex::new(Vec::new())),
     );
@@ -2079,4 +2085,615 @@ async fn an_expired_personal_token_falls_back_to_the_apps_authorization() {
     assert_eq!(git_identity_of(&world).await, "member");
     let opened = member_seen.pull_requests.lock().unwrap().clone();
     assert_eq!(opened[0].0, MEMBER_ACCESS);
+}
+
+async fn with_extra_repositories(world: &World, extras: &[&str]) {
+    let extras: Vec<String> = extras.iter().map(|extra| (*extra).to_owned()).collect();
+    sqlx::query("UPDATE runs SET extra_repositories = $2 WHERE id = $1")
+        .bind(world.run_id.0)
+        .bind(&extras)
+        .execute(&world.pool)
+        .await
+        .unwrap();
+}
+
+const API_CONFIG: &str = "[guard]\nallow_paths = [\"deploy/\"]\nmax_files = 7\nmax_lines = 70\n";
+
+#[derive(Clone, Default)]
+struct ExtraReads {
+    default_branches: Arc<Mutex<Vec<String>>>,
+    files: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+fn extras_host(
+    seen: &Seen,
+    reads: &ExtraReads,
+    can_push: Option<fn(&str) -> bool>,
+) -> MockCodeHost {
+    let mut host = MockCodeHost::new();
+    let files = reads.files.clone();
+    host.expect_file_at()
+        .returning(move |_, _, repository, git_ref, path| {
+            assert_eq!(path, ".matos.toml");
+            files
+                .lock()
+                .unwrap()
+                .push((repository.to_string(), git_ref.to_owned()));
+            let text = (repository.to_string() == "acme/api").then(|| API_CONFIG.to_owned());
+            Box::pin(std::future::ready(Ok(text)))
+        });
+    let branches = reads.default_branches.clone();
+    host.expect_default_branch()
+        .returning(move |_, _, repository| {
+            branches.lock().unwrap().push(repository.to_string());
+            Box::pin(std::future::ready(Ok("develop".to_owned())))
+        });
+    host.expect_branch_head()
+        .returning(|_, _, _, _| Box::pin(std::future::ready(Ok(Some(PUSHED_SHA.to_owned())))));
+    let pull_requests = seen.pull_requests.clone();
+    host.expect_open_draft_pr()
+        .returning(move |_, _, pull_request| {
+            pull_requests.lock().unwrap().push(pull_request);
+            Box::pin(std::future::ready(Ok(PullRequestUrl(PR_URL.into()))))
+        });
+    if let Some(can_push) = can_push {
+        host.expect_member_can_push()
+            .returning(move |_, _, repository| {
+                Box::pin(std::future::ready(Ok(can_push(&repository.to_string()))))
+            });
+        host.expect_open_draft_pr_as_member()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(PullRequestUrl(PR_URL.into())))));
+    }
+    host
+}
+
+#[tokio::test]
+async fn an_extra_repository_gets_its_default_branch_its_own_guard_a_path_and_a_writable_grant() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let (seen, reads) = (Seen::default(), ExtraReads::default());
+    let specs = Arc::new(Mutex::new(Vec::new()));
+    let runner = recording_runner(lines_of(SAMPLE), specs.clone());
+    let host = extras_host(&seen, &reads, None);
+
+    pipeline(&world, runner, host)
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    let spec = specs.lock().unwrap()[0].clone();
+    assert_eq!(spec.extra_repositories.len(), 1);
+    let extra = &spec.extra_repositories[0];
+    assert_eq!(extra.repository.to_string(), "acme/api");
+    assert_eq!(extra.path, "/workspace/api");
+    assert_eq!(extra.base_branch, "develop");
+    assert_eq!(extra.guard.allow_paths, vec!["deploy/"]);
+    assert_eq!((extra.guard.max_files, extra.guard.max_lines), (7, 70));
+    assert!(spec.push_guard.allow_paths.is_empty());
+    assert!(spec.prompt.contains("acme/api at /workspace/api"));
+    assert!(
+        reads
+            .files
+            .lock()
+            .unwrap()
+            .contains(&("acme/api".to_owned(), "develop".to_owned()))
+    );
+    let writable: Vec<String> =
+        sqlx::query_scalar("SELECT writable_repositories FROM task_grants WHERE run_id = $1")
+            .bind(world.run_id.0)
+            .fetch_one(&world.pool)
+            .await
+            .unwrap();
+    assert_eq!(writable, ["acme/api"]);
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["extra_repositories"][0]["repository"], "acme/api");
+    assert_eq!(output["extra_repositories"][0]["base_branch"], "develop");
+}
+
+#[tokio::test]
+async fn a_resumed_run_keeps_the_extra_repositories_it_read_instead_of_reading_them_again() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let kept = serde_json::json!([{
+        "repository": "acme/api",
+        "path": "/workspace/api",
+        "base_branch": "release",
+        "guard": {"deny_paths": [".matos.toml"], "allow_paths": [], "max_files": 3, "max_lines": 30}
+    }]);
+    crashed_attempt(
+        &world,
+        &format!("first-{}", world.run_id),
+        Some(serde_json::json!({"job_started": true, "extra_repositories": kept})),
+    )
+    .await;
+    let (seen, reads) = (Seen::default(), ExtraReads::default());
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_attach()
+        .returning(|_| Box::pin(std::future::ready(Ok(true))));
+    following(no_changes_lines(), &mut runner);
+    let host = extras_host(&seen, &reads, None);
+
+    pipeline(&world, runner, host)
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert!(reads.default_branches.lock().unwrap().is_empty());
+    assert!(
+        reads
+            .files
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|(repository, _)| repository == "acme/web")
+    );
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["extra_repositories"][0]["base_branch"], "release");
+    assert_eq!(output["extra_repositories"][0]["guard"]["max_files"], 3);
+}
+
+#[tokio::test]
+async fn a_member_who_cannot_push_to_one_extra_repository_makes_the_whole_run_use_the_app() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let seen = Seen::default();
+    let host = extras_host(
+        &seen,
+        &ExtraReads::default(),
+        Some(|repository| repository == "acme/web"),
+    );
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(git_identity_of(&world).await, "app");
+}
+
+#[tokio::test]
+async fn a_member_who_can_push_to_every_repository_keeps_the_member_identity() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let seen = Seen::default();
+    let host = extras_host(&seen, &ExtraReads::default(), Some(|_| true));
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(git_identity_of(&world).await, "member");
+}
+
+const API_PR_URL: &str = "https://github.com/acme/api/pull/3";
+const API_SHA: &str = "9a8b7c6d5e4f30211203f4e5d6c7b8a9908172635";
+const LINKED_HEADING: &str = "## Pull requests liées";
+
+#[derive(Clone, Default)]
+struct Linking {
+    heads: Arc<Mutex<Vec<(String, String)>>>,
+    updates: Arc<Mutex<Vec<(String, String, String)>>>,
+    members: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+fn url_of(repository: &str) -> &'static str {
+    match repository {
+        "acme/web" => PR_URL,
+        _ => API_PR_URL,
+    }
+}
+
+fn linking_host(seen: &Seen, linking: &Linking, member: bool) -> MockCodeHost {
+    let mut host = MockCodeHost::new();
+    host.expect_file_at()
+        .returning(|_, _, _, _, _| Box::pin(std::future::ready(Ok(None))));
+    host.expect_default_branch()
+        .returning(|_, _, _| Box::pin(std::future::ready(Ok("develop".to_owned()))));
+    let heads = linking.heads.clone();
+    host.expect_branch_head()
+        .returning(move |_, _, repository, branch| {
+            heads
+                .lock()
+                .unwrap()
+                .push((repository.to_string(), branch.to_owned()));
+            let sha = if repository.to_string() == "acme/web" {
+                PUSHED_SHA
+            } else {
+                API_SHA
+            };
+            Box::pin(std::future::ready(Ok(Some(sha.to_owned()))))
+        });
+    let pull_requests = seen.pull_requests.clone();
+    host.expect_open_draft_pr()
+        .returning(move |_, _, pull_request| {
+            let url = url_of(&pull_request.repository.to_string());
+            pull_requests.lock().unwrap().push(pull_request);
+            Box::pin(std::future::ready(Ok(PullRequestUrl(url.into()))))
+        });
+    let updates = linking.updates.clone();
+    host.expect_update_pull_request_body()
+        .returning(move |_, _, repository, url, body| {
+            updates
+                .lock()
+                .unwrap()
+                .push((repository.to_string(), url.0.clone(), body.to_owned()));
+            Box::pin(std::future::ready(Ok(())))
+        });
+    if member {
+        host.expect_member_can_push()
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(true))));
+        let members = linking.members.clone();
+        host.expect_open_draft_pr_as_member()
+            .returning(move |_, token, pull_request| {
+                let url = url_of(&pull_request.repository.to_string());
+                members.lock().unwrap().push((
+                    token.expose().to_owned(),
+                    pull_request.repository.to_string(),
+                ));
+                Box::pin(std::future::ready(Ok(PullRequestUrl(url.into()))))
+            });
+    }
+    host
+}
+
+fn api_contribution_lines(text: &str) -> Vec<TaskLine> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let mut lines = Vec::new();
+    for chunk in STANDARD.encode(text).as_bytes().chunks(12) {
+        lines.push(TaskLine::Matos(TaskMarker::ContributionChunk {
+            data: String::from_utf8(chunk.to_vec()).unwrap(),
+            repository: Some("acme/api".into()),
+        }));
+    }
+    let hash = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, text.as_bytes());
+    lines.push(TaskLine::Matos(TaskMarker::ContributionEnd {
+        sha256: hash.as_ref().iter().map(|b| format!("{b:02x}")).collect(),
+        bytes: text.len() as u64,
+        truncated: false,
+        repository: Some("acme/api".into()),
+    }));
+    lines
+}
+
+fn both_pushed_lines() -> Vec<TaskLine> {
+    let mut markers = api_contribution_lines("Aligner l'API\n\nLe contrat change aussi côté api.");
+    markers.push(TaskLine::Matos(TaskMarker::Quality {
+        lint: matos_core::domain::execution::QualityStatus::Passed,
+        excerpt: None,
+        repository: Some("acme/api".into()),
+    }));
+    markers.push(TaskLine::Matos(TaskMarker::ExtraRepositories {
+        cloned: vec!["acme/api".into()],
+        failed: Vec::new(),
+    }));
+    markers.push(TaskLine::Matos(TaskMarker::Pushed {
+        sha: API_SHA.into(),
+        repository: Some("acme/api".into()),
+    }));
+    let mut lines = lines_of(SAMPLE);
+    let pushed = lines.pop().unwrap();
+    lines.extend(markers);
+    lines.push(pushed);
+    lines
+}
+
+fn body_of(seen: &Seen, repository: &str) -> String {
+    seen.pull_requests
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|pull_request| pull_request.repository.to_string() == repository)
+        .unwrap()
+        .body
+        .clone()
+}
+
+#[tokio::test]
+async fn a_change_in_two_repositories_opens_two_pull_requests_that_cite_each_other() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let runner = recording_runner(both_pushed_lines(), Arc::new(Mutex::new(Vec::new())));
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    let opened = seen.pull_requests.lock().unwrap().clone();
+    let order: Vec<String> = opened
+        .iter()
+        .map(|pull_request| pull_request.repository.to_string())
+        .collect();
+    assert_eq!(order, ["acme/web", "acme/api"]);
+    assert!(
+        opened
+            .iter()
+            .all(|pull_request| pull_request.head == branch_of(world.run_id))
+    );
+    assert_eq!(
+        opened
+            .iter()
+            .map(|pull_request| pull_request.base.as_str())
+            .collect::<Vec<_>>(),
+        ["main", "develop"]
+    );
+    assert_eq!(opened[1].title, "Aligner l'API");
+    assert!(opened[1].body.contains("Le contrat change aussi côté api."));
+    assert!(opened[1].body.ends_with("Lint: passed"));
+    assert_eq!(opened[0].title, "Ajouter un CHANGELOG");
+    assert!(
+        opened[0]
+            .body
+            .ends_with("Lint: not run, the toolchain is not available")
+    );
+    let branch = branch_of(world.run_id);
+    assert_eq!(
+        *linking.heads.lock().unwrap(),
+        [
+            ("acme/web".to_owned(), branch.clone()),
+            ("acme/api".to_owned(), branch)
+        ]
+    );
+    let updates = linking.updates.lock().unwrap().clone();
+    assert_eq!(updates.len(), 2);
+    assert_eq!(updates[0].0, "acme/web");
+    assert_eq!(updates[0].1, PR_URL);
+    assert!(updates[0].2.starts_with(&opened[0].body));
+    assert!(
+        updates[0]
+            .2
+            .ends_with(&format!("\n\n{LINKED_HEADING}\n\n- {API_PR_URL}"))
+    );
+    assert_eq!(updates[1].0, "acme/api");
+    assert!(
+        updates[1]
+            .2
+            .ends_with(&format!("\n\n{LINKED_HEADING}\n\n- {PR_URL}"))
+    );
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["pull_request"], PR_URL);
+    assert_eq!(output["pull_requests"]["acme/web"], PR_URL);
+    assert_eq!(output["pull_requests"]["acme/api"], API_PR_URL);
+    assert_eq!(output["linked"], true);
+    assert_eq!(output["sha"], PUSHED_SHA);
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.starts_with(&format!(
+        "Pull request ouverte en brouillon sur acme/web : {PR_URL}\nPull request ouverte en brouillon sur acme/api : {API_PR_URL}"
+    )), "{}", posted[0].2);
+    assert_closed(&world).await;
+}
+
+#[tokio::test]
+async fn an_extra_repository_left_unchanged_gets_no_pull_request_and_no_linked_section() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let runner = recording_runner(lines_of(SAMPLE), Arc::new(Mutex::new(Vec::new())));
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_eq!(seen.pull_requests.lock().unwrap().len(), 1);
+    assert!(!body_of(&seen, "acme/web").contains(LINKED_HEADING));
+    assert!(linking.updates.lock().unwrap().is_empty());
+    assert_eq!(
+        *linking.heads.lock().unwrap(),
+        [("acme/web".to_owned(), branch_of(world.run_id))]
+    );
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["pull_requests"].as_object().unwrap().len(), 1);
+    assert_eq!(output["linked"], false);
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.starts_with(&format!(
+        "Pull request ouverte en brouillon sur acme/web : {PR_URL}"
+    )));
+    assert!(!posted[0].2.contains("acme/api"));
+}
+
+#[tokio::test]
+async fn a_run_without_extra_repositories_keeps_the_single_line_comment() {
+    let Some(world) = world().await else { return };
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let runner = recording_runner(lines_of(SAMPLE), Arc::new(Mutex::new(Vec::new())));
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(
+        posted[0]
+            .2
+            .starts_with(&format!("Pull request ouverte en brouillon : {PR_URL}"))
+    );
+    assert!(linking.updates.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_guard_blocking_one_repository_pushes_none_and_the_reasons_name_it() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let mut lines = lines_of(SAMPLE);
+    lines.pop();
+    lines.push(TaskLine::Matos(TaskMarker::GuardBlocked {
+        reasons: vec!["acme/api: chemin sensible : .github/workflows/ci.yml".into()],
+    }));
+    let runner = deleting(runner_ending(
+        &seen,
+        lines,
+        TaskOutcome::Failed {
+            reason: "container exited with 3".into(),
+        },
+    ));
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    let (status, failure) = run_row(&world.pool, world.run_id).await;
+    assert_eq!(status, "failed");
+    assert!(
+        failure
+            .unwrap()
+            .contains("acme/api: chemin sensible : .github/workflows/ci.yml")
+    );
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert!(linking.heads.lock().unwrap().is_empty());
+    assert!(linking.updates.lock().unwrap().is_empty());
+    assert_closed(&world).await;
+}
+
+#[tokio::test]
+async fn a_crash_between_two_openings_reopens_nothing_opens_the_next_and_links_both() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    crashed_attempt(
+        &world,
+        &format!("first-{}", world.run_id),
+        Some(serde_json::json!({
+            "job_started": true,
+            "branch": branch_of(world.run_id),
+            "sha": PUSHED_SHA,
+            "pull_request": PR_URL,
+            "pull_requests": {"acme/web": PR_URL},
+        })),
+    )
+    .await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_attach()
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(true))));
+    following(both_pushed_lines(), &mut runner);
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    let opened = seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].repository.to_string(), "acme/api");
+    assert_eq!(
+        *linking.heads.lock().unwrap(),
+        [("acme/api".to_owned(), branch_of(world.run_id))],
+        "the pull request already opened is not verified again"
+    );
+    let updates = linking.updates.lock().unwrap().clone();
+    assert_eq!(updates.len(), 2);
+    assert!(updates[0].2.contains(API_PR_URL) && updates[1].2.contains(PR_URL));
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["pull_request"], PR_URL);
+    assert_eq!(output["pull_requests"]["acme/api"], API_PR_URL);
+    assert_eq!(output["linked"], true);
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains(&format!("sur acme/web : {PR_URL}")));
+    assert!(
+        posted[0]
+            .2
+            .contains(&format!("sur acme/api : {API_PR_URL}"))
+    );
+}
+
+#[tokio::test]
+async fn pull_requests_already_linked_are_not_edited_again_after_a_resume() {
+    let Some(world) = world().await else { return };
+    with_extra_repositories(&world, &["acme/api"]).await;
+    crashed_attempt(
+        &world,
+        &format!("first-{}", world.run_id),
+        Some(serde_json::json!({
+            "job_started": true,
+            "sha": PUSHED_SHA,
+            "pull_request": PR_URL,
+            "pull_requests": {"acme/web": PR_URL, "acme/api": API_PR_URL},
+            "linked": true,
+        })),
+    )
+    .await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_attach()
+        .returning(|_| Box::pin(std::future::ready(Ok(true))));
+    following(both_pushed_lines(), &mut runner);
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert!(linking.heads.lock().unwrap().is_empty());
+    assert!(linking.updates.lock().unwrap().is_empty());
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+}
+
+#[tokio::test]
+async fn every_pull_request_of_a_run_is_opened_with_the_identity_the_run_decided() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    with_extra_repositories(&world, &["acme/api"]).await;
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let runner = recording_runner(both_pushed_lines(), Arc::new(Mutex::new(Vec::new())));
+
+    pipeline(&world, runner, linking_host(&seen, &linking, true))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert_eq!(git_identity_of(&world).await, "member");
+    assert_eq!(
+        *linking.members.lock().unwrap(),
+        [
+            (MEMBER_ACCESS.to_owned(), "acme/web".to_owned()),
+            (MEMBER_ACCESS.to_owned(), "acme/api".to_owned())
+        ]
+    );
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert_eq!(linking.updates.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn a_pushed_repository_the_run_does_not_list_fails_the_run_before_any_pull_request() {
+    let Some(world) = world().await else { return };
+    let (seen, linking) = (Seen::default(), Linking::default());
+    let mut lines = lines_of(SAMPLE);
+    let pushed = lines.pop().unwrap();
+    lines.push(TaskLine::Matos(TaskMarker::Pushed {
+        sha: API_SHA.into(),
+        repository: Some("acme/other".into()),
+    }));
+    lines.push(pushed);
+    let runner = deleting(runner_ending(&seen, lines, TaskOutcome::Succeeded));
+
+    pipeline(&world, runner, linking_host(&seen, &linking, false))
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    let (status, failure) = run_row(&world.pool, world.run_id).await;
+    assert_eq!(status, "failed");
+    assert!(failure.unwrap().contains("acme/other"));
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
 }
