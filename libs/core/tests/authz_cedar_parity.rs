@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 const CORPUS: &str = include_str!("fixtures/authz_parity.jsonl");
 const ACTION_NAMES: usize = 44;
-const POLICY_COUNT: usize = 20;
+const POLICY_COUNT: usize = 21;
 
 struct Case {
     evaluation: Value,
@@ -371,4 +371,43 @@ fn spoofed_actor_kinds_and_columns_are_denied() {
             denied(&with_context(&movement, "to", json!(bogus)));
         }
     }
+}
+
+#[test]
+fn run_cancel_follows_the_initiator_and_admin_flags() {
+    let engine = CedarPolicyEngine::new();
+
+    for actor in actors() {
+        for initiated in [false, true] {
+            for is_admin in [false, true] {
+                for same_organization in [true, false] {
+                    let request = request_of(
+                        Action::RunCancel { initiated },
+                        ResourceKind::Run,
+                        actor.as_ref(),
+                        is_admin,
+                        same_organization,
+                    );
+                    let expected = actor.is_none() && same_organization && (initiated || is_admin);
+
+                    assert_eq!(
+                        engine.allows(&evaluation_of(&request)),
+                        Ok(expected),
+                        "actor={actor:?} initiated={initiated} admin={is_admin} same={same_organization}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn run_cancel_is_not_in_the_broad_human_permit() {
+    let broad = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../deploy/ferriskey/authz/policies/human-acts-in-own-organization.cedar"),
+    )
+    .unwrap();
+
+    assert!(!broad.contains("run.cancel"));
 }

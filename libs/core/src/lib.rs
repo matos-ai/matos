@@ -7,8 +7,8 @@ pub mod infrastructure;
 pub use application::{
     AgentDelegation, AgentTaskConfig, AgentTaskPipeline, AgentTaskSource, ExecuteConfig,
     ExecutePipeline, ExecutionContext, Executor, IdentitySweep, InterventionConfig,
-    InterventionPipeline, MatosUseCase, MeetingPipeline, PipelineConfig, RunCardLinks, RunContext,
-    RunDelegation, RunTimeline, StartedAgentRun, StartedExecution, StartedIntervention,
-    SubmittedTranscript,
+    InterventionPipeline, MatosUseCase, MeetingPipeline, PipelineConfig, RunCancellation,
+    RunCardLinks, RunContext, RunDelegation, RunTimeline, StartedAgentRun, StartedExecution,
+    StartedIntervention, SubmittedTranscript,
 };
 pub use domain::organization::{Organization, OrganizationSlug};

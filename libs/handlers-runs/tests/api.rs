@@ -613,3 +613,90 @@ async fn another_organizations_run_events_are_a_404() {
 
     assert_eq!(status, 404);
 }
+
+impl Fixture {
+    async fn cancel(&self, run: RunId) -> (reqwest::StatusCode, Value) {
+        let response = reqwest::Client::new()
+            .post(format!("{}/api/v1/runs/{}/cancel", self.base, run.0))
+            .send()
+            .await
+            .unwrap();
+        let status = response.status();
+        (status, response.json().await.unwrap_or(Value::Null))
+    }
+
+    async fn status_of(&self, run: RunId) -> String {
+        sqlx::query_scalar("SELECT status FROM runs WHERE id = $1")
+            .bind(run.0)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap()
+    }
+}
+
+#[tokio::test]
+async fn the_initiator_cancels_a_running_run_and_a_second_cancel_is_idempotent() {
+    let Some(f) = fixture().await else { return };
+    let run = f.submit(f.organization.id, "Run").await;
+    f.set_status(run, "running").await;
+
+    let (status, body) = f.cancel(run).await;
+
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        body,
+        json!({"status": "cancelled", "already_cancelled": false})
+    );
+    assert_eq!(f.status_of(run).await, "cancelled");
+
+    let (status, body) = f.cancel(run).await;
+
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        body,
+        json!({"status": "cancelled", "already_cancelled": true})
+    );
+    assert_eq!(f.status_of(run).await, "cancelled");
+}
+
+#[tokio::test]
+async fn cancelling_another_organizations_run_is_a_404() {
+    let Some(f) = fixture().await else { return };
+    let other = organization(&f.pool).await;
+    let foreign = f.submit(other.id, "Autre organisation").await;
+    f.set_status(foreign, "running").await;
+
+    let (status, _) = f.cancel(foreign).await;
+
+    assert_eq!(status, 404);
+    assert_eq!(f.status_of(foreign).await, "running");
+}
+
+#[tokio::test]
+async fn cancelling_a_succeeded_run_is_a_409() {
+    let Some(f) = fixture().await else { return };
+    let run = f.submit(f.organization.id, "Run").await;
+    f.set_status(run, "succeeded").await;
+
+    let (status, _) = f.cancel(run).await;
+
+    assert_eq!(status, 409);
+    assert_eq!(f.status_of(run).await, "succeeded");
+}
+
+#[tokio::test]
+async fn a_non_admin_who_did_not_start_the_run_gets_a_403() {
+    let Some(f) = fixture().await else { return };
+    let run = f.submit(f.organization.id, "Run").await;
+    f.set_status(run, "running").await;
+    sqlx::query("UPDATE runs SET initiated_by = 'user-2' WHERE id = $1")
+        .bind(run.0)
+        .execute(&f.pool)
+        .await
+        .unwrap();
+
+    let (status, _) = f.cancel(run).await;
+
+    assert_eq!(status, 403);
+    assert_eq!(f.status_of(run).await, "running");
+}

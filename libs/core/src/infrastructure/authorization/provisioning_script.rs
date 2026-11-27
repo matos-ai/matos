@@ -200,7 +200,7 @@ fn the_bundle_is_pushed_in_full_to_an_empty_realm() {
 
     let realm = realm.lock().unwrap();
     let files = policy_files();
-    assert_eq!(files.len(), 20);
+    assert_eq!(files.len(), 21);
     assert_eq!(realm.policies.len(), files.len());
     for (name, source) in &files {
         let pushed = realm.policies.iter().find(|p| &p.name == name).unwrap();

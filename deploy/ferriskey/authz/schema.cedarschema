@@ -41,6 +41,14 @@ namespace Matos {
     granted: Bool,
   };
 
+  type RunCancelContext = {
+    organization: String,
+    is_admin: Bool,
+    actor_kind: String,
+    actor?: String,
+    initiated: Bool,
+  };
+
   entity Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact = {
     organization: String,
   };
@@ -75,5 +83,11 @@ namespace Matos {
     principal: [FerrisKey::User],
     resource: [Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact],
     context: McpCallContext,
+  };
+
+  action "run.cancel" in ["matos.any"] appliesTo {
+    principal: [FerrisKey::User],
+    resource: [Transcript, Transcription, Document, Run, Card, Provider, UserProvider, ModelAssignments, GithubInstallation, GithubApp, Client, Project, Member, Conversation, IntegrationInstance, Agent, McpConnector, Skill, Approval, Source, Routine, Audit, Budget, Inbox, Artifact],
+    context: RunCancelContext,
   };
 }

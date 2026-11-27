@@ -80,6 +80,9 @@ fn context_of(request: &AccessRequest) -> Value {
             context.insert("initiated".into(), json!(initiated));
             context.insert("granted".into(), json!(granted));
         }
+        Action::RunCancel { initiated } => {
+            context.insert("initiated".into(), json!(initiated));
+        }
         Action::TranscriptCreate
         | Action::TranscriptionCreate
         | Action::DocumentRead

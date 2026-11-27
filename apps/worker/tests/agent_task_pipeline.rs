@@ -1661,3 +1661,141 @@ async fn activate_identity(
     .await
     .unwrap();
 }
+
+async fn cancel(world: &World) {
+    sqlx::query(
+        "UPDATE runs SET status = 'cancelled', finished_at = now(), failure = 'Arrêté par Alice' WHERE id = $1",
+    )
+    .bind(world.run_id.0)
+    .execute(&world.pool)
+    .await
+    .unwrap();
+}
+
+#[derive(Clone)]
+struct Hanging {
+    first_call: Option<&'static str>,
+    calls_made: Arc<AtomicUsize>,
+}
+
+impl TaskRuntime for Hanging {
+    async fn run_task<T: IntegratorTools>(
+        &self,
+        _: &str,
+        _: &IntegratorRequest,
+        tools: &T,
+    ) -> Result<IntegratorReport, CoreError> {
+        if let Some(name) = self.first_call {
+            self.calls_made.fetch_add(1, Ordering::SeqCst);
+            tools.call(name, &json!({})).await;
+        }
+        std::future::pending().await
+    }
+}
+
+#[derive(Clone, Default)]
+struct StuckGateway {
+    inner: Gateway,
+}
+
+impl McpGateway for StuckGateway {
+    async fn list_tools(&self, url: &str, token: &SecretToken) -> Result<Vec<ToolInfo>, CoreError> {
+        self.inner.list_tools(url, token).await
+    }
+
+    async fn call_tool(
+        &self,
+        url: &str,
+        token: &SecretToken,
+        name: &str,
+        arguments: &Value,
+    ) -> Result<ToolOutput, CoreError> {
+        self.inner.calls.lock().unwrap().push((
+            url.to_owned(),
+            token.expose().to_owned(),
+            name.to_owned(),
+            arguments.clone(),
+        ));
+        std::future::pending().await
+    }
+}
+
+async fn cancelled_while_parked<R: TaskRuntime, G: McpGateway>(
+    world: &World,
+    oauth: &OAuth,
+    runtime: R,
+    gateway: G,
+) {
+    let pipeline = AgentTaskPipeline::new(
+        world.usecase.clone(),
+        runtime,
+        oauth.clone(),
+        gateway,
+        AgentTaskConfig::new(ModelAssignments::defaults("chat", "embed"), None),
+    );
+    let stopper = async {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        cancel(world).await;
+        std::time::Instant::now()
+    };
+    let (ended, cancelled_at) = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        let run = async {
+            pipeline.execute(world.run_id, None).await.unwrap();
+            std::time::Instant::now()
+        };
+        tokio::join!(run, stopper)
+    })
+    .await
+    .unwrap();
+    assert!(ended.duration_since(cancelled_at) < std::time::Duration::from_secs(2));
+    assert_eq!(
+        run_row(world).await,
+        ("cancelled".into(), Some("Arrêté par Alice".into()))
+    );
+    let (kind, status, error, _) = step(world).await;
+    assert_eq!(
+        (kind.as_str(), status.as_str(), error.as_deref()),
+        ("agent_task", "failed", Some("cancelled"))
+    );
+    let posted = comments(world).await;
+    let stops: Vec<_> = posted
+        .iter()
+        .filter(|comment| comment.2 == "Arrêté par Alice.")
+        .collect();
+    assert_eq!(stops.len(), 1);
+    assert_eq!(stops[0].1.as_deref(), Some("agent:darnold"));
+}
+
+#[tokio::test]
+async fn a_run_cancelled_during_a_model_call_ends_at_once_with_a_comment_and_no_tool_call() {
+    let oauth = OAuth::new(3600, true);
+    let Some(world) = world(Options::default(), &oauth).await else {
+        return;
+    };
+    let gateway = Gateway::default();
+    let runtime = Hanging {
+        first_call: None,
+        calls_made: Arc::default(),
+    };
+
+    cancelled_while_parked(&world, &oauth, runtime, gateway.clone()).await;
+
+    assert!(gateway.calls().is_empty());
+}
+
+#[tokio::test]
+async fn a_run_cancelled_during_a_tool_call_ends_at_once_with_a_comment() {
+    let oauth = OAuth::new(3600, true);
+    let Some(world) = world(Options::default(), &oauth).await else {
+        return;
+    };
+    let gateway = StuckGateway::default();
+    let runtime = Hanging {
+        first_call: Some("mestier__list_orders"),
+        calls_made: Arc::default(),
+    };
+
+    cancelled_while_parked(&world, &oauth, runtime, gateway.clone()).await;
+
+    assert_eq!(gateway.inner.calls().len(), 1);
+}

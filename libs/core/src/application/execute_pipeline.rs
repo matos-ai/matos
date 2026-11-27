@@ -50,7 +50,7 @@ use crate::{
         provider::{ModelAssignments, ModelRef},
         run::{
             Run, RunStatus, RunSubject, StepKind,
-            event::SequencedRunEvent,
+            event::{EVENTS_MAX_PER_RUN, RunEventDraft, SequencedRunEvent},
             ports::{RunRepository, StepRepository},
             step::{Pricing, Step, StepStatus},
             stream::RunStreamNotice,
@@ -60,6 +60,9 @@ use crate::{
     infrastructure::delegation::PgDelegationVault,
 };
 
+pub(super) const CANCEL_POLL_EVERY: Duration = Duration::from_secs(1);
+const CANCEL_TEXT_MAX_CHARS: usize = 1_500;
+const CANCELLED_STEP_ERROR: &str = "cancelled";
 const EVENT_FLUSH_EVERY: Duration = Duration::from_millis(250);
 const DELTA_FLUSH_EVERY: Duration = Duration::from_millis(100);
 const TASK_TOKEN_SLOT: &str = "matos-task-token";
@@ -240,6 +243,35 @@ pub struct ExecutePipeline<T, H> {
 }
 
 #[derive(Debug)]
+struct Cancellation {
+    reason: String,
+    last_seq: i64,
+    last_text: Option<String>,
+}
+
+impl Finish {
+    fn cancelled(reason: String, progress: &Progress) -> Self {
+        Self::Cancelled(Cancellation {
+            reason,
+            last_seq: progress.last_seq,
+            last_text: progress.last_text.clone(),
+        })
+    }
+}
+
+enum Followed {
+    Done(TaskOutcome),
+    Cancelled(String),
+}
+
+struct Stopped {
+    digest: Digest,
+    extras: Extras,
+    redactor: Redactor,
+    actor: Option<String>,
+}
+
+#[derive(Debug)]
 enum Finish {
     Pushed {
         /// The pull requests, by repository, the primary one first.
@@ -251,6 +283,8 @@ enum Finish {
         fallback: Option<String>,
     },
     NoChanges,
+    /// The run was cancelled: nothing more is published.
+    Cancelled(Cancellation),
     /// A read-only run ended; `report` is what it wrote, `problem` why there
     /// is none.
     Audited {
@@ -341,6 +375,7 @@ impl Prepared {
 struct Ended {
     result: Result<(), String>,
     job_started: bool,
+    cancelled: bool,
 }
 
 /// What the Execute step reports besides the stream. A resumed run starts
@@ -402,6 +437,8 @@ struct Progress {
     step: Step,
     extras: Extras,
     pending_events: Vec<SequencedRunEvent>,
+    last_seq: i64,
+    last_text: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -561,8 +598,14 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             Executor::Disabled { reason } => Ended {
                 result: Err(reason.clone()),
                 job_started: false,
+                cancelled: false,
             },
         };
+        if ended.cancelled {
+            self.usecase.finish_cancelled(run_id).await?;
+            tracing::info!(%run_id, "execution cancelled");
+            return Ok(());
+        }
         self.revoke_grants(run_id).await;
         if let (Err(_), true, Executor::Ready { runner, .. }) =
             (&ended.result, ended.job_started, &self.executor)
@@ -597,7 +640,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         })
         .await;
         if let Err(error) = deleted {
-            tracing::warn!(%run_id, %error, "the job of a failed execution was not deleted, its TTL removes it");
+            tracing::warn!(%run_id, %error, "the job was not deleted, its TTL removes it");
         }
     }
 
@@ -638,12 +681,14 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 return Ok(Ended {
                     result: Ok(()),
                     job_started: false,
+                    cancelled: false,
                 });
             }
             Some(failed) if failed.status == StepStatus::Failed => {
                 return Ok(Ended {
                     result: Err(failed.error.clone().unwrap_or_default()),
                     job_started: false,
+                    cancelled: false,
                 });
             }
             _ => {}
@@ -695,12 +740,22 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             step,
             extras,
             pending_events: Vec::new(),
+            last_seq: 0,
+            last_text: None,
         });
-        let result = self
+        let mut result = self
             .drive(context, runner, host, &prepared, &progress, never_started)
             .await;
         if let Err(error @ CoreError::Database(_)) = result {
             return Err(error);
+        }
+        if matches!(result, Ok(Finish::Audited { .. }))
+            && let Some(reason) = self
+                .usecase
+                .cancel_reason(context.run.organization_id, context.run.id)
+                .await
+        {
+            result = Ok(Finish::cancelled(reason, &*progress.lock().await));
         }
         let Progress {
             reader,
@@ -708,6 +763,17 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             mut extras,
             ..
         } = progress.into_inner();
+        if let Ok(Finish::Cancelled(cancellation)) = result {
+            let stopped = Stopped {
+                digest: reader.finish(),
+                extras,
+                actor: prepared.actor(),
+                redactor: prepared.redactor,
+            };
+            return self
+                .conclude_cancelled(context, runner, step, started, cancellation, stopped)
+                .await;
+        }
         extras.companions = companion_note(&prepared.skipped_companions, reader.companions());
         if let Ok(Finish::Audited {
             report,
@@ -1246,6 +1312,13 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         progress: &Mutex<Progress>,
         never_started: bool,
     ) -> Result<Finish, CoreError> {
+        if let Some(reason) = self
+            .usecase
+            .cancel_reason(context.run.organization_id, context.run.id)
+            .await
+        {
+            return Ok(Finish::cancelled(reason, &*progress.lock().await));
+        }
         self.start_or_attach(context, runner, prepared, never_started)
             .await?;
         {
@@ -1260,11 +1333,26 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 let mut progress = progress.lock().await;
                 progress.reader.reset();
                 progress.pending_events.clear();
+                progress.last_seq = 0;
+                progress.last_text = None;
                 self.follow_once(context, runner, &mut progress).await
             },
         )
         .await?;
+        let outcome = match outcome {
+            Followed::Cancelled(reason) => {
+                return Ok(Finish::cancelled(reason, &*progress.lock().await));
+            }
+            Followed::Done(outcome) => outcome,
+        };
         let mut progress = progress.lock().await;
+        if let Some(reason) = self
+            .usecase
+            .cancel_reason(context.run.organization_id, context.run.id)
+            .await
+        {
+            return Ok(Finish::cancelled(reason, &progress));
+        }
         match outcome {
             TaskOutcome::DeadlineExceeded => Err(CoreError::Internal(DEADLINE_REASON.into())),
             TaskOutcome::Failed { reason } => match progress.reader.blocked() {
@@ -1335,7 +1423,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         context: &ExecutionContext,
         runner: &T,
         progress: &mut Progress,
-    ) -> Result<TaskOutcome, CoreError> {
+    ) -> Result<Followed, CoreError> {
         let (sender, mut lines) = mpsc::channel::<TaskLine>(256);
         let follow = runner.follow(context.run.id, sender);
         tokio::pin!(follow);
@@ -1352,9 +1440,23 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             DELTA_FLUSH_EVERY,
         );
         deltas_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut cancel_tick = tokio::time::interval_at(
+            tokio::time::Instant::now() + CANCEL_POLL_EVERY,
+            CANCEL_POLL_EVERY,
+        );
+        cancel_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let result = loop {
             tokio::select! {
-                result = &mut follow => break result,
+                result = &mut follow => break result.map(Followed::Done),
+                _ = cancel_tick.tick() => {
+                    if let Some(reason) = self
+                        .usecase
+                        .cancel_reason(context.run.organization_id, context.run.id)
+                        .await
+                    {
+                        break Ok(Followed::Cancelled(reason));
+                    }
+                }
                 Some(line) = lines.recv() => progress.reader.accept(&line),
                 _ = events_tick.tick() => self.flush_events(context, progress).await,
                 _ = deltas_tick.tick() => self.flush_deltas(context, progress).await,
@@ -1373,6 +1475,15 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
 
     async fn flush_events(&self, context: &ExecutionContext, progress: &mut Progress) {
         let fresh = progress.reader.take_events();
+        if let Some(last) = fresh.last() {
+            progress.last_seq = last.seq;
+        }
+        if let Some(text) = fresh.iter().rev().find_map(|event| match &event.draft {
+            RunEventDraft::AssistantText { text, .. } => Some(text.clone()),
+            _ => None,
+        }) {
+            progress.last_text = Some(text);
+        }
         progress.pending_events.extend(fresh);
         if progress.pending_events.is_empty() {
             return;
@@ -1543,6 +1654,13 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             let key = target.repository.to_string();
             if progress.extras.pull_requests.contains_key(&key) {
                 continue;
+            }
+            if let Some(reason) = self
+                .usecase
+                .cancel_reason(context.run.organization_id, context.run.id)
+                .await
+            {
+                return Ok(Finish::cancelled(reason, progress));
             }
             let opened = self.open_pull_request(host, prepared, target, text).await?;
             if progress.extras.pull_request.is_none() {
@@ -1830,6 +1948,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 Some(reason) => Err(reason),
             },
             job_started: finished.extras.job_started,
+            cancelled: false,
         })
     }
 
@@ -1911,6 +2030,85 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             Err(error) => {
                 tracing::warn!(run_id = %run.id, %error, "the report artifact was not filed");
                 format!("not published: {}", reason_of(&error))
+            }
+        }
+    }
+
+    async fn conclude_cancelled(
+        &self,
+        context: &ExecutionContext,
+        runner: &T,
+        mut step: Step,
+        started: Instant,
+        cancellation: Cancellation,
+        stopped: Stopped,
+    ) -> Result<Ended, CoreError> {
+        let Stopped {
+            digest,
+            mut extras,
+            redactor,
+            actor,
+        } = stopped;
+        let run_id = context.run.id;
+        if extras.job_started {
+            self.delete_job(runner, run_id).await;
+        }
+        self.revoke_grants(run_id).await;
+        let reason = redactor.apply(&cancellation.reason);
+        self.record_stop(context, cancellation.last_seq, &reason)
+            .await;
+        let mut body = format!("{reason}.");
+        if let Some(text) = &cancellation.last_text {
+            body.push_str("\n\n");
+            body.push_str(&truncate_chars(
+                &redactor.apply(text),
+                CANCEL_TEXT_MAX_CHARS,
+            ));
+        }
+        self.comment(context, actor, defang_mentions(&body), &mut extras)
+            .await;
+        step.cost_micros = self.cost_of(&step.usage.model, &digest);
+        step.usage.input_tokens = digest.input_tokens;
+        step.usage.output_tokens = digest.output_tokens;
+        step.output = Some(output_of(&digest, &extras)?);
+        step.latency_ms = Some(i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX));
+        step.finished_at = Some(Utc::now());
+        step.status = StepStatus::Failed;
+        step.error = Some(CANCELLED_STEP_ERROR.to_owned());
+        self.usecase.record_step(context.run.clone(), step).await?;
+        Ok(Ended {
+            result: Ok(()),
+            job_started: extras.job_started,
+            cancelled: true,
+        })
+    }
+
+    async fn record_stop(&self, context: &ExecutionContext, last_seq: i64, reason: &str) {
+        if last_seq >= EVENTS_MAX_PER_RUN {
+            return;
+        }
+        let seq = last_seq + 1;
+        let event = SequencedRunEvent {
+            seq,
+            draft: RunEventDraft::System {
+                text: reason.to_owned(),
+            },
+        };
+        match self
+            .usecase
+            .append_run_events(context.run.organization_id, context.run.id, vec![event])
+            .await
+        {
+            Ok(()) => {
+                self.publish_notices(&[RunStreamNotice::Events {
+                    run: context.run.id.0,
+                    org: context.run.organization_id.0,
+                    last: seq,
+                }])
+                .await;
+            }
+            Err(error) => {
+                tracing::warn!(run_id = %context.run.id, %error, "saving the cancellation event failed");
             }
         }
     }
@@ -2151,6 +2349,7 @@ fn comment_body(
             format!("Aucun changement : rien n'a été modifié dans le dépôt.\n\n{note}{summary}")
         }
         Ok(Finish::Audited { .. }) => summary.to_owned(),
+        Ok(Finish::Cancelled(cancellation)) => format!("{}.", cancellation.reason),
         Err(_) => format!(
             "L'exécution a échoué : {}{}",
             reason.unwrap_or("raison inconnue"),

@@ -125,7 +125,13 @@ impl MatosUseCase {
         let mut run_repository = run_repository;
         let mut step_repository = step_repository;
         step_repository.save(&step).await?;
-        run_repository.save(&run, Some(Utc::now())).await?;
+        let cancelled = run_repository
+            .find(run.organization_id, run.id)
+            .await?
+            .is_some_and(|overview| overview.run.status == RunStatus::Cancelled);
+        if !cancelled {
+            run_repository.save(&run, Some(Utc::now())).await?;
+        }
         if step.status != StepStatus::Running {
             emitter.emit(&StepFinished {
                 run_id: step.run_id.0,
@@ -167,6 +173,29 @@ impl MatosUseCase {
             failure: run.failure.clone(),
         })?;
         Ok(())
+    }
+
+    /// Closes a cancelled run: the cancellation already ended it and told the
+    /// world, only its delegations remain to destroy.
+    #[transactional()]
+    pub async fn finish_cancelled(&self, run_id: RunId) -> Result<(), CoreError> {
+        purge_delegations(&tx, run_id).await
+    }
+
+    /// The reason the run was cancelled, when it was. A failed read is not a
+    /// cancellation: the next poll asks again.
+    pub(super) async fn cancel_reason(
+        &self,
+        organization_id: OrganizationId,
+        run_id: RunId,
+    ) -> Option<String> {
+        match self.run_cancellation(organization_id, run_id).await {
+            Ok(reason) => reason,
+            Err(error) => {
+                tracing::warn!(%run_id, %error, "checking the run for a cancellation failed");
+                None
+            }
+        }
     }
 
     #[transactional(run)]
