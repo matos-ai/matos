@@ -53,6 +53,7 @@ use crate::{
             event::SequencedRunEvent,
             ports::{RunRepository, StepRepository},
             step::{Pricing, Step, StepStatus},
+            stream::RunStreamNotice,
         },
         skill::{PROMPT_SKILLS_MAX_CHARS, skills_prompt},
     },
@@ -60,6 +61,7 @@ use crate::{
 };
 
 const EVENT_FLUSH_EVERY: Duration = Duration::from_millis(250);
+const DELTA_FLUSH_EVERY: Duration = Duration::from_millis(100);
 const TASK_TOKEN_SLOT: &str = "matos-task-token";
 const GRANT_GRACE: Duration = Duration::from_secs(5 * 60);
 const MEMBER_TOKEN_MARGIN: Duration = Duration::from_secs(10 * 60);
@@ -1345,11 +1347,17 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             EVENT_FLUSH_EVERY,
         );
         events_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut deltas_tick = tokio::time::interval_at(
+            tokio::time::Instant::now() + DELTA_FLUSH_EVERY,
+            DELTA_FLUSH_EVERY,
+        );
+        deltas_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let result = loop {
             tokio::select! {
                 result = &mut follow => break result,
                 Some(line) = lines.recv() => progress.reader.accept(&line),
                 _ = events_tick.tick() => self.flush_events(context, progress).await,
+                _ = deltas_tick.tick() => self.flush_deltas(context, progress).await,
                 _ = tick.tick() => {
                     let refresh = progress.reader.take_dirty();
                     self.save_progress(context, progress, refresh).await;
@@ -1380,7 +1388,42 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         {
             tracing::warn!(run_id = %context.run.id, %error, "saving the run events failed");
         } else {
+            let last = progress.pending_events.last().map(|event| event.seq);
             progress.pending_events.clear();
+            if let Some(last) = last {
+                self.publish_notices(&[RunStreamNotice::Events {
+                    run: context.run.id.0,
+                    org: context.run.organization_id.0,
+                    last,
+                }])
+                .await;
+            }
+        }
+    }
+
+    async fn flush_deltas(&self, context: &ExecutionContext, progress: &mut Progress) {
+        let notices: Vec<RunStreamNotice> = progress
+            .reader
+            .take_deltas()
+            .iter()
+            .flat_map(|delta| {
+                RunStreamNotice::deltas(
+                    context.run.id.0,
+                    context.run.organization_id.0,
+                    delta.after,
+                    &delta.text,
+                )
+            })
+            .collect();
+        self.publish_notices(&notices).await;
+    }
+
+    async fn publish_notices(&self, notices: &[RunStreamNotice]) {
+        if notices.is_empty() {
+            return;
+        }
+        if let Err(error) = self.usecase.publish_run_stream(notices).await {
+            tracing::warn!(%error, "publishing the run stream failed");
         }
     }
 

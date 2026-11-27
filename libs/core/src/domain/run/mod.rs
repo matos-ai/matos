@@ -4,6 +4,7 @@ pub mod locate;
 pub mod ports;
 pub mod service;
 pub mod step;
+pub mod stream;
 
 use chrono::{DateTime, Utc};
 use matos_common::{AgentId, CardId, CoreError, OrganizationId, RunId, TranscriptId};

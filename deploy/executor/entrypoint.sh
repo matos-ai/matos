@@ -137,6 +137,7 @@ run_agent() {
         claude -p "$PROMPT" \
           --output-format stream-json \
           --verbose \
+          --include-partial-messages \
           --model "$MODEL" \
           --max-turns "$MAX_TURNS" \
           --allowedTools "Read,Glob,Grep,Bash,Write" \
@@ -145,6 +146,7 @@ run_agent() {
         claude -p "$PROMPT" \
           --output-format stream-json \
           --verbose \
+          --include-partial-messages \
           --model "$MODEL" \
           --max-turns "$MAX_TURNS" \
           --allowedTools "Read,Edit,Write,Glob,Grep,Bash"

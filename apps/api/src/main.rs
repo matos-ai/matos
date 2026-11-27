@@ -19,13 +19,14 @@ use matos_core::{
 use matos_github::{GithubApps, GithubBases};
 use matos_handlers::{AppState, Delegation};
 use matos_handlers_integrations::{GithubIntegration, signer::StateSigner};
-use matos_handlers_realtime::{Gateway, Hub, consumer};
+use matos_handlers_realtime::{Gateway, Hub, StreamHub, consumer, run_stream};
 use matos_integrations::{HttpConnector, McpHttp, NetworkPolicy};
 use matos_runtime_rig::{LlmArgs, RigCaptain};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
 const REALTIME_BACKLOG: usize = 256;
+const RUN_STREAM_BACKLOG: usize = 1024;
 
 #[derive(Debug, Parser)]
 #[command(name = "matos-api", version)]
@@ -76,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("connecting to postgres")?;
     let (client_id, client_secret) = args.authz.pdp_client().map_err(anyhow::Error::msg)?;
-    let mut usecase = MatosUseCase::with_policies(pool, client_id, client_secret);
+    let mut usecase = MatosUseCase::with_policies(pool.clone(), client_id, client_secret);
     match &args.secrets.key {
         Some(key) => {
             usecase = usecase.with_secrets_cipher(
@@ -135,7 +136,10 @@ async fn main() -> anyhow::Result<()> {
     let hub = Hub::new(REALTIME_BACKLOG);
     let realtime_consumer =
         consumer::spawn_until(args.iggy, hub.clone(), stopped_signal(stopped.clone()));
-    let realtime = Gateway::new(state.clone(), hub);
+    let stream = StreamHub::new(RUN_STREAM_BACKLOG);
+    let run_stream_listener =
+        run_stream::spawn_until(pool, stream.clone(), stopped_signal(stopped.clone()));
+    let realtime = Gateway::new(state.clone(), hub, stream);
     let analytics = DataFusionAnalytics::new(Dataset::parse(&args.analytics.uri)?);
     let app = router::router(
         state,
@@ -174,6 +178,9 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     if let Err(error) = realtime_consumer.await {
         tracing::error!(%error, "the realtime consumer did not stop cleanly");
+    }
+    if let Err(error) = run_stream_listener.await {
+        tracing::error!(%error, "the run stream listener did not stop cleanly");
     }
     Ok(())
 }

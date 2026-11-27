@@ -20,7 +20,8 @@ use tracing::{Instrument, field};
 use crate::{
     auth::{Authenticate, Session},
     hub::Hub,
-    wire::{ClientMessage, ServerMessage},
+    run_stream::{Relayed, StreamHub},
+    wire::{ClientMessage, ServerMessage, Subscriptions},
 };
 
 pub const PATH: &str = "/api/v1/realtime";
@@ -28,6 +29,7 @@ pub const PATH: &str = "/api/v1/realtime";
 pub const CLOSE_UNAUTHORIZED: u16 = 4001;
 pub const CLOSE_SUBJECT_CHANGED: u16 = 4003;
 const CLOSE_HEARTBEAT: u16 = 1011;
+const AUTHORIZE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy)]
 pub struct Timing {
@@ -50,14 +52,16 @@ impl Default for Timing {
 pub struct Gateway<A> {
     auth: A,
     hub: Hub,
+    stream: StreamHub,
     timing: Timing,
 }
 
 impl<A: Authenticate> Gateway<A> {
-    pub fn new(auth: A, hub: Hub) -> Self {
+    pub fn new(auth: A, hub: Hub, stream: StreamHub) -> Self {
         Self {
             auth,
             hub,
+            stream,
             timing: Timing::default(),
         }
     }
@@ -123,7 +127,7 @@ async fn read_identify(socket: &mut WebSocket) -> Identified {
             Some(Ok(Message::Text(text))) => {
                 return match serde_json::from_str::<ClientMessage>(&text) {
                     Ok(ClientMessage::Identify { token }) => Identified::Token(token),
-                    Err(_) => Identified::Invalid,
+                    Ok(_) | Err(_) => Identified::Invalid,
                 };
             }
             Some(Ok(Message::Close(_))) | Some(Err(_)) | None => return Identified::Gone,
@@ -151,6 +155,8 @@ async fn run<A: Authenticate>(
     span.record("organization_id", field::display(session.organization_id));
 
     let mut notices = gateway.hub.subscribe();
+    let mut stream = gateway.stream.subscribe();
+    let mut subscriptions = Subscriptions::default();
     let mut status = gateway.hub.watch_degraded();
     let mut degraded = *status.borrow_and_update();
 
@@ -173,6 +179,27 @@ async fn run<A: Authenticate>(
                     Ok(_) => continue,
                     Err(RecvError::Lagged(missed)) => {
                         tracing::warn!(missed, "realtime socket lagged, asking for a resync");
+                        ServerMessage::Resync
+                    }
+                    Err(RecvError::Closed) => return Exit::Gone,
+                };
+                if !send_json(socket, &message, timing.send_timeout).await {
+                    return Exit::Gone;
+                }
+            }
+            relayed = stream.recv() => {
+                let message = match relayed {
+                    Ok(relayed) => match &*relayed {
+                        Relayed::Notice(notice) => {
+                            match subscriptions.relay(notice, session.organization_id) {
+                                Some(message) => message,
+                                None => continue,
+                            }
+                        }
+                        Relayed::Gap => ServerMessage::Resync,
+                    },
+                    Err(RecvError::Lagged(missed)) => {
+                        tracing::warn!(missed, "run stream socket lagged, asking for a resync");
                         ServerMessage::Resync
                     }
                     Err(RecvError::Closed) => return Exit::Gone,
@@ -217,10 +244,20 @@ async fn run<A: Authenticate>(
                 awaiting_pong = false;
                 match frame {
                     Some(Ok(Message::Text(text))) => {
-                        let Ok(ClientMessage::Identify { token }) =
-                            serde_json::from_str::<ClientMessage>(&text)
-                        else {
-                            continue;
+                        let token = match serde_json::from_str::<ClientMessage>(&text) {
+                            Ok(ClientMessage::Identify { token }) => token,
+                            Ok(ClientMessage::Subscribe { run_id }) => {
+                                let reply = subscribe(gateway, &session, &mut subscriptions, run_id).await;
+                                if !send_json(socket, &reply, timing.send_timeout).await {
+                                    return Exit::Gone;
+                                }
+                                continue;
+                            }
+                            Ok(ClientMessage::Unsubscribe { run_id }) => {
+                                subscriptions.remove(run_id);
+                                continue;
+                            }
+                            Err(_) => continue,
                         };
                         match reidentify(gateway, &session, &token).await {
                             Ok(renewed) => {
@@ -238,6 +275,33 @@ async fn run<A: Authenticate>(
                 }
             }
         }
+    }
+}
+
+async fn subscribe<A: Authenticate>(
+    gateway: &Gateway<A>,
+    session: &Session,
+    subscriptions: &mut Subscriptions,
+    run_id: uuid::Uuid,
+) -> ServerMessage {
+    if subscriptions.contains(run_id) {
+        return ServerMessage::Subscribed { run_id };
+    }
+    if subscriptions.is_full() {
+        return ServerMessage::Refused { run_id };
+    }
+    let allowed = matches!(
+        timeout(
+            AUTHORIZE_TIMEOUT,
+            gateway.auth.authorize_run(session, run_id)
+        )
+        .await,
+        Ok(true)
+    );
+    if allowed && subscriptions.insert(run_id) {
+        ServerMessage::Subscribed { run_id }
+    } else {
+        ServerMessage::Refused { run_id }
     }
 }
 
