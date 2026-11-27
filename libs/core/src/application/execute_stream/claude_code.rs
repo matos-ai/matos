@@ -6,6 +6,7 @@ pub(super) fn events(line: &Value) -> Vec<AgentEvent> {
     match line["type"].as_str() {
         Some("assistant") => blocks(&line["message"]["content"]),
         Some("user") => tool_results(&line["message"]["content"]),
+        Some("stream_event") => text_delta(&line["event"]),
         Some("result") => vec![AgentEvent::Finished(finish(line))],
         _ => Vec::new(),
     }
@@ -13,6 +14,19 @@ pub(super) fn events(line: &Value) -> Vec<AgentEvent> {
 
 pub(super) fn hit_turn_limit(stopped: &str) -> bool {
     stopped == "error_max_turns"
+}
+
+fn text_delta(event: &Value) -> Vec<AgentEvent> {
+    if event["type"] != "content_block_delta" || event["delta"]["type"] != "text_delta" {
+        return Vec::new();
+    }
+    event["delta"]["text"]
+        .as_str()
+        .map(|text| AgentEvent::TextDelta {
+            text: text.to_owned(),
+        })
+        .into_iter()
+        .collect()
 }
 
 fn items<'a>(content: &'a Value, kind: &'a str) -> impl Iterator<Item = &'a Value> {
@@ -100,6 +114,33 @@ mod tests {
         match events(line).as_slice() {
             [AgentEvent::Finished(finish)] => finish.clone(),
             other => panic!("a result is one finish, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_text_delta_gives_a_text_delta_event() {
+        let line = json!({"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello there"}}});
+        assert_eq!(
+            events(&line),
+            vec![AgentEvent::TextDelta {
+                text: "hello there".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn other_deltas_and_stream_events_are_ignored() {
+        for event in [
+            json!({"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hm"}}),
+            json!({"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"a\""}}),
+            json!({"type":"message_start","message":{}}),
+            json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}),
+            json!({"type":"content_block_stop","index":0}),
+            json!({"type":"message_delta","delta":{"stop_reason":"end_turn"}}),
+            json!({"type":"message_stop"}),
+        ] {
+            let line = json!({"type":"stream_event","event":event});
+            assert!(events(&line).is_empty(), "{line}");
         }
     }
 

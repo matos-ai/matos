@@ -32,6 +32,7 @@ use matos_core::{
         run::{
             StepKind,
             step::{Pricing, Step, StepStatus},
+            stream::{RUN_STREAM_CHANNEL, RunStreamNotice},
         },
     },
     infrastructure::{crypto::SecretCipher, postgres},
@@ -3058,4 +3059,85 @@ async fn events_are_visible_while_the_agent_is_still_running() {
     handle.await.unwrap().unwrap();
     assert_eq!(run_row(&world.pool, run_id).await.0, "succeeded");
     assert_conversation(&run_events(&world.pool, run_id).await);
+}
+
+fn text_delta_line(text: &str) -> TaskLine {
+    TaskLine::Agent(serde_json::json!({
+        "type": "stream_event",
+        "event": {
+            "type": "content_block_delta", "index": 0,
+            "delta": {"type": "text_delta", "text": text}
+        }
+    }))
+}
+
+#[tokio::test]
+async fn live_text_and_stored_events_are_published_in_order_on_the_stream_channel() {
+    let Some(world) = world().await else { return };
+    let mut listener = sqlx::postgres::PgListener::connect_with(&world.pool)
+        .await
+        .unwrap();
+    listener.listen(RUN_STREAM_CHANNEL).await.unwrap();
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_start()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    runner.expect_follow().returning(move |_, sender| {
+        Box::pin(async move {
+            sender.send(text_delta_line("Je regarde ")).await.unwrap();
+            sender.send(text_delta_line("le dépôt.")).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            sender
+                .send(TaskLine::Agent(serde_json::json!({
+                    "type": "assistant",
+                    "message": {"content": [{"type": "text", "text": "Je regarde le dépôt."}]}
+                })))
+                .await
+                .unwrap();
+            sender.send(text_delta_line("Fini.")).await.unwrap();
+            sender
+                .send(TaskLine::Matos(TaskMarker::NoChanges))
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            Ok(TaskOutcome::Succeeded)
+        })
+    });
+    let pipeline = pipeline(&world, runner, without_config());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    let mut notices = Vec::new();
+    while let Ok(Ok(notification)) =
+        tokio::time::timeout(Duration::from_millis(500), listener.recv()).await
+    {
+        let notice = RunStreamNotice::decode(notification.payload()).unwrap();
+        if notice.run() == world.run_id.0 {
+            notices.push(notice);
+        }
+    }
+    let stored = run_events(&world.pool, world.run_id).await;
+    let last_seq = stored.last().unwrap().0;
+    let mut first = String::new();
+    let mut second = String::new();
+    let mut events_at = None;
+    let mut last_event = 0;
+    for (index, notice) in notices.iter().enumerate() {
+        match notice {
+            RunStreamNotice::Delta { after: 0, text, .. } => {
+                assert!(events_at.is_none(), "a delta after 0 came after the events");
+                first.push_str(text);
+            }
+            RunStreamNotice::Delta { after: 1, text, .. } => second.push_str(text),
+            RunStreamNotice::Delta { after, .. } => panic!("unexpected after {after}"),
+            RunStreamNotice::Events { last, .. } => {
+                events_at.get_or_insert(index);
+                last_event = *last;
+            }
+        }
+    }
+    assert_eq!(first, "Je regarde le dépôt.");
+    assert_eq!(second, "Fini.");
+    assert!(events_at.is_some());
+    assert_eq!(last_event, last_seq);
 }

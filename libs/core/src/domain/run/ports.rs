@@ -5,6 +5,7 @@ use super::{
     Run, RunFilter, RunOverview,
     event::{RunEvent, SequencedRunEvent},
     step::Step,
+    stream::RunStreamNotice,
 };
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
@@ -101,4 +102,12 @@ pub trait RunEventRepository: Send {
         after_seq: i64,
         limit: u32,
     ) -> impl Future<Output = Result<Vec<RunEvent>, CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait RunStreamPublisher: Send + Sync {
+    fn publish(
+        &self,
+        notice: &RunStreamNotice,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
 }

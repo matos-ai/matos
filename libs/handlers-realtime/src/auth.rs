@@ -3,13 +3,17 @@ use std::future::Future;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use matos_auth::{TokenVerifier, unverified_issuer};
-use matos_handlers::AppState;
+use matos_common::{OrganizationId, RunId};
+use matos_core::domain::authorization::Subject;
+use matos_handlers::{AppState, auth::ADMIN_ROLE};
 use serde::Deserialize;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     pub subject: String,
+    pub actor: Option<String>,
+    pub is_admin: bool,
     pub organization_id: Uuid,
     pub expires_at: Option<DateTime<Utc>>,
 }
@@ -19,6 +23,8 @@ pub struct Denied(pub &'static str);
 
 pub trait Authenticate: Clone + Send + Sync + 'static {
     fn authenticate(&self, token: &str) -> impl Future<Output = Result<Session, Denied>> + Send;
+
+    fn authorize_run(&self, session: &Session, run: Uuid) -> impl Future<Output = bool> + Send;
 }
 
 impl Authenticate for AppState {
@@ -44,10 +50,25 @@ impl Authenticate for AppState {
                 Denied("unauthorized")
             })?;
         Ok(Session {
+            is_admin: identity.roles.iter().any(|role| role == ADMIN_ROLE),
+            actor: identity.actor.and_then(|actor| actor.client_id),
             subject: identity.subject,
             organization_id: organization.id.0,
             expires_at: expiry(token),
         })
+    }
+
+    async fn authorize_run(&self, session: &Session, run: Uuid) -> bool {
+        let subject = Subject {
+            id: session.subject.clone(),
+            organization_id: OrganizationId(session.organization_id),
+            actor: session.actor.clone(),
+            is_admin: session.is_admin,
+        };
+        self.usecase
+            .authorize_run_stream(subject, RunId(run))
+            .await
+            .is_ok()
     }
 }
 

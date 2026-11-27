@@ -141,6 +141,9 @@ pub enum AgentEvent {
     Text {
         text: String,
     },
+    TextDelta {
+        text: String,
+    },
     ToolCall {
         id: String,
         tool: String,

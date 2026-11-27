@@ -48,6 +48,20 @@ impl Redactor {
         }
         text.replace(&self.secret, REDACTED)
     }
+
+    fn partial_tail_len(&self, text: &str) -> usize {
+        let mut starts = text
+            .char_indices()
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        starts.reverse();
+        starts
+            .into_iter()
+            .map(|start| text.len() - start)
+            .filter(|length| *length < self.secret.len())
+            .find(|length| self.secret.starts_with(&text[text.len() - length..]))
+            .unwrap_or(0)
+    }
 }
 
 pub(super) fn truncate_chars(text: &str, max_chars: usize) -> String {
@@ -107,6 +121,12 @@ impl Digest {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct StreamDelta {
+    pub after: i64,
+    pub text: String,
+}
+
 pub(super) struct StreamReader {
     harness: Harness,
     parser: AgentParser,
@@ -124,6 +144,8 @@ pub(super) struct StreamReader {
     order: Vec<String>,
     events: Vec<SequencedRunEvent>,
     emitted: i64,
+    deltas: Vec<StreamDelta>,
+    held: Option<StreamDelta>,
     dirty: bool,
 }
 
@@ -164,6 +186,8 @@ impl StreamReader {
             order: Vec::new(),
             events: Vec::new(),
             emitted: 0,
+            deltas: Vec::new(),
+            held: None,
             dirty: false,
         }
     }
@@ -183,7 +207,39 @@ impl StreamReader {
         self.order.clear();
         self.events.clear();
         self.emitted = 0;
+        self.deltas.clear();
+        self.held = None;
         self.dirty = true;
+    }
+
+    pub(super) fn take_deltas(&mut self) -> Vec<StreamDelta> {
+        let mut taken: Vec<StreamDelta> = Vec::new();
+        let pending = self
+            .held
+            .take()
+            .into_iter()
+            .chain(std::mem::take(&mut self.deltas));
+        for delta in pending {
+            match taken.last_mut() {
+                Some(last) if last.after == delta.after => last.text.push_str(&delta.text),
+                _ => taken.push(delta),
+            }
+        }
+        for delta in &mut taken {
+            delta.text = self.redactor.apply(&delta.text);
+        }
+        if let Some(last) = taken.last_mut() {
+            let keep = self.redactor.partial_tail_len(&last.text);
+            if keep > 0 {
+                let cut = last.text.len() - keep;
+                self.held = Some(StreamDelta {
+                    after: last.after,
+                    text: last.text.split_off(cut),
+                });
+            }
+        }
+        taken.retain(|delta| !delta.text.is_empty());
+        taken
     }
 
     pub(super) fn take_events(&mut self) -> Vec<SequencedRunEvent> {
@@ -446,6 +502,14 @@ impl StreamReader {
                     text: truncate_chars(&redacted, TEXT_MAX_CHARS),
                     truncated,
                 });
+            }
+            AgentEvent::TextDelta { text } => {
+                if self.emitted < EVENTS_MAX_PER_RUN && !text.is_empty() {
+                    self.deltas.push(StreamDelta {
+                        after: self.emitted,
+                        text,
+                    });
+                }
             }
             AgentEvent::ToolCall { id, tool, input } => {
                 let input = self.redactor.apply(&input);
@@ -941,6 +1005,107 @@ mod tests {
         assert_eq!(late[0].seq, early.len() as i64 + 1);
         let total = events_of(Harness::ClaudeCode, SAMPLE, "");
         assert_eq!(total.len(), early.len() + late.len());
+    }
+
+    fn delta_line(text: &str) -> TaskLine {
+        TaskLine::Agent(
+            json!({"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":text}}}),
+        )
+    }
+
+    fn text_line(text: &str) -> TaskLine {
+        TaskLine::Agent(
+            json!({"type":"assistant","message":{"content":[{"type":"text","text":text}]}}),
+        )
+    }
+
+    #[test]
+    fn deltas_with_the_same_position_are_coalesced_and_tagged_across_an_event() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new(""));
+        assert!(reader.take_deltas().is_empty());
+        reader.accept(&delta_line("hel"));
+        reader.accept(&delta_line("lo"));
+        reader.accept(&text_line("hello"));
+        reader.accept(&delta_line("wor"));
+        reader.accept(&delta_line("ld"));
+        assert_eq!(
+            reader.take_deltas(),
+            vec![
+                StreamDelta {
+                    after: 0,
+                    text: "hello".into()
+                },
+                StreamDelta {
+                    after: 1,
+                    text: "world".into()
+                },
+            ]
+        );
+        assert!(reader.take_deltas().is_empty());
+        reader.accept(&delta_line("!"));
+        assert_eq!(
+            reader.take_deltas(),
+            vec![StreamDelta {
+                after: 1,
+                text: "!".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn deltas_are_redacted_and_reset_clears_them() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new("tok-secret"));
+        reader.accept(&delta_line("the tok-"));
+        reader.accept(&delta_line("secret is"));
+        let taken = reader.take_deltas();
+        assert_eq!(taken.len(), 1);
+        assert!(!taken[0].text.contains("tok-secret"));
+        reader.accept(&delta_line("pending"));
+        reader.reset();
+        assert!(reader.take_deltas().is_empty());
+    }
+
+    #[test]
+    fn a_secret_split_across_two_takes_never_leaves_the_reader() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new("tok-secret"));
+        reader.accept(&delta_line("the tok-"));
+        let first = reader.take_deltas();
+        reader.accept(&delta_line("secret is"));
+        let second = reader.take_deltas();
+        let shown: String = first
+            .iter()
+            .chain(&second)
+            .map(|d| d.text.as_str())
+            .collect();
+        assert!(!shown.contains("tok-"), "{shown}");
+        assert!(!shown.contains("secret"), "{shown}");
+        assert_eq!(shown, "the *** is");
+    }
+
+    #[test]
+    fn a_held_tail_that_is_not_the_secret_is_released_on_the_next_take() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new("tok-secret"));
+        reader.accept(&delta_line("see tok"));
+        let first = reader.take_deltas();
+        reader.accept(&delta_line("ens"));
+        let second = reader.take_deltas();
+        let shown: String = first
+            .iter()
+            .chain(&second)
+            .map(|d| d.text.as_str())
+            .collect();
+        assert_eq!(shown, "see tokens");
+    }
+
+    #[test]
+    fn deltas_stop_after_the_per_run_cap() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new(""));
+        for _ in 0..EVENTS_MAX_PER_RUN {
+            reader.accept(&text_line("x"));
+        }
+        reader.take_deltas();
+        reader.accept(&delta_line("late"));
+        assert!(reader.take_deltas().is_empty());
     }
 
     #[test]
