@@ -1,6 +1,6 @@
 use std::fmt;
 
-use clap::Args;
+use clap::{Args, ValueEnum};
 
 fn masked(value: &Option<String>) -> &'static str {
     if value.is_some() { "***" } else { "unset" }
@@ -61,6 +61,64 @@ pub struct AuthArgs {
     /// console requests at login. Unset, the audience is not checked.
     #[arg(long = "auth-audience", env = "AUTH_AUDIENCE")]
     pub audience: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum AuthzEngine {
+    Local,
+    Authzen,
+}
+
+#[derive(Clone, Args)]
+pub struct AuthzArgs {
+    #[arg(
+        id = "authz_engine",
+        long = "authz-engine",
+        env = "AUTHZ_ENGINE",
+        value_enum,
+        default_value = "local"
+    )]
+    pub engine: AuthzEngine,
+
+    /// The client the decision point is asked as: the matos-api client.
+    #[arg(
+        id = "authz_client_id",
+        long = "authz-client-id",
+        env = "EXCHANGE_CLIENT_ID"
+    )]
+    pub client_id: Option<String>,
+
+    #[arg(
+        id = "authz_client_secret",
+        long = "authz-client-secret",
+        env = "EXCHANGE_CLIENT_SECRET",
+        hide_env_values = true
+    )]
+    pub client_secret: Option<String>,
+}
+
+impl fmt::Debug for AuthzArgs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AuthzArgs")
+            .field("engine", &self.engine)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &masked(&self.client_secret))
+            .finish()
+    }
+}
+
+impl AuthzArgs {
+    /// The client id and secret to ask the decision point with, `None` for
+    /// the local engine.
+    pub fn pdp_client(&self) -> Result<Option<(&str, &str)>, String> {
+        match self.engine {
+            AuthzEngine::Local => Ok(None),
+            AuthzEngine::Authzen => match (&self.client_id, &self.client_secret) {
+                (Some(id), Some(secret)) => Ok(Some((id, secret))),
+                _ => Err("AUTHZ_ENGINE=authzen needs EXCHANGE_CLIENT_ID and EXCHANGE_CLIENT_SECRET: the policy decision point is asked as the matos-api client".to_owned()),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Args)]
@@ -330,6 +388,65 @@ mod tests {
         for leak in ["delegation-leak", "secrets-leak", "db-leak"] {
             assert!(!shown.contains(leak), "{leak} in {shown}");
         }
+    }
+
+    #[derive(Parser)]
+    struct AuthzCli {
+        #[command(flatten)]
+        authz: AuthzArgs,
+    }
+
+    #[test]
+    fn the_local_engine_stays_the_default() {
+        assert_eq!(
+            AuthzCli::parse_from(["bin"]).authz.engine,
+            AuthzEngine::Local
+        );
+    }
+
+    #[test]
+    fn authzen_is_chosen_on_its_flag() {
+        let cli = AuthzCli::parse_from(["bin", "--authz-engine", "authzen"]);
+        assert_eq!(cli.authz.engine, AuthzEngine::Authzen);
+    }
+
+    #[test]
+    fn an_unknown_engine_is_refused() {
+        assert!(AuthzCli::try_parse_from(["bin", "--authz-engine", "cedar"]).is_err());
+    }
+
+    #[test]
+    fn the_local_engine_needs_no_pdp_client() {
+        let cli = AuthzCli::parse_from(["bin"]);
+        assert_eq!(cli.authz.pdp_client(), Ok(None));
+    }
+
+    #[test]
+    fn authzen_asks_the_pdp_as_the_given_client() {
+        let cli = AuthzCli::parse_from([
+            "bin",
+            "--authz-engine",
+            "authzen",
+            "--authz-client-id",
+            "matos-api",
+            "--authz-client-secret",
+            "s",
+        ]);
+        assert_eq!(cli.authz.pdp_client(), Ok(Some(("matos-api", "s"))));
+        assert!(!format!("{:?}", cli.authz).contains("\"s\""));
+    }
+
+    #[test]
+    fn authzen_without_a_client_secret_is_refused() {
+        let cli = AuthzCli::parse_from([
+            "bin",
+            "--authz-engine",
+            "authzen",
+            "--authz-client-id",
+            "matos-api",
+        ]);
+        let refused = cli.authz.pdp_client().unwrap_err();
+        assert!(refused.contains("EXCHANGE_CLIENT_SECRET"));
     }
 
     #[derive(Parser)]

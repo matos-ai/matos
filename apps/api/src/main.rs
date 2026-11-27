@@ -6,7 +6,7 @@ use anyhow::Context;
 use clap::Parser;
 use matos_analytics::{AnalyticsArgs, DataFusionAnalytics, Dataset};
 use matos_args::{
-    AuthArgs, DatabaseArgs, DelegationArgs, GithubArgs, IntegrationsArgs, LogArgs,
+    AuthArgs, AuthzArgs, DatabaseArgs, DelegationArgs, GithubArgs, IntegrationsArgs, LogArgs,
     ObservabilityArgs, SecretsArgs, ServerArgs,
 };
 use matos_auth::{AcceptedClients, ExchangeArgs, FerrisKeyTokenExchange, FerrisKeyVerifier};
@@ -38,6 +38,8 @@ struct Args {
     auth: AuthArgs,
     #[command(flatten)]
     exchange: ExchangeArgs,
+    #[command(flatten)]
+    authz: AuthzArgs,
     #[command(flatten)]
     delegation: DelegationArgs,
     #[command(flatten)]
@@ -73,7 +75,8 @@ async fn main() -> anyhow::Result<()> {
     let pool = postgres::connect(&args.database.url, args.database.max_connections)
         .await
         .context("connecting to postgres")?;
-    let mut usecase = MatosUseCase::with_local_policies(pool);
+    let mut usecase =
+        MatosUseCase::with_policies(pool, args.authz.pdp_client().map_err(anyhow::Error::msg)?);
     match &args.secrets.key {
         Some(key) => {
             usecase = usecase.with_secrets_cipher(

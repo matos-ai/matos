@@ -35,8 +35,12 @@ use std::sync::Arc;
 use matos_common::CoreError;
 use sqlx::PgPool;
 
+use crate::domain::agent::SecretToken;
 use crate::infrastructure::{
-    authorization::{AuditedAuthorizer, LocalPolicyEngine},
+    authorization::{
+        AuditedAuthorizer, AuthzenAuthorizer, LocalPolicyEngine, PdpCredentials, PgIssuers,
+        PolicyEngine,
+    },
     crypto::SecretCipher,
     postgres,
 };
@@ -58,7 +62,7 @@ pub use provider::{ModelListing, ProviderFailure};
 pub use run::{AgentDelegation, RunTimeline, SubmittedTranscript};
 pub use transcription::PreparedTranscription;
 
-pub type MatosAuthorizer = AuditedAuthorizer<LocalPolicyEngine>;
+pub type MatosAuthorizer = AuditedAuthorizer<PolicyEngine>;
 
 /// Long-lived and cloned into every request: never hold request-scoped state here.
 #[derive(Clone)]
@@ -103,7 +107,31 @@ impl MatosUseCase {
 
     /// The default assembly: the local policy engine, every decision audited.
     pub fn with_local_policies(pool: PgPool) -> Self {
-        let authz = AuditedAuthorizer::new(LocalPolicyEngine, pool.clone());
+        Self::with_engine(pool, PolicyEngine::Local(LocalPolicyEngine))
+    }
+
+    pub fn with_authzen_policies(pool: PgPool, credentials: PdpCredentials) -> Self {
+        let engine = AuthzenAuthorizer::new(PgIssuers::new(pool.clone()), credentials);
+        Self::with_engine(pool, PolicyEngine::Authzen(engine))
+    }
+
+    /// The authzen engine when a decision point client is given, the local
+    /// engine otherwise.
+    pub fn with_policies(pool: PgPool, pdp_client: Option<(&str, &str)>) -> Self {
+        match pdp_client {
+            Some((client_id, client_secret)) => Self::with_authzen_policies(
+                pool,
+                PdpCredentials {
+                    client_id: client_id.to_owned(),
+                    client_secret: SecretToken::new(client_secret),
+                },
+            ),
+            None => Self::with_local_policies(pool),
+        }
+    }
+
+    fn with_engine(pool: PgPool, engine: PolicyEngine) -> Self {
+        let authz = AuditedAuthorizer::new(engine, pool.clone());
         Self::new(pool, authz)
     }
 
