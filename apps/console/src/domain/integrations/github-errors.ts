@@ -98,3 +98,15 @@ export function describeMyConnectError(error: unknown): string {
 export function describeMyDisconnectError(): string {
 	return 'La déconnexion de ton compte GitHub a échoué. Réessaie.'
 }
+
+export function describePutTokenError(error: unknown): string {
+	if (hasErrorKey(error, 'github_token_refused')) {
+		return 'GitHub a refusé ce jeton.'
+	}
+	if (statusOf(error) === 503) return NOT_CONFIGURED
+	return "Le jeton n'a pas pu être enregistré. Réessaie."
+}
+
+export function describeTokenActionError(): string {
+	return "Le jeton personnel n'a pas pu être modifié. Réessaie."
+}

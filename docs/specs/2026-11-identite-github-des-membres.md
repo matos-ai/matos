@@ -28,6 +28,8 @@ Une exécution qui modifie un dépôt pousse sa branche et ouvre sa pull request
 | D9 | Échec tardif | Si l'ouverture de la PR avec le jeton du membre échoue (401/403/422 hors « déjà ouverte »), le worker réessaie une fois avec l'App, puis applique la note de D8. |
 | D10 | Déconnexion | `DELETE` supprime la ligne et révoque l'autorisation chez GitHub (`DELETE /applications/{client_id}/grant`), sans échouer si GitHub refuse. |
 | D11 | Accès | Toutes les routes sont sous `/api/v1/me/github` : un membre ne voit et ne touche que sa propre connexion. |
+| D12 | Jeton personnel | GitHub affiche « with <App> » sur toute action faite avec un jeton utilisateur d'App. Pour l'éviter, un membre peut enregistrer un jeton personnel fine-grained (table `github_personal_tokens`, scellé avec `SECRETS_KEY`, AD `github-pat/{org}/{subject}`). Validé à l'enregistrement par `GET /user` (login, id) ; l'expiration vient de l'en-tête `github-authentication-token-expiration` si présent. |
+| D13 | Priorité | Jeton personnel actif et non expiré, sinon autorisation via l'App, sinon App (note D8). Le worker et le proxy appliquent le même ordre. Un jeton personnel n'est jamais rafraîchi. Le membre peut le désactiver sans le supprimer. |
 
 ## API
 
@@ -35,6 +37,10 @@ Une exécution qui modifie un dépôt pousse sa branche et ouvre sa pull request
 - `GET /api/v1/me/github/authorize` : `{url}` vers `{web_base}/login/oauth/authorize?client_id=…&state=…`. `state` signé, finalité `UserConnect`, 10 min. 409 si l'organisation n'a pas de GitHub App.
 - `POST /api/v1/me/github/callback` `{code, state}` : échange le code, lit `GET /user`, enregistre. 400 si `state` invalide.
 - `DELETE /api/v1/me/github` : 204.
+- `GET /api/v1/me/github` renvoie aussi `personal_token: {login, preview, expires_at, active} | null`.
+- `PUT /api/v1/me/github/token` `{token}` : valide auprès de GitHub puis enregistre, actif. 400 si GitHub refuse le jeton.
+- `PATCH /api/v1/me/github/token` `{active}` : active ou désactive. 404 sans jeton.
+- `DELETE /api/v1/me/github/token` : 204.
 
 ## Console
 
@@ -51,4 +57,6 @@ Une exécution qui modifie un dépôt pousse sa branche et ouvre sa pull request
 6. Le proxy ne pousse avec le jeton du membre que pour `git_identity = member`, et ne l'utilise jamais pour le fetch.
 7. Les jetons ne sont jamais en clair en base ni dans les logs (Debug masqué).
 8. Un membre ne lit ni ne supprime la connexion d'un autre.
-9. `deploy/postgres/egress-proxy-role.sql` donne `SELECT` sur `github_user_connections`.
+9. `deploy/postgres/egress-proxy-role.sql` donne `SELECT` sur `github_user_connections` et `github_personal_tokens`.
+10. Un jeton personnel actif est utilisé pour le push et la PR, même si l'autorisation via l'App existe ; désactivé ou expiré, l'autorisation via l'App reprend.
+11. Un jeton refusé par GitHub à l'enregistrement n'est pas stocké.

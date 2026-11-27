@@ -137,6 +137,8 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         "DELETE FROM github_installations",
         "DELETE FROM github_apps",
         "DELETE FROM github_user_connections",
+        "DELETE FROM github_personal_tokens",
+        "UPDATE github_personal_tokens SET active = FALSE",
         "SELECT count(*) FROM runs",
     ] {
         assert!(

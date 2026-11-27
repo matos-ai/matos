@@ -125,6 +125,7 @@ impl GithubConnectionRepository for PgGithubConnectionRepository<'_, '_> {
                     connected: true,
                     login: Some(row.github_login),
                     connected_at: Some(row.created_at),
+                    personal_token: None,
                 }
             }),
         )

@@ -9,11 +9,17 @@ use crate::{
         authorization::Subject,
         execution::ports::CodeHost,
         github_user::{
-            GithubConnection, GithubConnectionStatus, ports::GithubConnectionRepository,
-            ports::GithubUserOAuth,
+            GithubConnection, GithubConnectionStatus, PersonalToken,
+            ports::{
+                GithubConnectionRepository, GithubUserOAuth, PersonalTokenRepository,
+                PersonalTokenValidator,
+            },
         },
+        provider::preview,
     },
-    infrastructure::github_user::postgres::PgGithubConnectionRepository,
+    infrastructure::github_user::{
+        personal::PgPersonalTokenRepository, postgres::PgGithubConnectionRepository,
+    },
 };
 
 impl MatosUseCase {
@@ -22,9 +28,64 @@ impl MatosUseCase {
         &self,
         subject: Subject,
     ) -> Result<GithubConnectionStatus, CoreError> {
-        PgGithubConnectionRepository::new(&tx, self.secrets.as_deref())
+        let mut status = PgGithubConnectionRepository::new(&tx, self.secrets.as_deref())
             .status(subject.organization_id, &subject.id)
+            .await?;
+        status.personal_token = PgPersonalTokenRepository::new(&tx, self.secrets.as_deref())
+            .status(subject.organization_id, &subject.id)
+            .await?;
+        Ok(status)
+    }
+
+    pub async fn save_github_personal_token<V: PersonalTokenValidator>(
+        &self,
+        subject: Subject,
+        token: SecretToken,
+        validator: &V,
+    ) -> Result<GithubConnectionStatus, CoreError> {
+        let trimmed = token.expose().trim();
+        if trimmed.is_empty() {
+            return Err(CoreError::Invalid("the GitHub token is empty".into()));
+        }
+        let token = SecretToken::new(trimmed);
+        let check = validator.validate(&token).await?;
+        let now = Utc::now();
+        let stored = PersonalToken {
+            organization_id: subject.organization_id,
+            subject: subject.id.clone(),
+            github_user_id: check.user.id,
+            github_login: check.user.login,
+            preview: preview(token.expose()),
+            token,
+            expires_at: check.expires_at,
+            active: true,
+            created_at: now,
+            updated_at: now,
+        };
+        self.store_personal_token(&stored).await?;
+        self.github_connection_status(subject).await
+    }
+
+    pub async fn set_github_personal_token_active(
+        &self,
+        subject: Subject,
+        active: bool,
+    ) -> Result<GithubConnectionStatus, CoreError> {
+        if !self
+            .update_personal_token(subject.organization_id, &subject.id, active)
+            .await?
+        {
+            return Err(CoreError::NotFound);
+        }
+        self.github_connection_status(subject).await
+    }
+
+    #[transactional()]
+    pub async fn delete_github_personal_token(&self, subject: Subject) -> Result<(), CoreError> {
+        PgPersonalTokenRepository::new(&tx, self.secrets.as_deref())
+            .delete(subject.organization_id, &subject.id)
             .await
+            .map(|_| ())
     }
 
     pub async fn github_authorize_url<O: GithubUserOAuth>(
@@ -48,7 +109,7 @@ impl MatosUseCase {
         let now = Utc::now();
         let connection = GithubConnection {
             organization_id,
-            subject: subject.id,
+            subject: subject.id.clone(),
             github_user_id: user.id,
             github_login: user.login,
             tokens,
@@ -56,7 +117,7 @@ impl MatosUseCase {
             updated_at: now,
         };
         self.store_github_connection(&connection).await?;
-        Ok(GithubConnectionStatus::from(&connection))
+        self.github_connection_status(subject).await
     }
 
     pub async fn disconnect_github_user<O: GithubUserOAuth>(
@@ -87,6 +148,9 @@ impl MatosUseCase {
         min_validity: Duration,
         host: &H,
     ) -> Result<Option<SecretToken>, CoreError> {
+        if let Some(token) = self.usable_personal_token(organization_id, subject).await? {
+            return Ok(Some(token));
+        }
         let Some(connection) = self
             .stored_github_connection(organization_id, subject)
             .await?
@@ -140,12 +204,62 @@ impl MatosUseCase {
         organization_id: OrganizationId,
         subject: &str,
     ) -> Result<Option<SecretToken>, CoreError> {
+        if let Some(token) = self.usable_personal_token(organization_id, subject).await? {
+            return Ok(Some(token));
+        }
         Ok(self
             .stored_github_connection(organization_id, subject)
             .await?
             .map(|connection| connection.tokens)
             .filter(|tokens| !tokens.is_expired(Utc::now()))
             .map(|tokens| tokens.access_token))
+    }
+
+    async fn usable_personal_token(
+        &self,
+        organization_id: OrganizationId,
+        subject: &str,
+    ) -> Result<Option<SecretToken>, CoreError> {
+        match self.stored_personal_token(organization_id, subject).await {
+            Ok(found) => Ok(found
+                .filter(|token| token.is_usable(Utc::now()))
+                .map(|token| token.token)),
+            Err(error @ CoreError::Database(_)) => Err(error),
+            Err(error) => {
+                tracing::warn!(%organization_id, %error, "the member's personal GitHub token is unreadable");
+                Ok(None)
+            }
+        }
+    }
+
+    #[transactional()]
+    async fn stored_personal_token(
+        &self,
+        organization_id: OrganizationId,
+        subject: &str,
+    ) -> Result<Option<PersonalToken>, CoreError> {
+        PgPersonalTokenRepository::new(&tx, self.secrets.as_deref())
+            .find(organization_id, subject)
+            .await
+    }
+
+    #[transactional()]
+    async fn store_personal_token(&self, token: &PersonalToken) -> Result<(), CoreError> {
+        PgPersonalTokenRepository::new(&tx, self.secrets.as_deref())
+            .upsert(token)
+            .await
+    }
+
+    #[transactional()]
+    async fn update_personal_token(
+        &self,
+        organization_id: OrganizationId,
+        subject: &str,
+        active: bool,
+    ) -> Result<bool, CoreError> {
+        PgPersonalTokenRepository::new(&tx, self.secrets.as_deref())
+            .set_active(organization_id, subject, active)
+            .await
     }
 
     #[transactional()]

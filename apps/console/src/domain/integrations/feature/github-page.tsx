@@ -11,6 +11,7 @@ import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '#/components/ui/radio-group'
 import { Skeleton } from '#/components/ui/skeleton'
+import { PersonalTokenSection } from '#/domain/integrations/feature/personal-token-section'
 import { RepositoriesSection } from '#/domain/integrations/feature/repositories-section'
 import {
 	describeDeleteAppError,
@@ -248,6 +249,12 @@ function MyAccount({ onNotice }: { onNotice: (message: string) => void }) {
 					</Button>
 				</div>
 			)}
+			{connection.data ? (
+				<PersonalTokenSection
+					token={connection.data.personal_token ?? null}
+					onNotice={onNotice}
+				/>
+			) : null}
 			<ConfirmDialog
 				open={confirming}
 				title="Déconnecter ton compte GitHub ?"

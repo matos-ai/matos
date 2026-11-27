@@ -9,6 +9,7 @@ use axum::{
     Extension, Json, Router,
     extract::{Path, Request},
     http::StatusCode,
+    response::IntoResponse,
     routing::{get, post},
 };
 use chrono::{Duration, Utc};
@@ -149,8 +150,22 @@ async fn fake_github(conversions: Arc<AtomicUsize>) -> String {
             "/user",
             get(|request: Request| async move {
                 let token = request.headers()["authorization"].to_str().unwrap();
+                if let Some(pat) = token.strip_prefix("Bearer github_pat_") {
+                    if pat.starts_with("bad") {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(json!({"message": "Bad credentials"})),
+                        )
+                            .into_response();
+                    }
+                    return (
+                        [("github-authentication-token-expiration", "2099-12-31 00:00:00 UTC")],
+                        Json(json!({"id": 4242, "login": format!("pat-{pat}")})),
+                    )
+                        .into_response();
+                }
                 let login = token.trim_start_matches("Bearer ghu_").to_owned();
-                Json(json!({"id": login.len(), "login": login}))
+                Json(json!({"id": login.len(), "login": login})).into_response()
             }),
         )
         .route(
@@ -1134,7 +1149,7 @@ async fn a_member_connects_reads_and_disconnects_their_own_github_account() {
     .await;
     assert_eq!(
         before,
-        json!({"connected": false, "login": null, "connected_at": null})
+        json!({"connected": false, "login": null, "connected_at": null, "personal_token": null})
     );
 
     let authorize = client
@@ -1286,4 +1301,153 @@ async fn a_member_never_sees_or_removes_another_members_connection() {
     )
     .await;
     assert_eq!(still_alice["login"], "alice-login");
+}
+
+#[tokio::test]
+async fn a_member_saves_deactivates_and_deletes_a_personal_token() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+    let client = reqwest::Client::new();
+    let url = format!("{member}/api/v1/me/github/token");
+
+    let saved = client
+        .put(&url)
+        .json(&json!({"token": "github_pat_abcdefgh1234"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let raw = saved.text().await.unwrap();
+    assert!(!raw.contains("github_pat_abcdefgh1234"), "{raw}");
+    let body: Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(body["connected"], false);
+    let token = &body["personal_token"];
+    assert_eq!(token["login"], "pat-abcdefgh1234");
+    assert_eq!(token["preview"], "…1234");
+    assert_eq!(token["active"], true);
+    assert_eq!(token["expires_at"], "2099-12-31T00:00:00Z");
+
+    let status = json_of(
+        client
+            .get(format!("{member}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status["personal_token"], *token);
+
+    let off = client
+        .patch(&url)
+        .json(&json!({"active": false}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(off.status(), 200);
+    assert_eq!(json_of(off).await["personal_token"]["active"], false);
+
+    let removed = client.delete(&url).send().await.unwrap();
+    assert_eq!(removed.status(), 204);
+    assert_eq!(client.delete(&url).send().await.unwrap().status(), 204);
+    let gone = json_of(
+        client
+            .get(format!("{member}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(gone["personal_token"], Value::Null);
+    assert_eq!(
+        count(&pool, "github_personal_tokens", &organization).await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn a_token_github_refuses_is_a_400_and_stores_nothing() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+    let client = reqwest::Client::new();
+
+    let refused = client
+        .put(format!("{member}/api/v1/me/github/token"))
+        .json(&json!({"token": "github_pat_bad1"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 400);
+    assert_eq!(json_of(refused).await["code"], "github_token_refused");
+    assert_eq!(
+        count(&pool, "github_personal_tokens", &organization).await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn patching_without_a_personal_token_is_a_404() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+
+    let response = reqwest::Client::new()
+        .patch(format!("{member}/api/v1/me/github/token"))
+        .json(&json!({"active": true}))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 404);
+}
+
+#[tokio::test]
+async fn a_member_never_sees_or_changes_another_members_personal_token() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let alice = serve(&pool, caller(&organization, "alice", &[]), &backend).await;
+    let bob = serve(&pool, caller(&organization, "bob", &[]), &backend).await;
+    let client = reqwest::Client::new();
+    client
+        .put(format!("{alice}/api/v1/me/github/token"))
+        .json(&json!({"token": "github_pat_alicealice"}))
+        .send()
+        .await
+        .unwrap();
+
+    let seen = json_of(
+        client
+            .get(format!("{bob}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(seen["personal_token"], Value::Null);
+    let patched = client
+        .patch(format!("{bob}/api/v1/me/github/token"))
+        .json(&json!({"active": false}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), 404);
+    client
+        .delete(format!("{bob}/api/v1/me/github/token"))
+        .send()
+        .await
+        .unwrap();
+    let still = json_of(
+        client
+            .get(format!("{alice}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(still["personal_token"]["active"], true);
 }

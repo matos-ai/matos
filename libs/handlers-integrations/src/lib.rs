@@ -30,8 +30,9 @@ pub use actions::{
 pub use dto::{
     ConnectGithubRequest, ConnectGithubUserRequest, CreateGithubAppRequest, CreateManifestRequest,
     GithubAppResponse, GithubConnectionResponse, GithubInstallationResponse,
-    GithubIntegrationResponse, InstallUrlResponse, ManifestOwner, ManifestResponse,
-    RepositoryListResponse, RepositoryResponse,
+    GithubIntegrationResponse, GithubPersonalTokenResponse, InstallUrlResponse, ManifestOwner,
+    ManifestResponse, PutGithubPersonalTokenRequest, RepositoryListResponse, RepositoryResponse,
+    SetGithubPersonalTokenActiveRequest,
 };
 pub use error::IntegrationError;
 pub use instances::dto::{
@@ -64,6 +65,9 @@ where
         .typed_get(me_github::authorize::handler)
         .typed_post(me_github::callback::handler)
         .typed_delete(me_github::disconnect::handler)
+        .typed_put(me_github::put_token::handler)
+        .typed_patch(me_github::patch_token::handler)
+        .typed_delete(me_github::delete_token::handler)
         .typed_get(list_repositories::handler)
         .typed_get(list_issues::handler)
         .typed_get(instances::list::handler)

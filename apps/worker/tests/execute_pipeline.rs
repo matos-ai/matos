@@ -23,7 +23,10 @@ use matos_core::{
             harness::Harness,
             ports::{MockCodeHost, MockTaskRunner},
         },
-        github_user::{GitIdentity, GithubUser, UserTokens, ports::MockGithubUserOAuth},
+        github_user::{
+            GitIdentity, GithubUser, PersonalTokenCheck, UserTokens,
+            ports::{MockGithubUserOAuth, MockPersonalTokenValidator},
+        },
         member::Member,
         provider::ModelAssignments,
         run::{
@@ -2004,4 +2007,76 @@ async fn a_pull_request_that_already_exists_is_not_retried_with_the_app() {
 
     assert_eq!(run_row(&world.pool, world.run_id).await.0, "failed");
     assert!(seen.pull_requests.lock().unwrap().is_empty());
+}
+
+const MEMBER_PAT: &str = "github_pat_member_personal_secret";
+
+async fn save_ada_personal_token(world: &World, expires_at: Option<chrono::DateTime<Utc>>) {
+    let mut validator = MockPersonalTokenValidator::new();
+    validator.expect_validate().returning(move |_| {
+        Box::pin(std::future::ready(Ok(PersonalTokenCheck {
+            user: GithubUser {
+                id: 583231,
+                login: "ada".into(),
+            },
+            expires_at,
+        })))
+    });
+    world
+        .usecase
+        .save_github_personal_token(
+            human(world.organization_id),
+            SecretToken::new(MEMBER_PAT),
+            &validator,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_personal_token_opens_the_pull_request_even_when_the_apps_authorization_exists() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    save_ada_personal_token(&world, None).await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(&seen, &member_seen, &world, MemberHost::default());
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_eq!(git_identity_of(&world).await, "member");
+    let opened = member_seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, MEMBER_PAT);
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert!(member_seen.refreshed_with.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(!posted[0].2.contains(APP_NOTE));
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    for text in [posted[0].2.clone(), output.to_string()] {
+        assert!(!text.contains(MEMBER_PAT));
+    }
+}
+
+#[tokio::test]
+async fn an_expired_personal_token_falls_back_to_the_apps_authorization() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    save_ada_personal_token(&world, Some(Utc::now() - chrono::Duration::minutes(1))).await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(&seen, &member_seen, &world, MemberHost::default());
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(git_identity_of(&world).await, "member");
+    let opened = member_seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened[0].0, MEMBER_ACCESS);
 }

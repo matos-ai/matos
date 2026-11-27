@@ -34,6 +34,9 @@ pub enum IntegrationError {
     #[error("the GitHub App lacks the organization permission Members: read")]
     MembersPermissionMissing,
 
+    #[error("GitHub refused the token: {0}")]
+    TokenRefused(String),
+
     #[error("{message}")]
     Unprocessable { code: &'static str, message: String },
 }
@@ -88,6 +91,11 @@ impl IntoResponse for IntegrationError {
                 "github_app_members_permission_missing",
                 "the GitHub App needs the organization permission Members: read to check who administers the organization"
                     .to_owned(),
+            ),
+            Self::TokenRefused(message) => (
+                StatusCode::BAD_REQUEST,
+                "github_token_refused",
+                format!("GitHub refused the token: {message}"),
             ),
             Self::Unprocessable { code, message } => {
                 (StatusCode::UNPROCESSABLE_ENTITY, code, message)

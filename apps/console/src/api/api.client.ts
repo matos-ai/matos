@@ -438,10 +438,17 @@ export namespace Schemas {
     owner_type: string;
     slug: string;
   };
+  export type GithubPersonalTokenResponse = {
+    active: boolean;
+    expires_at?: (string | null) | undefined;
+    login: string;
+    preview: string;
+  };
   export type GithubConnectionResponse = {
     connected: boolean;
     connected_at?: (string | null) | undefined;
     login?: (string | null) | undefined;
+    personal_token?: (null | GithubPersonalTokenResponse) | undefined;
   };
   export type GithubInstallationResponse = {
     account_login: string;
@@ -728,6 +735,7 @@ export namespace Schemas {
     updated_at: string;
   };
   export type ProviderListResponse = { providers: Array<ProviderResponse> };
+  export type PutGithubPersonalTokenRequest = { token: string };
   export type PutProviderRequest = Partial<{ api_key: string; base_url: string | null }>;
   export type PutUserProviderRequest = {
     api_key?: (string | null) | undefined;
@@ -783,6 +791,7 @@ export namespace Schemas {
   };
   export type SaveBudgetsRequest = Partial<{ agents: Array<AgentLimitRequest>; organization: null | LimitRequest }>;
   export type SendMessageRequest = Partial<{ message: string | null }>;
+  export type SetGithubPersonalTokenActiveRequest = { active: boolean };
   export type SkillId = string;
   export type SkillResponse = {
     archived: boolean;
@@ -1920,6 +1929,36 @@ export namespace Endpoints {
       503: Schemas.ApiErrorResponse;
     };
   };
+  export type put_PutMyGithubToken = {
+    method: "PUT";
+    path: "/api/v1/me/github/token";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.PutGithubPersonalTokenRequest;
+    };
+    responses: {
+      200: Schemas.GithubConnectionResponse;
+      400: Schemas.ApiErrorResponse;
+      401: Schemas.ApiErrorResponse;
+      503: Schemas.ApiErrorResponse;
+    };
+  };
+  export type delete_DeleteMyGithubToken = {
+    method: "DELETE";
+    path: "/api/v1/me/github/token";
+    requestFormat: "json";
+    parameters: never;
+    responses: { 204: unknown; 401: Schemas.ApiErrorResponse };
+  };
+  export type patch_SetMyGithubTokenActive = {
+    method: "PATCH";
+    path: "/api/v1/me/github/token";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.SetGithubPersonalTokenActiveRequest;
+    };
+    responses: { 200: Schemas.GithubConnectionResponse; 401: Schemas.ApiErrorResponse; 404: Schemas.ApiErrorResponse };
+  };
   export type get_ListMyProviders = {
     method: "GET";
     path: "/api/v1/me/providers";
@@ -2832,6 +2871,7 @@ export type EndpointByMethod = {
   };
   put: {
     "/api/v1/budgets": Endpoints.put_SaveBudgets;
+    "/api/v1/me/github/token": Endpoints.put_PutMyGithubToken;
     "/api/v1/me/providers/{kind}": Endpoints.put_PutMyProvider;
     "/api/v1/model-assignments": Endpoints.put_PutModelAssignments;
     "/api/v1/providers/{kind}": Endpoints.put_PutProvider;
@@ -2842,6 +2882,7 @@ export type EndpointByMethod = {
     "/api/v1/conversations/{id}": Endpoints.patch_UpdateConversation;
     "/api/v1/integration-instances/{id}": Endpoints.patch_UpdateIntegrationInstance;
     "/api/v1/mcp-connectors/{connector_id}": Endpoints.patch_UpdateMcpConnector;
+    "/api/v1/me/github/token": Endpoints.patch_SetMyGithubTokenActive;
     "/api/v1/projects/{project_id}": Endpoints.patch_UpdateProject;
     "/api/v1/routines/{routine_id}": Endpoints.patch_UpdateRoutine;
     "/api/v1/routines/{routine_id}/triggers/{trigger_id}": Endpoints.patch_UpdateRoutineTrigger;
@@ -2855,6 +2896,7 @@ export type EndpointByMethod = {
     "/api/v1/integrations/github/app": Endpoints.delete_DeleteGithubApp;
     "/api/v1/mcp-connectors/{connector_id}/connection": Endpoints.delete_DisconnectMcpConnector;
     "/api/v1/me/github": Endpoints.delete_DisconnectMyGithub;
+    "/api/v1/me/github/token": Endpoints.delete_DeleteMyGithubToken;
     "/api/v1/me/providers/{kind}": Endpoints.delete_DeleteMyProvider;
     "/api/v1/providers/{kind}": Endpoints.delete_DeleteProvider;
     "/api/v1/routines/{routine_id}/triggers/{trigger_id}": Endpoints.delete_RemoveRoutineTrigger;

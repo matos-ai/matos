@@ -1,6 +1,9 @@
 use matos_common::{CoreError, OrganizationId};
 
-use super::{GithubConnection, GithubConnectionStatus, GithubUser, UserTokens};
+use super::{
+    GithubConnection, GithubConnectionStatus, GithubUser, PersonalToken, PersonalTokenCheck,
+    PersonalTokenStatus, UserTokens,
+};
 use crate::domain::agent::SecretToken;
 
 pub trait GithubConnectionRepository: Send {
@@ -53,4 +56,44 @@ pub trait GithubUserOAuth: Send + Sync {
         organization_id: OrganizationId,
         access_token: &SecretToken,
     ) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+pub trait PersonalTokenRepository: Send {
+    fn find(
+        &mut self,
+        organization_id: OrganizationId,
+        subject: &str,
+    ) -> impl Future<Output = Result<Option<PersonalToken>, CoreError>> + Send;
+
+    fn status(
+        &mut self,
+        organization_id: OrganizationId,
+        subject: &str,
+    ) -> impl Future<Output = Result<Option<PersonalTokenStatus>, CoreError>> + Send;
+
+    fn upsert(
+        &mut self,
+        token: &PersonalToken,
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn set_active(
+        &mut self,
+        organization_id: OrganizationId,
+        subject: &str,
+        active: bool,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+
+    fn delete(
+        &mut self,
+        organization_id: OrganizationId,
+        subject: &str,
+    ) -> impl Future<Output = Result<bool, CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait PersonalTokenValidator: Send + Sync {
+    fn validate(
+        &self,
+        token: &SecretToken,
+    ) -> impl Future<Output = Result<PersonalTokenCheck, CoreError>> + Send;
 }

@@ -10,7 +10,10 @@ use matos_core::{
         agent::SecretToken,
         authorization::Subject,
         execution::ports::CodeHost,
-        github_user::{GithubUser, UserTokens, ports::GithubUserOAuth},
+        github_user::{
+            GithubUser, PersonalTokenCheck, UserTokens,
+            ports::{GithubUserOAuth, PersonalTokenValidator},
+        },
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
@@ -632,4 +635,436 @@ async fn a_refresh_lost_to_a_concurrent_one_uses_the_token_the_winner_stored() {
         .unwrap();
 
     assert_eq!(token.unwrap().expose(), "ghu_winner");
+}
+
+const PAT: &str = "github_pat_secret_value_1";
+
+struct FakeValidator {
+    expires_at: Option<chrono::DateTime<Utc>>,
+    refuses: bool,
+}
+
+impl FakeValidator {
+    fn accepting() -> Self {
+        Self {
+            expires_at: None,
+            refuses: false,
+        }
+    }
+
+    fn refusing() -> Self {
+        Self {
+            expires_at: None,
+            refuses: true,
+        }
+    }
+}
+
+impl PersonalTokenValidator for FakeValidator {
+    async fn validate(&self, token: &SecretToken) -> Result<PersonalTokenCheck, CoreError> {
+        if self.refuses {
+            return Err(CoreError::Invalid("Bad credentials".into()));
+        }
+        assert_eq!(token.expose(), PAT);
+        Ok(PersonalTokenCheck {
+            user: GithubUser {
+                id: 583231,
+                login: "octocat-pat".into(),
+            },
+            expires_at: self.expires_at,
+        })
+    }
+}
+
+async fn with_personal_token(usecase: &MatosUseCase, who: &Subject, validator: &FakeValidator) {
+    usecase
+        .save_github_personal_token(who.clone(), SecretToken::new(PAT), validator)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn saving_a_personal_token_stores_it_sealed_and_shows_only_a_preview() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(organization_id, "alice");
+    let expires_at = Utc::now() + Duration::days(30);
+    let validator = FakeValidator {
+        expires_at: Some(expires_at),
+        refuses: false,
+    };
+
+    let status = usecase
+        .save_github_personal_token(
+            alice.clone(),
+            SecretToken::new(format!("  {PAT}\n")),
+            &validator,
+        )
+        .await
+        .unwrap();
+
+    assert!(!status.connected);
+    let shown = status.personal_token.unwrap();
+    assert_eq!(shown.login, "octocat-pat");
+    assert_eq!(shown.preview, "…ue_1");
+    assert!(shown.active);
+    assert_eq!(
+        shown.expires_at.map(|at| at.timestamp()),
+        Some(expires_at.timestamp())
+    );
+    assert!(!format!("{shown:?}").contains(PAT));
+
+    let row: (Vec<u8>, String) = sqlx::query_as(
+        "SELECT token_ciphertext, token_preview FROM github_personal_tokens WHERE organization_id = $1",
+    )
+    .bind(organization_id.0)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!row.0.windows(PAT.len()).any(|w| w == PAT.as_bytes()));
+    assert!(!row.1.contains("secret"));
+    let read = usecase
+        .member_git_access_token(organization_id, "alice")
+        .await
+        .unwrap();
+    assert_eq!(read.unwrap().expose(), PAT);
+}
+
+#[tokio::test]
+async fn a_token_github_refuses_is_not_stored() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(organization_id, "alice");
+
+    let error = usecase
+        .save_github_personal_token(
+            alice.clone(),
+            SecretToken::new(PAT),
+            &FakeValidator::refusing(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, CoreError::Invalid(_)), "{error:?}");
+    let empty = usecase
+        .save_github_personal_token(
+            alice.clone(),
+            SecretToken::new("  "),
+            &FakeValidator::accepting(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(empty, CoreError::Invalid(_)), "{empty:?}");
+
+    assert!(
+        usecase
+            .github_connection_status(alice)
+            .await
+            .unwrap()
+            .personal_token
+            .is_none()
+    );
+    let stored: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM github_personal_tokens WHERE organization_id = $1",
+    )
+    .bind(organization_id.0)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, 0);
+}
+
+#[tokio::test]
+async fn an_active_personal_token_wins_over_the_apps_authorization_in_both_readers() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(organization_id, "alice");
+    let github = connected(
+        &usecase,
+        &alice,
+        tokens(ACCESS, Some(Duration::minutes(-5)), Some(REFRESH)),
+    )
+    .await
+    .refreshing_to(tokens(
+        "ghu_access_secret_2",
+        Some(Duration::hours(8)),
+        None,
+    ));
+    with_personal_token(&usecase, &alice, &FakeValidator::accepting()).await;
+
+    let worker = usecase
+        .member_git_token(organization_id, "alice", Duration::minutes(40), &github)
+        .await
+        .unwrap();
+    let proxy = usecase
+        .member_git_access_token(organization_id, "alice")
+        .await
+        .unwrap();
+
+    assert_eq!(worker.unwrap().expose(), PAT);
+    assert_eq!(proxy.unwrap().expose(), PAT);
+    assert!(github.refresh_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_personal_token_alone_is_enough_without_the_apps_authorization() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let github = FakeGithub::new(tokens(ACCESS, None, None));
+    with_personal_token(
+        &usecase,
+        &subject(organization_id, "alice"),
+        &FakeValidator::accepting(),
+    )
+    .await;
+
+    let token = usecase
+        .member_git_token(organization_id, "alice", Duration::minutes(40), &github)
+        .await
+        .unwrap();
+
+    assert_eq!(token.unwrap().expose(), PAT);
+}
+
+#[tokio::test]
+async fn an_inactive_personal_token_gives_way_to_the_apps_authorization() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(organization_id, "alice");
+    let github = connected(
+        &usecase,
+        &alice,
+        tokens(ACCESS, Some(Duration::hours(8)), Some(REFRESH)),
+    )
+    .await;
+    with_personal_token(&usecase, &alice, &FakeValidator::accepting()).await;
+
+    let status = usecase
+        .set_github_personal_token_active(alice.clone(), false)
+        .await
+        .unwrap();
+    assert!(!status.personal_token.unwrap().active);
+    assert!(status.connected);
+
+    let worker = usecase
+        .member_git_token(organization_id, "alice", Duration::minutes(40), &github)
+        .await
+        .unwrap();
+    let proxy = usecase
+        .member_git_access_token(organization_id, "alice")
+        .await
+        .unwrap();
+    assert_eq!(worker.unwrap().expose(), ACCESS);
+    assert_eq!(proxy.unwrap().expose(), ACCESS);
+
+    let status = usecase
+        .set_github_personal_token_active(alice, true)
+        .await
+        .unwrap();
+    assert!(status.personal_token.unwrap().active);
+    let again = usecase
+        .member_git_access_token(organization_id, "alice")
+        .await
+        .unwrap();
+    assert_eq!(again.unwrap().expose(), PAT);
+}
+
+#[tokio::test]
+async fn an_expired_personal_token_gives_way_to_the_apps_authorization_and_is_never_refreshed() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(organization_id, "alice");
+    let github = connected(
+        &usecase,
+        &alice,
+        tokens(ACCESS, Some(Duration::hours(8)), Some(REFRESH)),
+    )
+    .await;
+    let validator = FakeValidator {
+        expires_at: Some(Utc::now() - Duration::minutes(1)),
+        refuses: false,
+    };
+    with_personal_token(&usecase, &alice, &validator).await;
+
+    let worker = usecase
+        .member_git_token(organization_id, "alice", Duration::minutes(40), &github)
+        .await
+        .unwrap();
+    let proxy = usecase
+        .member_git_access_token(organization_id, "alice")
+        .await
+        .unwrap();
+
+    assert_eq!(worker.unwrap().expose(), ACCESS);
+    assert_eq!(proxy.unwrap().expose(), ACCESS);
+    assert!(github.refresh_calls.lock().unwrap().is_empty());
+
+    let bob = subject(organization_id, "bob");
+    with_personal_token(&usecase, &bob, &validator).await;
+    assert!(
+        usecase
+            .member_git_token(organization_id, "bob", Duration::minutes(40), &github)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        usecase
+            .member_git_access_token(organization_id, "bob")
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn saving_again_replaces_the_token_and_reactivates_it() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(organization_id, "alice");
+    with_personal_token(&usecase, &alice, &FakeValidator::accepting()).await;
+    usecase
+        .set_github_personal_token_active(alice.clone(), false)
+        .await
+        .unwrap();
+
+    with_personal_token(&usecase, &alice, &FakeValidator::accepting()).await;
+
+    let status = usecase.github_connection_status(alice).await.unwrap();
+    assert!(status.personal_token.unwrap().active);
+}
+
+#[tokio::test]
+async fn a_member_never_reads_nor_changes_another_members_personal_token() {
+    let Some(pool) = pool().await else { return };
+    let acme = organization(&pool).await;
+    let other = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(acme, "alice");
+    with_personal_token(&usecase, &alice, &FakeValidator::accepting()).await;
+
+    for stranger in [subject(acme, "bob"), subject(other, "alice")] {
+        assert!(
+            usecase
+                .github_connection_status(stranger.clone())
+                .await
+                .unwrap()
+                .personal_token
+                .is_none()
+        );
+        assert!(matches!(
+            usecase
+                .set_github_personal_token_active(stranger.clone(), false)
+                .await,
+            Err(CoreError::NotFound)
+        ));
+        usecase
+            .delete_github_personal_token(stranger)
+            .await
+            .unwrap();
+    }
+    assert!(
+        usecase
+            .member_git_access_token(other, "alice")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        usecase
+            .github_connection_status(alice)
+            .await
+            .unwrap()
+            .personal_token
+            .unwrap()
+            .active
+    );
+}
+
+#[tokio::test]
+async fn deleting_removes_the_personal_token_and_is_idempotent() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    let alice = subject(organization_id, "alice");
+    with_personal_token(&usecase, &alice, &FakeValidator::accepting()).await;
+
+    usecase
+        .delete_github_personal_token(alice.clone())
+        .await
+        .unwrap();
+    usecase
+        .delete_github_personal_token(alice.clone())
+        .await
+        .unwrap();
+
+    assert!(
+        usecase
+            .github_connection_status(alice)
+            .await
+            .unwrap()
+            .personal_token
+            .is_none()
+    );
+    assert!(
+        usecase
+            .member_git_access_token(organization_id, "alice")
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_personal_token_ciphertext_moved_to_another_member_or_key_does_not_open() {
+    let Some(pool) = pool().await else { return };
+    let organization_id = organization(&pool).await;
+    let usecase = usecase(&pool, 7);
+    with_personal_token(
+        &usecase,
+        &subject(organization_id, "alice"),
+        &FakeValidator::accepting(),
+    )
+    .await;
+
+    sqlx::query("UPDATE github_personal_tokens SET subject = 'bob' WHERE organization_id = $1")
+        .bind(organization_id.0)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        usecase
+            .member_git_access_token(organization_id, "bob")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    sqlx::query("UPDATE github_personal_tokens SET subject = 'alice' WHERE organization_id = $1")
+        .bind(organization_id.0)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        self::usecase(&pool, 8)
+            .member_git_access_token(organization_id, "alice")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        usecase
+            .member_git_access_token(organization_id, "alice")
+            .await
+            .unwrap()
+            .unwrap()
+            .expose(),
+        PAT
+    );
 }

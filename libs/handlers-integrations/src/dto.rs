@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use matos_core::domain::{
     execution::{GithubAppSummary, GithubInstallation, RepositoryListing},
-    github_user::GithubConnectionStatus,
+    github_user::{GithubConnectionStatus, PersonalTokenStatus},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -144,6 +144,31 @@ pub struct GithubConnectionResponse {
     pub connected: bool,
     pub login: Option<String>,
     pub connected_at: Option<DateTime<Utc>>,
+    /// The caller's own personal access token; `null` when none is stored.
+    pub personal_token: Option<GithubPersonalTokenResponse>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GithubPersonalTokenResponse {
+    /// The GitHub account the token belongs to.
+    pub login: String,
+    /// The last characters of the token, for recognition; the token itself is never returned.
+    pub preview: String,
+    /// When GitHub expires the token; `null` when it does not.
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Whether runs use the token; an inactive token is kept but ignored.
+    pub active: bool,
+}
+
+impl From<PersonalTokenStatus> for GithubPersonalTokenResponse {
+    fn from(token: PersonalTokenStatus) -> Self {
+        Self {
+            login: token.login,
+            preview: token.preview,
+            expires_at: token.expires_at,
+            active: token.active,
+        }
+    }
 }
 
 impl From<GithubConnectionStatus> for GithubConnectionResponse {
@@ -152,6 +177,7 @@ impl From<GithubConnectionStatus> for GithubConnectionResponse {
             connected: status.connected,
             login: status.login,
             connected_at: status.connected_at,
+            personal_token: status.personal_token.map(Into::into),
         }
     }
 }
@@ -162,4 +188,22 @@ pub struct ConnectGithubUserRequest {
     pub code: String,
     /// The `state` of the authorize URL, returned untouched by GitHub.
     pub state: String,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct PutGithubPersonalTokenRequest {
+    /// A fine-grained personal access token; GitHub validates it before it is stored.
+    pub token: String,
+}
+
+impl std::fmt::Debug for PutGithubPersonalTokenRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PutGithubPersonalTokenRequest")
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetGithubPersonalTokenActiveRequest {
+    pub active: bool,
 }

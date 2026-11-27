@@ -2563,3 +2563,18 @@ async fn a_member_identity_without_an_initiator_pushes_with_the_installation_tok
     let installation = basic(INSTALLATION_TOKEN);
     assert_eq!(authorizations(&seen), [&installation; 4]);
 }
+
+#[tokio::test]
+async fn a_personal_token_the_member_saved_is_what_receive_pack_is_authenticated_with() {
+    const PERSONAL_TOKEN: &str = "github_pat_member_personal";
+    let mut fake = member_fake(GitIdentity::Member, false);
+    fake.member_tokens.insert(INITIATOR, PERSONAL_TOKEN);
+    let h = harness_with(fake).await;
+    let seen = push_and_fetch(&h).await;
+    let personal = basic(PERSONAL_TOKEN);
+    let installation = basic(INSTALLATION_TOKEN);
+    assert_eq!(
+        authorizations(&seen),
+        [&personal, &personal, &installation, &installation]
+    );
+}

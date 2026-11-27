@@ -83,10 +83,56 @@ pub struct GithubConnection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonalToken {
+    pub organization_id: OrganizationId,
+    pub subject: String,
+    pub github_user_id: i64,
+    pub github_login: String,
+    pub token: SecretToken,
+    pub preview: String,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl PersonalToken {
+    pub fn is_usable(&self, now: DateTime<Utc>) -> bool {
+        self.active && self.expires_at.is_none_or(|expires_at| expires_at > now)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonalTokenCheck {
+    pub user: GithubUser,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonalTokenStatus {
+    pub login: String,
+    pub preview: String,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub active: bool,
+}
+
+impl From<&PersonalToken> for PersonalTokenStatus {
+    fn from(token: &PersonalToken) -> Self {
+        Self {
+            login: token.github_login.clone(),
+            preview: token.preview.clone(),
+            expires_at: token.expires_at,
+            active: token.active,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GithubConnectionStatus {
     pub connected: bool,
     pub login: Option<String>,
     pub connected_at: Option<DateTime<Utc>>,
+    pub personal_token: Option<PersonalTokenStatus>,
 }
 
 impl GithubConnectionStatus {
@@ -95,6 +141,7 @@ impl GithubConnectionStatus {
             connected: false,
             login: None,
             connected_at: None,
+            personal_token: None,
         }
     }
 }
@@ -105,6 +152,7 @@ impl From<&GithubConnection> for GithubConnectionStatus {
             connected: true,
             login: Some(connection.github_login.clone()),
             connected_at: Some(connection.created_at),
+            personal_token: None,
         }
     }
 }
@@ -194,5 +242,44 @@ mod tests {
         assert_eq!(status.login.as_deref(), Some("octo"));
         assert_eq!(status.connected_at, Some(now));
         assert!(!GithubConnectionStatus::disconnected().connected);
+        assert!(status.personal_token.is_none());
+    }
+
+    fn personal(active: bool, expires_in: Option<i64>) -> PersonalToken {
+        let now = Utc::now();
+        PersonalToken {
+            organization_id: OrganizationId::new(),
+            subject: "user-1".into(),
+            github_user_id: 1,
+            github_login: "octo".into(),
+            token: SecretToken::new("github_pat_leak"),
+            preview: "…leak".into(),
+            expires_at: expires_in.map(|seconds| now + Duration::seconds(seconds)),
+            active,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn a_personal_token_is_usable_when_active_and_not_expired() {
+        let now = Utc::now();
+        assert!(personal(true, None).is_usable(now));
+        assert!(personal(true, Some(60)).is_usable(now));
+        assert!(!personal(true, Some(-1)).is_usable(now));
+        assert!(!personal(false, None).is_usable(now));
+        assert!(!personal(false, Some(60)).is_usable(now));
+    }
+
+    #[test]
+    fn a_personal_token_debug_and_status_never_show_the_token() {
+        let token = personal(true, None);
+        let shown = format!("{token:?}");
+        assert!(!shown.contains("github_pat_leak"), "{shown}");
+        let status = PersonalTokenStatus::from(&token);
+        assert_eq!(status.login, "octo");
+        assert_eq!(status.preview, "…leak");
+        assert!(status.active);
+        assert!(!format!("{status:?}").contains("github_pat_leak"));
     }
 }

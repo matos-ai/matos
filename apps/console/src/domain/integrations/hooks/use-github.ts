@@ -133,6 +133,32 @@ export function useDisconnectMyGithub() {
 	})
 }
 
+export function usePutMyGithubToken() {
+	const client = useQueryClient()
+	return useMutation({
+		mutationFn: (token: string) =>
+			api.put('/api/v1/me/github/token', { body: { token } }),
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
+export function useSetMyGithubTokenActive() {
+	const client = useQueryClient()
+	return useMutation({
+		mutationFn: (active: boolean) =>
+			api.patch('/api/v1/me/github/token', { body: { active } }),
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
+export function useDeleteMyGithubToken() {
+	const client = useQueryClient()
+	return useMutation({
+		mutationFn: () => api.delete('/api/v1/me/github/token'),
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
 export type RepositoriesState =
 	| { kind: 'loading' }
 	| { kind: 'not_connected' }
