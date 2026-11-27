@@ -25,6 +25,7 @@ mod pipeline;
 mod provider;
 mod routine;
 mod run;
+mod run_event;
 mod skill;
 mod source;
 mod transcription;

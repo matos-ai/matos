@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO run_events (run_id, organization_id, seq, kind, payload)\n            SELECT $1, $2, seq, kind, payload\n            FROM UNNEST($3::bigint[], $4::text[], $5::jsonb[]) AS e(seq, kind, payload)\n            ON CONFLICT (run_id, seq) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8Array",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d1738c9af7772a6861d360418508c5018636aa4559c546992e1d41aa9871c103"
+}

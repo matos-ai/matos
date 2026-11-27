@@ -14,7 +14,13 @@ use crate::domain::{
         harness::{AgentEvent, AgentFinish, Harness},
         report::{ReportAssembler, ReportOutcome},
     },
-    run::step::CachedUsage,
+    run::{
+        event::{
+            EVENTS_MAX_PER_RUN, RunEventDraft, SequencedRunEvent, TEXT_MAX_CHARS,
+            TOOL_FIELD_MAX_CHARS,
+        },
+        step::CachedUsage,
+    },
 };
 
 pub(super) const REDACTED: &str = "***";
@@ -116,6 +122,8 @@ pub(super) struct StreamReader {
     extra_outcome: Option<CompanionOutcome>,
     pending: HashMap<String, PendingCall>,
     order: Vec<String>,
+    events: Vec<SequencedRunEvent>,
+    emitted: i64,
     dirty: bool,
 }
 
@@ -154,6 +162,8 @@ impl StreamReader {
             extra_outcome: None,
             pending: HashMap::new(),
             order: Vec::new(),
+            events: Vec::new(),
+            emitted: 0,
             dirty: false,
         }
     }
@@ -171,7 +181,28 @@ impl StreamReader {
         self.extra_outcome = None;
         self.pending.clear();
         self.order.clear();
+        self.events.clear();
+        self.emitted = 0;
         self.dirty = true;
+    }
+
+    pub(super) fn take_events(&mut self) -> Vec<SequencedRunEvent> {
+        std::mem::take(&mut self.events)
+    }
+
+    fn emit(&mut self, draft: RunEventDraft) {
+        if self.emitted >= EVENTS_MAX_PER_RUN {
+            return;
+        }
+        self.emitted += 1;
+        self.events.push(SequencedRunEvent {
+            seq: self.emitted,
+            draft,
+        });
+    }
+
+    fn tool_field(&self, text: &str) -> String {
+        truncate_chars(&self.redactor.apply(text), TOOL_FIELD_MAX_CHARS)
     }
 
     pub(super) fn take_dirty(&mut self) -> bool {
@@ -405,8 +436,24 @@ impl StreamReader {
 
     fn apply(&mut self, event: AgentEvent) {
         match event {
+            AgentEvent::Text { text } => {
+                if text.trim().is_empty() {
+                    return;
+                }
+                let redacted = self.redactor.apply(&text);
+                let truncated = redacted.chars().count() > TEXT_MAX_CHARS;
+                self.emit(RunEventDraft::AssistantText {
+                    text: truncate_chars(&redacted, TEXT_MAX_CHARS),
+                    truncated,
+                });
+            }
             AgentEvent::ToolCall { id, tool, input } => {
                 let input = self.redactor.apply(&input);
+                self.emit(RunEventDraft::ToolUse {
+                    id: id.clone(),
+                    tool: tool.clone(),
+                    input: truncate_chars(&input, TOOL_FIELD_MAX_CHARS),
+                });
                 self.order.push(id.clone());
                 self.pending.insert(
                     id,
@@ -422,6 +469,12 @@ impl StreamReader {
                 output,
                 succeeded,
             } => {
+                let shown = self.tool_field(&output);
+                self.emit(RunEventDraft::ToolResult {
+                    id: id.clone(),
+                    succeeded,
+                    output: shown,
+                });
                 let Some(call) = self.pending.remove(&id) else {
                     return;
                 };
@@ -747,6 +800,167 @@ mod tests {
         assert!(stored.contains(REDACTED));
         assert_eq!(digest.tool_calls.len(), 2);
         assert!(digest.summary.unwrap().contains("I saw *** in the env"));
+    }
+
+    fn events_of(harness: Harness, sample: &str, secret: &str) -> Vec<SequencedRunEvent> {
+        let mut reader = StreamReader::new(harness, Redactor::new(secret));
+        for line in lines(sample) {
+            reader.accept(&line);
+        }
+        reader.take_events()
+    }
+
+    #[test]
+    fn every_harness_yields_text_and_tool_events_with_contiguous_seqs() {
+        for (harness, sample) in [
+            (Harness::ClaudeCode, SAMPLE),
+            (Harness::Codex, CODEX_SAMPLE),
+            (Harness::Antigravity, ANTIGRAVITY_SAMPLE),
+            (Harness::MistralVibe, VIBE_SAMPLE),
+        ] {
+            let events = events_of(harness, sample, "");
+            let seqs: Vec<i64> = events.iter().map(|event| event.seq).collect();
+            let expected: Vec<i64> = (1..=events.len() as i64).collect();
+            assert_eq!(seqs, expected, "{harness}");
+            assert!(
+                events
+                    .iter()
+                    .any(|event| matches!(event.draft, RunEventDraft::AssistantText { .. })),
+                "{harness}: {events:?}"
+            );
+            assert!(
+                events
+                    .iter()
+                    .any(|event| matches!(event.draft, RunEventDraft::ToolUse { .. })),
+                "{harness}"
+            );
+            assert!(
+                events
+                    .iter()
+                    .any(|event| matches!(event.draft, RunEventDraft::ToolResult { .. })),
+                "{harness}"
+            );
+        }
+    }
+
+    #[test]
+    fn events_keep_the_order_of_the_blocks_in_a_line() {
+        let sample = format!(
+            "{}\n{}",
+            json!({"type":"assistant","message":{"content":[{"type":"text","text":"look"},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}},{"type":"text","text":"then"}]}}),
+            json!({"type":"result","subtype":"success","result":"x"}),
+        );
+        let kinds: Vec<_> = events_of(Harness::ClaudeCode, &sample, "")
+            .iter()
+            .map(|event| (event.seq, event.draft.kind().as_str()))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                (1, "assistant_text"),
+                (2, "tool_use"),
+                (3, "assistant_text")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_secret_never_reaches_an_event() {
+        let secret = "dG9rZW4tZGUtdGFjaGUtMDEyMzQ1Njc4OWFiY2RlZg";
+        let sample = format!(
+            "{}\n{}",
+            json!({"type":"assistant","message":{"content":[{"type":"text","text":format!("saw {secret}")},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":format!("echo {secret}")}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":format!("token={secret}")}]}}),
+        );
+        let events = events_of(Harness::ClaudeCode, &sample, secret);
+        let stored = format!("{events:?}");
+        assert!(!stored.contains(secret), "{stored}");
+        assert_eq!(events.len(), 3);
+        assert!(
+            matches!(&events[0].draft, RunEventDraft::AssistantText { text, .. } if text == "saw ***")
+        );
+    }
+
+    #[test]
+    fn long_text_is_cut_and_flagged_and_tool_fields_are_cut() {
+        let sample = format!(
+            "{}\n{}",
+            json!({"type":"assistant","message":{"content":[
+                {"type":"text","text":"a".repeat(TEXT_MAX_CHARS + 10)},
+                {"type":"text","text":"b".repeat(TEXT_MAX_CHARS)},
+                {"type":"tool_use","id":"t1","name":"Bash","input":{"command":"c".repeat(TOOL_FIELD_MAX_CHARS * 2)}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"d".repeat(TOOL_FIELD_MAX_CHARS + 1)}]}}),
+        );
+        let events = events_of(Harness::ClaudeCode, &sample, "");
+        assert!(
+            matches!(&events[0].draft, RunEventDraft::AssistantText { text, truncated: true } if text.chars().count() == TEXT_MAX_CHARS)
+        );
+        assert!(
+            matches!(&events[1].draft, RunEventDraft::AssistantText { text, truncated: false } if text.chars().count() == TEXT_MAX_CHARS)
+        );
+        assert!(
+            matches!(&events[2].draft, RunEventDraft::ToolUse { input, .. } if input.chars().count() == TOOL_FIELD_MAX_CHARS)
+        );
+        assert!(
+            matches!(&events[3].draft, RunEventDraft::ToolResult { output, .. } if output.chars().count() == TOOL_FIELD_MAX_CHARS)
+        );
+    }
+
+    #[test]
+    fn a_second_reader_fed_the_same_lines_yields_the_same_events() {
+        for (harness, sample) in [
+            (Harness::ClaudeCode, SAMPLE),
+            (Harness::Codex, CODEX_SAMPLE),
+            (Harness::Antigravity, ANTIGRAVITY_SAMPLE),
+            (Harness::MistralVibe, VIBE_SAMPLE),
+        ] {
+            assert_eq!(
+                events_of(harness, sample, ""),
+                events_of(harness, sample, ""),
+                "{harness}"
+            );
+        }
+    }
+
+    #[test]
+    fn take_events_returns_only_what_is_new() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new(""));
+        let all = lines(SAMPLE);
+        let (first, rest) = all.split_at(3);
+        for line in first {
+            reader.accept(line);
+        }
+        let early = reader.take_events();
+        assert!(!early.is_empty());
+        assert!(reader.take_events().is_empty());
+        for line in rest {
+            reader.accept(line);
+        }
+        let late = reader.take_events();
+        assert!(!late.is_empty());
+        assert_eq!(late[0].seq, early.len() as i64 + 1);
+        let total = events_of(Harness::ClaudeCode, SAMPLE, "");
+        assert_eq!(total.len(), early.len() + late.len());
+    }
+
+    #[test]
+    fn empty_text_yields_no_event() {
+        let sample = json!({"type":"assistant","message":{"content":[{"type":"text","text":""},{"type":"text","text":"  \n"}]}}).to_string();
+        assert!(events_of(Harness::ClaudeCode, &sample, "").is_empty());
+    }
+
+    #[test]
+    fn events_stop_after_the_per_run_cap() {
+        let mut reader = StreamReader::new(Harness::ClaudeCode, Redactor::new(""));
+        let line = TaskLine::Agent(
+            json!({"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}),
+        );
+        for _ in 0..(EVENTS_MAX_PER_RUN + 5) {
+            reader.accept(&line);
+        }
+        let events = reader.take_events();
+        assert_eq!(events.len() as i64, EVENTS_MAX_PER_RUN);
+        assert_eq!(events.last().unwrap().seq, EVENTS_MAX_PER_RUN);
     }
 
     #[test]

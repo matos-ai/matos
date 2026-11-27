@@ -1,3 +1,4 @@
+pub mod events;
 pub mod get_run;
 pub mod list_active_runs;
 pub mod list_runs;
@@ -18,4 +19,5 @@ pub fn router() -> Router<AppState> {
         .typed_get(list_active_runs::handler)
         .typed_get(get_run::handler)
         .typed_get(timeline::handler)
+        .typed_get(events::handler)
 }

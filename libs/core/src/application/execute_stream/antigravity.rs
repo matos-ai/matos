@@ -11,6 +11,14 @@ pub(super) fn events(line: &Value) -> Vec<AgentEvent> {
 }
 
 fn tool_step(step: &Value) -> Vec<AgentEvent> {
+    if step["step_type"] == "agent_response" {
+        return match (step["state"].as_str(), step["text_delta"].as_str()) {
+            (Some("DONE"), Some(text)) => vec![AgentEvent::Text {
+                text: text.to_owned(),
+            }],
+            _ => Vec::new(),
+        };
+    }
     if step["step_type"] != "tool" {
         return Vec::new();
     }
@@ -132,10 +140,12 @@ mod tests {
     }
 
     #[test]
-    fn an_active_tool_step_and_other_steps_give_nothing() {
+    fn an_active_tool_step_and_other_steps_give_nothing_but_a_reply() {
         assert!(events(&step("ACTIVE", json!({"name":"run_command"}))).is_empty());
         let reply = json!({"event":"step_update","step_update":{"step_index":3,"state":"DONE","step_type":"agent_response","text_delta":"hi"}});
-        assert!(events(&reply).is_empty());
+        assert_eq!(events(&reply), [AgentEvent::Text { text: "hi".into() }]);
+        let silent = json!({"event":"step_update","step_update":{"step_index":1,"state":"DONE","step_type":"agent_response"}});
+        assert!(events(&silent).is_empty());
         assert!(events(&json!({"event":"init"})).is_empty());
     }
 

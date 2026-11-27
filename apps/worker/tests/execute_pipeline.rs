@@ -2925,3 +2925,137 @@ async fn a_multi_repository_run_that_failed_after_pushing_puts_the_note_in_every
     }
     assert_eq!(linking.updates.lock().unwrap().len(), 2);
 }
+
+fn scripted_conversation() -> Vec<TaskLine> {
+    vec![
+        TaskLine::Agent(serde_json::json!({
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "Je regarde le dépôt."}]}
+        })),
+        TaskLine::Agent(serde_json::json!({
+            "type": "assistant",
+            "message": {"content": [{
+                "type": "tool_use", "id": "toolu_ls", "name": "Bash",
+                "input": {"command": "ls"}
+            }]}
+        })),
+        TaskLine::Agent(serde_json::json!({
+            "type": "user",
+            "message": {"content": [{
+                "type": "tool_result", "tool_use_id": "toolu_ls",
+                "content": "README.md\n", "is_error": false
+            }]}
+        })),
+        TaskLine::Matos(TaskMarker::NoChanges),
+    ]
+}
+
+async fn run_events(pool: &PgPool, run_id: RunId) -> Vec<(i64, String, serde_json::Value)> {
+    sqlx::query_as("SELECT seq, kind, payload FROM run_events WHERE run_id = $1 ORDER BY seq")
+        .bind(run_id.0)
+        .fetch_all(pool)
+        .await
+        .unwrap()
+}
+
+fn assert_conversation(events: &[(i64, String, serde_json::Value)]) {
+    let seqs: Vec<i64> = events.iter().map(|event| event.0).collect();
+    assert_eq!(seqs, (1..=3).collect::<Vec<i64>>());
+    let kinds: Vec<&str> = events.iter().map(|event| event.1.as_str()).collect();
+    assert_eq!(kinds, ["assistant_text", "tool_use", "tool_result"]);
+    assert_eq!(events[0].2["text"], "Je regarde le dépôt.");
+    assert_eq!(events[1].2["id"], "toolu_ls");
+    assert_eq!(events[1].2["tool"], "Bash");
+    assert_eq!(events[2].2["id"], "toolu_ls");
+    assert_eq!(events[2].2["succeeded"], true);
+    assert_eq!(events[2].2["output"], "README.md\n");
+}
+
+#[tokio::test]
+async fn the_agent_conversation_is_written_to_the_run_events_in_order() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let runner = runner_ending(&seen, scripted_conversation(), TaskOutcome::Succeeded);
+    let pipeline = pipeline(&world, runner, without_config());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_conversation(&run_events(&world.pool, world.run_id).await);
+}
+
+#[tokio::test]
+async fn following_the_same_lines_again_adds_no_duplicate_events() {
+    let Some(world) = world().await else { return };
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_start()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let calls = Arc::new(Mutex::new(0u32));
+    runner.expect_follow().times(2).returning(move |_, sender| {
+        let first = {
+            let mut calls = calls.lock().unwrap();
+            *calls += 1;
+            *calls == 1
+        };
+        let lines = scripted_conversation();
+        Box::pin(async move {
+            for line in lines {
+                sender.send(line).await.unwrap();
+            }
+            if first {
+                Err(CoreError::Internal("try again".into()))
+            } else {
+                Ok(TaskOutcome::Succeeded)
+            }
+        })
+    });
+    let pipeline = pipeline(&world, runner, without_config());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_conversation(&run_events(&world.pool, world.run_id).await);
+}
+
+#[tokio::test]
+async fn events_are_visible_while_the_agent_is_still_running() {
+    let Some(world) = world().await else { return };
+    let release = Arc::new(tokio::sync::Notify::new());
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_start()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let gate = release.clone();
+    runner.expect_follow().returning(move |_, sender| {
+        let gate = gate.clone();
+        let lines = scripted_conversation();
+        Box::pin(async move {
+            for line in lines {
+                sender.send(line).await.unwrap();
+            }
+            gate.notified().await;
+            Ok(TaskOutcome::Succeeded)
+        })
+    });
+    let pipeline = pipeline(&world, runner, without_config());
+    let run_id = world.run_id;
+    let handle = tokio::spawn(async move { pipeline.execute(run_id, None).await });
+
+    let mut live = Vec::new();
+    for _ in 0..100 {
+        live = run_events(&world.pool, run_id).await;
+        if live.len() == 3 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(!handle.is_finished(), "the follow is still pending");
+    assert_conversation(&live);
+    assert_eq!(run_row(&world.pool, run_id).await.0, "running");
+
+    release.notify_one();
+    handle.await.unwrap().unwrap();
+    assert_eq!(run_row(&world.pool, run_id).await.0, "succeeded");
+    assert_conversation(&run_events(&world.pool, run_id).await);
+}

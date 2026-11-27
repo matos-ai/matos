@@ -66,7 +66,10 @@ impl CodexParser {
         match item["type"].as_str() {
             Some("agent_message") => {
                 self.summary = item["text"].as_str().map(str::to_owned);
-                Vec::new()
+                self.summary
+                    .iter()
+                    .map(|text| AgentEvent::Text { text: text.clone() })
+                    .collect()
             }
             Some("command_execution") => call(
                 id,
@@ -310,12 +313,13 @@ mod tests {
     fn a_completed_turn_finishes_with_its_usage_and_the_last_message() {
         let mut parser = CodexParser::default();
         assert!(parser.events(&json!({"type":"turn.started"})).is_empty());
-        assert!(
-            parser
-                .events(&completed(
-                    json!({"id":"item_0","type":"agent_message","text":"first"})
-                ))
-                .is_empty()
+        assert_eq!(
+            parser.events(&completed(
+                json!({"id":"item_0","type":"agent_message","text":"first"})
+            )),
+            [AgentEvent::Text {
+                text: "first".into()
+            }]
         );
         parser.events(&completed(
             json!({"id":"item_9","type":"agent_message","text":"done"}),

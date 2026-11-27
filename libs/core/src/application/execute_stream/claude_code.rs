@@ -4,7 +4,7 @@ use crate::domain::execution::harness::{AgentEvent, AgentFinish, AgentUsage};
 
 pub(super) fn events(line: &Value) -> Vec<AgentEvent> {
     match line["type"].as_str() {
-        Some("assistant") => tool_uses(&line["message"]["content"]),
+        Some("assistant") => blocks(&line["message"]["content"]),
         Some("user") => tool_results(&line["message"]["content"]),
         Some("result") => vec![AgentEvent::Finished(finish(line))],
         _ => Vec::new(),
@@ -23,14 +23,21 @@ fn items<'a>(content: &'a Value, kind: &'a str) -> impl Iterator<Item = &'a Valu
         .filter(move |item| item["type"] == kind)
 }
 
-fn tool_uses(content: &Value) -> Vec<AgentEvent> {
-    items(content, "tool_use")
-        .filter_map(|item| {
-            Some(AgentEvent::ToolCall {
+fn blocks(content: &Value) -> Vec<AgentEvent> {
+    content
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| match item["type"].as_str() {
+            Some("text") => Some(AgentEvent::Text {
+                text: item["text"].as_str()?.to_owned(),
+            }),
+            Some("tool_use") => Some(AgentEvent::ToolCall {
                 id: item["id"].as_str()?.to_owned(),
                 tool: item["name"].as_str().unwrap_or("unknown").to_owned(),
                 input: item["input"].to_string(),
-            })
+            }),
+            _ => None,
         })
         .collect()
 }
@@ -107,6 +114,9 @@ mod tests {
         assert_eq!(
             events(&line),
             [
+                AgentEvent::Text {
+                    text: "Je regarde.".into()
+                },
                 AgentEvent::ToolCall {
                     id: "t1".into(),
                     tool: "Bash".into(),

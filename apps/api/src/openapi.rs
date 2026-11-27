@@ -110,6 +110,7 @@ use matos_handlers_routines::{
 };
 use matos_handlers_runs::{
     self as runs,
+    events::{RunEventResponse, RunEventsResponse},
     list_active_runs::{ActiveRunListResponse, ActiveRunResponse, ActiveStepResponse},
     list_runs::RunListResponse,
     response::{ClientRefResponse, ProjectRefResponse, RunResponse, RunStatusResponse},
@@ -168,6 +169,7 @@ use utoipa::{
         runs::list_active_runs::handler,
         runs::get_run::handler,
         runs::timeline::handler,
+        runs::events::handler,
         cards::list_cards::handler,
         cards::create_card::handler,
         cards::get_card::handler,
@@ -304,6 +306,8 @@ use utoipa::{
         RunResponse,
         RunStatusResponse,
         RunTimelineResponse,
+        RunEventsResponse,
+        RunEventResponse,
         StepResponse,
         StepStatusResponse,
         ToolCallResponse,
