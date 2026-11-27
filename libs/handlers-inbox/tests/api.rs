@@ -59,7 +59,7 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
         created_at: Utc::now(),
     };
     let state = AppState {
-        usecase: MatosUseCase::with_local_policies(pool.clone()),
+        usecase: MatosUseCase::with_test_policies(pool.clone()),
         verifier: FerrisKeyVerifier::new(AcceptedClients::new(["matos-console"])),
         delegation: None,
     };

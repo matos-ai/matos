@@ -34,7 +34,7 @@ fn database_url() -> Option<String> {
 
 async fn setup() -> Option<(PgPool, MatosUseCase)> {
     let pool = postgres::connect(&database_url()?, 3).await.unwrap();
-    let usecase = MatosUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_test_policies(pool.clone());
     Some((pool, usecase))
 }
 

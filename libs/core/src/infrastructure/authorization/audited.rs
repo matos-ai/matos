@@ -88,7 +88,7 @@ mod tests {
         },
         infrastructure::{
             authorization::{
-                AuthzenAuthorizer, LocalPolicyEngine, PDP_UNAVAILABLE, PdpCredentials, PgIssuers,
+                AuthzenAuthorizer, CedarPolicyEngine, PDP_UNAVAILABLE, PdpCredentials, PgIssuers,
                 PolicyEngine,
             },
             postgres,
@@ -178,7 +178,8 @@ mod tests {
     async fn every_decision_of_a_batch_is_recorded_denials_included() {
         let Some(pool) = pool().await else { return };
         let organization_id = organization(&pool, "http://idp.test/realms/batch").await;
-        let audited = AuditedAuthorizer::new(PolicyEngine::Local(LocalPolicyEngine), pool.clone());
+        let audited =
+            AuditedAuthorizer::new(PolicyEngine::Cedar(CedarPolicyEngine::new()), pool.clone());
 
         let decisions = audited
             .evaluate_all(&[

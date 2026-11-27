@@ -49,7 +49,7 @@ async fn fixture() -> Option<Fixture> {
         issuer_url,
         created_at: Utc::now(),
     };
-    let usecase = MatosUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_test_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     let state = AppState {

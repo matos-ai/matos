@@ -81,7 +81,7 @@ fn cipher() -> SecretCipher {
 }
 
 fn usecase(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone()).with_secrets_cipher(cipher())
+    MatosUseCase::with_test_policies(pool.clone()).with_secrets_cipher(cipher())
 }
 
 async fn client(usecase: &MatosUseCase, organization_id: OrganizationId, name: &str) -> Client {
@@ -1078,7 +1078,7 @@ async fn without_a_secrets_key_nothing_is_probed_or_stored() {
         &ScriptedConnector::healthy(),
     )
     .await;
-    let keyless = MatosUseCase::with_local_policies(pool.clone());
+    let keyless = MatosUseCase::with_test_policies(pool.clone());
     let connector = ScriptedConnector::healthy();
     let admin = subject(organization_id, true);
 

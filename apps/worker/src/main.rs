@@ -141,11 +141,9 @@ async fn main() -> anyhow::Result<()> {
         args.delegation.key.as_deref().context(
             "DELEGATION_KEY is required: the worker reads the delegations the API sealed",
         )?;
-    let mut usecase = MatosUseCase::with_policies(
-        pool.clone(),
-        args.authz.pdp_client().map_err(anyhow::Error::msg)?,
-    )
-    .with_cipher(SecretCipher::from_base64(key)?);
+    let (client_id, client_secret) = args.authz.pdp_client().map_err(anyhow::Error::msg)?;
+    let mut usecase = MatosUseCase::with_policies(pool.clone(), client_id, client_secret)
+        .with_cipher(SecretCipher::from_base64(key)?);
     match &args.secrets.key {
         Some(key) => {
             usecase = usecase.with_secrets_cipher(

@@ -224,7 +224,7 @@ async fn backend() -> Backend {
 }
 
 fn usecase_of(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[5u8; 32]).unwrap())
 }
 

@@ -477,7 +477,7 @@ mod tests {
             client::{Client, links::tests::client, ports::MockClientRepository},
             integration::ports::MockIntegrationInstanceRepository,
         },
-        infrastructure::authorization::LocalPolicyEngine,
+        infrastructure::authorization::CedarPolicyEngine,
     };
 
     const KEY: &str = "sk-0123456789abcdef-wxyz";
@@ -650,7 +650,7 @@ mod tests {
         let organization_id = OrganizationId::new();
         let acme = client(organization_id, "Acme");
         let member = subject(organization_id, false);
-        let authorizer = LocalPolicyEngine;
+        let authorizer = CedarPolicyEngine::new();
         let id = IntegrationInstanceId::new();
 
         let created = IntegrationInstanceService::new(

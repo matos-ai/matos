@@ -17,8 +17,8 @@ async fn main() -> anyhow::Result<()> {
     let pool = postgres::connect(&args.database.url, args.database.max_connections)
         .await
         .context("connecting to postgres")?;
-    let usecase =
-        MatosUseCase::with_policies(pool, args.authz.pdp_client().map_err(anyhow::Error::msg)?);
+    let (client_id, client_secret) = args.authz.pdp_client().map_err(anyhow::Error::msg)?;
+    let usecase = MatosUseCase::with_policies(pool, client_id, client_secret);
     let verifier = FerrisKeyVerifier::with_audience(
         AcceptedClients::new(args.accepted_agents).with_agent_clients(),
         args.audience,

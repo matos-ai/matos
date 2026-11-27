@@ -69,7 +69,7 @@ async fn fixture(actor: Option<&str>) -> Option<Fixture> {
     };
     let pool = postgres::connect(&url, 3).await.unwrap();
     let organization = organization(&pool).await;
-    let usecase = MatosUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_test_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     let state = AppState {

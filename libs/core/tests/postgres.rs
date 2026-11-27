@@ -65,7 +65,7 @@ fn member(organization_id: OrganizationId) -> Subject {
 }
 
 fn usecase(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
 }
 
 async fn outbox_kinds_for_run(pool: &PgPool, run_id: Uuid) -> Vec<String> {

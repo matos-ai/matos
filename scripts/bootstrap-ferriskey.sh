@@ -148,7 +148,6 @@ cat <<SUMMARY
      AGENT_CREDENTIALS=${AGENT_CREDENTIALS}
      PROVISIONER_CLIENT_ID=${PROVISIONER_CLIENT_ID}
      PROVISIONER_CLIENT_SECRET=${PROVISIONER_SECRET}
-     AUTHZ_ENGINE=authzen   # optional: ask FerrisKey's AuthZEN decision point instead of the local engine (default: local)
      DELEGATION_KEY=<openssl rand -base64 32, the same for the API and the worker>
      SECRETS_KEY=<openssl rand -base64 32, distinct from DELEGATION_KEY, the same for the API and the worker>
 

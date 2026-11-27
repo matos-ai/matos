@@ -72,7 +72,7 @@ async fn setup() -> Option<(PgPool, MatosUseCase, OrganizationId)> {
     .await
     .unwrap();
     let organization_id = organization(&pool).await;
-    let usecase = MatosUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_test_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap());
     Some((pool, usecase, organization_id))

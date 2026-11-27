@@ -32,6 +32,7 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+matos-core = { workspace = true, features = ["test-policies"] }
 chrono.workspace = true
 jsonwebtoken.workspace = true
 reqwest.workspace = true

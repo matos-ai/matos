@@ -5177,6 +5177,7 @@ dependencies = [
  "chrono-tz",
  "croner",
  "matos-common",
+ "matos-core",
  "matos-events",
  "matos-macros",
  "matos-telemetry",

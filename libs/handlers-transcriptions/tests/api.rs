@@ -273,7 +273,7 @@ fn caller(organization: &Organization, actor: Option<&str>) -> Caller {
 }
 
 fn usecase(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[9u8; 32]).unwrap())
 }
 

@@ -73,7 +73,7 @@ fn credentials(organization_id: OrganizationId) -> GithubAppCredentials {
 }
 
 fn usecase(pool: &PgPool, byte: u8) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[byte; 32]).unwrap())
 }
 
@@ -197,7 +197,7 @@ async fn sealed_secrets_are_bound_to_their_organization_and_key() {
     assert!(usecase.github_app_for(second).await.is_err());
     assert!(self::usecase(&pool, 2).github_app_for(first).await.is_err());
     assert!(
-        MatosUseCase::with_local_policies(pool.clone())
+        MatosUseCase::with_test_policies(pool.clone())
             .github_app_for(first)
             .await
             .is_err()

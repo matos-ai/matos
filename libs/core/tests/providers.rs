@@ -62,7 +62,7 @@ fn subject(organization_id: OrganizationId, is_admin: bool) -> Subject {
 }
 
 fn usecase(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
 }
 
@@ -272,7 +272,7 @@ async fn invalid_providers_are_refused() {
 async fn without_a_secrets_key_nothing_can_be_stored() {
     let Some(pool) = pool().await else { return };
     let organization_id = organization(&pool).await;
-    let usecase = MatosUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_test_policies(pool.clone());
 
     let put = usecase
         .put_provider(anthropic(subject(organization_id, true)))

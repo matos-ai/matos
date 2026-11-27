@@ -650,62 +650,48 @@ mod tests {
         assert!(decisions.iter().all(denied_as_unavailable), "{decisions:?}");
     }
 
-    fn real_pdp() -> Option<AuthzenAuthorizer<Fixed>> {
+    fn real_pdp() -> Option<(AuthzenAuthorizer<Fixed>, String)> {
         let issuer = std::env::var("MATOS_PDP_ISSUER").ok()?;
         let secret = std::env::var("MATOS_PDP_CLIENT_SECRET").ok()?;
-        Some(AuthzenAuthorizer::new(
-            Fixed(issuer),
+        let pdp = AuthzenAuthorizer::new(
+            Fixed(issuer.clone()),
             PdpCredentials {
                 client_id: "matos-api".into(),
                 client_secret: SecretToken::new(secret),
             },
-        ))
+        );
+        Some((pdp, issuer.trim_end_matches('/').to_owned()))
     }
 
     #[tokio::test]
     #[ignore = "needs a FerrisKey with the Matos policies: MATOS_PDP_ISSUER and MATOS_PDP_CLIENT_SECRET"]
-    async fn the_real_pdp_decides_like_the_local_engine() {
-        let Some(pdp) = real_pdp() else {
+    async fn the_real_pdp_decides_like_the_corpus() {
+        let Some((pdp, issuer)) = real_pdp() else {
             panic!("MATOS_PDP_ISSUER and MATOS_PDP_CLIENT_SECRET are required");
         };
-        let org = OrganizationId::new();
-        let in_org = |action: Action, actor: Option<&str>| {
-            let mut asked = request(action);
-            asked.subject.organization_id = org;
-            asked.resource.organization_id = org;
-            asked.subject.actor = actor.map(str::to_owned);
-            asked
-        };
-        let create = in_org(Action::CardCreate, None);
-        let agent_move = in_org(
-            Action::CardMove {
-                from: Column::Proposed,
-                to: Column::Todo,
-            },
-            Some("matos-agent-captain"),
-        );
-        let human_move = in_org(
-            Action::CardMove {
-                from: Column::Proposed,
-                to: Column::Todo,
-            },
-            None,
-        );
-        let mut foreign = in_org(Action::CardRead, None);
-        foreign.resource.organization_id = OrganizationId::new();
+        let corpus: Vec<Value> = include_str!("../../../tests/fixtures/authz_parity.jsonl")
+            .lines()
+            .step_by(7)
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert!(corpus.len() > 400);
 
-        assert_eq!(pdp.evaluate(&create).await.unwrap(), Decision::Allow);
-        assert!(matches!(
-            pdp.evaluate(&agent_move).await.unwrap(),
-            Decision::Deny { reason } if reason != PDP_UNAVAILABLE
-        ));
-        let decisions = pdp
-            .evaluate_all(&[create, agent_move, human_move, foreign])
-            .await
-            .unwrap();
-        assert_eq!(decisions[0], Decision::Allow);
-        assert!(matches!(&decisions[1], Decision::Deny { reason } if reason != PDP_UNAVAILABLE));
-        assert_eq!(decisions[2], Decision::Allow);
-        assert!(matches!(&decisions[3], Decision::Deny { reason } if reason != PDP_UNAVAILABLE));
+        for chunk in corpus.chunks(MAX_BATCH) {
+            let body = json!({
+                "evaluations": chunk.iter().map(|case| &case["evaluation"]).collect::<Vec<_>>(),
+                "options": { "evaluations_semantic": "execute_all" },
+            });
+            let answer = pdp.post(&issuer, "evaluations", &body).await.unwrap();
+            let verdicts: Verdicts = serde_json::from_value(answer).unwrap();
+            assert_eq!(verdicts.evaluations.len(), chunk.len());
+            for (case, verdict) in chunk.iter().zip(&verdicts.evaluations) {
+                assert_eq!(
+                    verdict.decision,
+                    case["allow"].as_bool().unwrap(),
+                    "{}",
+                    case["evaluation"]
+                );
+            }
+        }
     }
 }

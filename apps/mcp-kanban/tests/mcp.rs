@@ -120,7 +120,7 @@ async fn harness() -> Option<Harness> {
         AcceptedClients::new([AGENT, CAPTAIN]).with_agent_clients(),
         AUDIENCE,
     );
-    let usecase = MatosUseCase::with_local_policies(pool.clone());
+    let usecase = MatosUseCase::with_test_policies(pool.clone());
     let app = router(usecase.clone(), verifier, base.clone());
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -359,7 +359,7 @@ async fn a_crew_agents_own_client_acts_as_that_agent_only_while_it_is_active() {
         "a crew agent proposes no card"
     );
     assert!(
-        payload(&created).to_string().contains("agent:bernard"),
+        payload(&created).to_string().contains("card.create denied"),
         "{created:?}"
     );
     let found = client

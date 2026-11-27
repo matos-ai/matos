@@ -32,7 +32,6 @@ Le détail est dans [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 MVP fonctionnel de bout en bout sur une stack locale, avec un modèle de 7 milliards de paramètres (`qwen2.5:7b-instruct`) sur Ollama. Limites connues :
 
 - La qualité de l'extraction dépend fortement du modèle : sur le jeu d'évaluation (`libs/runtime-rig/eval`), le rappel est de 82 %.
-- L'autorisation passe par un moteur de politique local. Il sera remplacé par le PDP AuthZEN de FerrisKey quand celui-ci exposera son endpoint ([`docs/ferriskey-needs.md`](docs/ferriskey-needs.md)).
 - Une délégation reste bornée par la session FerrisKey de l'utilisateur, en attendant un grant de délégation durable côté FerrisKey.
 
 ## Démarrer en local

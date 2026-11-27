@@ -64,7 +64,7 @@ fn user(organization_id: OrganizationId, id: &str) -> Subject {
 }
 
 fn usecase(pool: &PgPool) -> MatosUseCase {
-    MatosUseCase::with_local_policies(pool.clone())
+    MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[7u8; 32]).unwrap())
 }
 
@@ -304,7 +304,7 @@ async fn tokens_are_sealed_at_rest_and_bound_to_their_row() {
         .unwrap_err();
     assert!(matches!(moved, CoreError::Internal(_)), "{moved}");
 
-    let other_key = MatosUseCase::with_local_policies(pool.clone())
+    let other_key = MatosUseCase::with_test_policies(pool.clone())
         .with_secrets_cipher(SecretCipher::new(&[8u8; 32]).unwrap());
     sqlx::query("UPDATE mcp_connections SET subject = 'user-1' WHERE connector_id = $1")
         .bind(id.0)
@@ -552,7 +552,7 @@ async fn agents_cannot_touch_connectors_and_a_missing_key_refuses_to_store_token
         Err(CoreError::Forbidden { .. })
     ));
 
-    let keyless = MatosUseCase::with_local_policies(pool.clone());
+    let keyless = MatosUseCase::with_test_policies(pool.clone());
     assert!(!keyless.secrets_configured());
     let refused = keyless
         .start_mcp_authorization(user(organization_id, "user-1"), id, REDIRECT)

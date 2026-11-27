@@ -92,7 +92,10 @@ async fn fake_github(calls: Arc<AtomicUsize>) -> String {
     spawn(app).await
 }
 
+static EXECUTOR_STATUS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 struct Fixture {
+    _executor_status: tokio::sync::MutexGuard<'static, ()>,
     github_calls: Arc<AtomicUsize>,
     pool: PgPool,
     usecase: MatosUseCase,
@@ -105,6 +108,7 @@ async fn fixture() -> Option<Fixture> {
         eprintln!("skipped: DATABASE_URL is unset");
         return None;
     };
+    let executor_status = EXECUTOR_STATUS.lock().await;
     let pool = postgres::connect(&url, 3).await.unwrap();
     let id = Uuid::now_v7();
     let slug = format!("test-{}", id.simple());
@@ -125,7 +129,7 @@ async fn fixture() -> Option<Fixture> {
         issuer_url,
         created_at: Utc::now(),
     };
-    let usecase = MatosUseCase::with_local_policies(pool.clone())
+    let usecase = MatosUseCase::with_test_policies(pool.clone())
         .with_cipher(SecretCipher::new(&[1u8; 32]).unwrap())
         .with_secrets_cipher(SecretCipher::new(&[2u8; 32]).unwrap());
     let state = AppState {
@@ -163,6 +167,7 @@ async fn fixture() -> Option<Fixture> {
         .layer(Extension(caller))
         .with_state(state);
     let fixture = Fixture {
+        _executor_status: executor_status,
         github_calls,
         pool,
         usecase,

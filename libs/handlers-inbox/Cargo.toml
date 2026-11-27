@@ -16,6 +16,7 @@ serde.workspace = true
 utoipa.workspace = true
 
 [dev-dependencies]
+matos-core = { workspace = true, features = ["test-policies"] }
 matos-auth.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true

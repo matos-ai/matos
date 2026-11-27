@@ -18,6 +18,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+matos-core = { workspace = true, features = ["test-policies"] }
 axum.workspace = true
 sqlx.workspace = true
 
