@@ -166,6 +166,7 @@ export namespace Schemas {
     month_start: string;
     spent_micros: number;
   };
+  export type CancelRunResponse = { already_cancelled: boolean; status: string };
   export type CapabilitiesResponse = { chat: boolean; embeddings: boolean; ocr: boolean; transcription: boolean };
   export type CardColumnDto = "proposed" | "todo" | "in_progress" | "done" | "rejected";
   export type CardCommentId = string;
@@ -2385,6 +2386,21 @@ export namespace Endpoints {
     };
     responses: { 200: Schemas.RunResponse; 401: Schemas.ApiErrorResponse; 404: Schemas.ApiErrorResponse };
   };
+  export type post_CancelRun = {
+    method: "POST";
+    path: "/api/v1/runs/{run_id}/cancel";
+    requestFormat: "json";
+    parameters: {
+      path: { run_id: string };
+    };
+    responses: {
+      200: Schemas.CancelRunResponse;
+      401: Schemas.ApiErrorResponse;
+      403: Schemas.ApiErrorResponse;
+      404: Schemas.ApiErrorResponse;
+      409: Schemas.ApiErrorResponse;
+    };
+  };
   export type get_ListRunEvents = {
     method: "GET";
     path: "/api/v1/runs/{run_id}/events";
@@ -2881,6 +2897,7 @@ export type EndpointByMethod = {
     "/api/v1/routines/{routine_id}/launch": Endpoints.post_LaunchRoutine;
     "/api/v1/routines/{routine_id}/triggers": Endpoints.post_AddRoutineTrigger;
     "/api/v1/routines/{routine_id}/triggers/{trigger_id}/rotate-token": Endpoints.post_RotateRoutineTriggerToken;
+    "/api/v1/runs/{run_id}/cancel": Endpoints.post_CancelRun;
     "/api/v1/skills": Endpoints.post_CreateSkill;
     "/api/v1/skills/{skill_id}/archive": Endpoints.post_ArchiveSkill;
     "/api/v1/sources": Endpoints.post_CreateSource;

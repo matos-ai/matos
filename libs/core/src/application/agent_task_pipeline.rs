@@ -11,7 +11,7 @@ use tracing::Instrument;
 use super::{
     MatosUseCase,
     agent_run::{AgentTaskSource, TaskStage},
-    execute_pipeline::defang_mentions,
+    execute_pipeline::{CANCEL_POLL_EVERY, defang_mentions},
     execute_stream::truncate_chars,
     intervene_pipeline::{
         card_link, carried_calls, fenced, format_cost, is_interruption, output_of, reason_of,
@@ -48,6 +48,7 @@ use crate::domain::{
 };
 
 const AGENT_TASK_SEQ: i32 = 0;
+const CANCELLED_STEP_ERROR: &str = "cancelled";
 const FIELD_MAX_CHARS: usize = 8_000;
 const COMMENT_MAX_CHARS: usize = 2_000;
 const COMMENTS_MAX_COUNT: usize = 20;
@@ -156,6 +157,11 @@ struct Prepared {
     target: ModelTarget,
 }
 
+enum TaskEnd {
+    Finished(Result<(), String>),
+    Cancelled,
+}
+
 struct Finished {
     result: Result<(), String>,
     records: Vec<ToolRecord>,
@@ -254,7 +260,12 @@ impl<R: TaskRuntime, O: McpOAuth, G: McpGateway> AgentTaskPipeline<R, O, G> {
         tracing::info!(%run_id, resumed = context.resumed, "agent task claimed");
         self.track(&context, TaskStage::Started).await;
         let result = match self.run_task(&context).await {
-            Ok(result) => result,
+            Ok(TaskEnd::Finished(result)) => result,
+            Ok(TaskEnd::Cancelled) => {
+                self.usecase.finish_cancelled(run_id).await?;
+                tracing::info!(%run_id, "agent task cancelled");
+                return Ok(());
+            }
             Err(error) => {
                 tracing::warn!(%run_id, %error, "agent task interrupted, a later sweep resumes it");
                 return Err(error);
@@ -305,12 +316,12 @@ impl<R: TaskRuntime, O: McpOAuth, G: McpGateway> AgentTaskPipeline<R, O, G> {
         }
     }
 
-    async fn run_task(&self, context: &AgentTaskContext) -> Result<Result<(), String>, CoreError> {
+    async fn run_task(&self, context: &AgentTaskContext) -> Result<TaskEnd, CoreError> {
         let previous = context.steps.iter().find(|step| step.seq == AGENT_TASK_SEQ);
         match previous {
             Some(done) if matches!(done.status, StepStatus::Succeeded | StepStatus::Skipped) => {
                 self.restate(context, done, Ok(())).await;
-                return Ok(Ok(()));
+                return Ok(TaskEnd::Finished(Ok(())));
             }
             Some(failed) if failed.status == StepStatus::Failed => {
                 let reason = failed
@@ -318,7 +329,7 @@ impl<R: TaskRuntime, O: McpOAuth, G: McpGateway> AgentTaskPipeline<R, O, G> {
                     .clone()
                     .unwrap_or_else(|| UNKNOWN_REASON.to_owned());
                 self.restate(context, failed, Err(reason.clone())).await;
-                return Ok(Err(reason));
+                return Ok(TaskEnd::Finished(Err(reason)));
             }
             _ => {}
         }
@@ -339,7 +350,10 @@ impl<R: TaskRuntime, O: McpOAuth, G: McpGateway> AgentTaskPipeline<R, O, G> {
             Err(error) if is_interruption(&error) => return Err(error),
             Err(error) => {
                 let finished = Finished::failed(reason_of(&error), Vec::new());
-                return self.conclude(context, step, started, finished, None).await;
+                return self
+                    .conclude(context, step, started, finished, None)
+                    .await
+                    .map(TaskEnd::Finished);
             }
         };
         let carried = carried_calls(previous);
@@ -351,7 +365,8 @@ impl<R: TaskRuntime, O: McpOAuth, G: McpGateway> AgentTaskPipeline<R, O, G> {
             let slug = prepared.source.agent.slug.as_str().to_owned();
             return self
                 .conclude(context, step, started, finished, Some(&slug))
-                .await;
+                .await
+                .map(TaskEnd::Finished);
         }
         let Prepared {
             source,
@@ -385,8 +400,26 @@ impl<R: TaskRuntime, O: McpOAuth, G: McpGateway> AgentTaskPipeline<R, O, G> {
                 records: Vec::new(),
             }),
         };
-        let reported = self.runtime.run_task(&system, &request, &tools).await;
+        let raced = match self
+            .usecase
+            .cancel_reason(run.organization_id, run.id)
+            .await
+        {
+            Some(reason) => Err(reason),
+            None => tokio::select! {
+                reported = self.runtime.run_task(&system, &request, &tools) => Ok(reported),
+                reason = self.cancelled(run) => Err(reason),
+            },
+        };
         let Progress { step, records } = tools.progress.into_inner();
+        let reported = match raced {
+            Ok(reported) => reported,
+            Err(reason) => {
+                return self
+                    .conclude_cancelled(context, step, started, records, &reason, &slug)
+                    .await;
+            }
+        };
         let finished = match reported {
             Ok(report) => Finished::reported(report),
             Err(error) => Finished::failed(reason_of(&error), records),
@@ -398,7 +431,52 @@ impl<R: TaskRuntime, O: McpOAuth, G: McpGateway> AgentTaskPipeline<R, O, G> {
         if let (Ok(()), Some(report)) = (&result, report) {
             self.publish_report(context, &source, &report).await;
         }
-        Ok(result)
+        Ok(TaskEnd::Finished(result))
+    }
+
+    async fn cancelled(&self, run: &Run) -> String {
+        let mut tick = tokio::time::interval_at(
+            tokio::time::Instant::now() + CANCEL_POLL_EVERY,
+            CANCEL_POLL_EVERY,
+        );
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tick.tick().await;
+            if let Some(reason) = self
+                .usecase
+                .cancel_reason(run.organization_id, run.id)
+                .await
+            {
+                return reason;
+            }
+        }
+    }
+
+    async fn conclude_cancelled(
+        &self,
+        context: &AgentTaskContext,
+        mut step: Step,
+        started: Instant,
+        records: Vec<ToolRecord>,
+        reason: &str,
+        agent_slug: &str,
+    ) -> Result<TaskEnd, CoreError> {
+        step.output = Some(output_of(&records, None, "")?);
+        step.latency_ms = Some(i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX));
+        step.finished_at = Some(Utc::now());
+        step.status = StepStatus::Failed;
+        step.error = Some(CANCELLED_STEP_ERROR.to_owned());
+        self.usecase.record_step(context.run.clone(), step).await?;
+        let run = &context.run;
+        let body = defang_mentions(&format!("{reason}."));
+        if let Err(error) = self
+            .usecase
+            .comment_card_as_agent(run.id, context.card_id, agent_slug, body)
+            .await
+        {
+            tracing::warn!(run_id = %run.id, %error, "the card was not commented");
+        }
+        Ok(TaskEnd::Cancelled)
     }
 
     /// Files the final answer as a markdown artifact of the card. A failure is

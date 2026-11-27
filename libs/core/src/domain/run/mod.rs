@@ -225,11 +225,12 @@ impl Run {
         Ok(())
     }
 
-    pub fn cancel(&mut self, now: DateTime<Utc>) -> Result<(), CoreError> {
+    pub fn cancel(&mut self, now: DateTime<Utc>, reason: String) -> Result<(), CoreError> {
         self.transition(
             &[RunStatus::Queued, RunStatus::Running],
             RunStatus::Cancelled,
         )?;
+        self.failure = Some(reason);
         self.finished_at = Some(now);
         Ok(())
     }
@@ -368,7 +369,8 @@ mod tests {
     #[test]
     fn a_finished_run_is_final() {
         let mut run = queued();
-        run.cancel(Utc::now()).unwrap();
+        run.cancel(Utc::now(), "stopped".into()).unwrap();
+        assert_eq!(run.failure.as_deref(), Some("stopped"));
         assert!(matches!(run.start(Utc::now()), Err(CoreError::Conflict(_))));
         assert!(run.fail("late".into(), Utc::now()).is_err());
         assert_eq!(run.status, RunStatus::Cancelled);

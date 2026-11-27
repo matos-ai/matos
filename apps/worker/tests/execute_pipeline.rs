@@ -3141,3 +3141,174 @@ async fn live_text_and_stored_events_are_published_in_order_on_the_stream_channe
     assert!(events_at.is_some());
     assert_eq!(last_event, last_seq);
 }
+
+async fn cancel_run_row(pool: &PgPool, run_id: RunId) {
+    sqlx::query(
+        "UPDATE runs SET status = 'cancelled', finished_at = now(), failure = 'Arrêté par Alice' WHERE id = $1",
+    )
+    .bind(run_id.0)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn step_error(pool: &PgPool, run_id: RunId) -> (String, Option<String>) {
+    sqlx::query_as("SELECT status, error FROM run_steps WHERE run_id = $1")
+        .bind(run_id.0)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+fn assert_stopped_once(posted: &[(String, Option<String>, String)]) {
+    assert_eq!(posted.len(), 1);
+    assert!(posted[0].2.starts_with("Arrêté par Alice."));
+}
+
+#[tokio::test]
+async fn a_run_cancelled_while_the_task_is_followed_stops_the_job_and_leaves_a_trace() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_start()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    runner.expect_follow().returning(|_, sender| {
+        let lines = scripted_conversation();
+        Box::pin(async move {
+            for line in lines {
+                sender.send(line).await.unwrap();
+            }
+            std::future::pending().await
+        })
+    });
+    let deleted = Arc::new(Mutex::new(Vec::new()));
+    let record = deleted.clone();
+    runner.expect_delete().times(1).returning(move |run_id| {
+        record.lock().unwrap().push(run_id);
+        Box::pin(std::future::ready(Ok(())))
+    });
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+    let stopper = async {
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        cancel_run_row(&world.pool, world.run_id).await;
+        std::time::Instant::now()
+    };
+
+    let (ended, cancelled_at) = tokio::time::timeout(Duration::from_secs(10), async {
+        let run = async {
+            pipeline.execute(world.run_id, None).await.unwrap();
+            std::time::Instant::now()
+        };
+        tokio::join!(run, stopper)
+    })
+    .await
+    .unwrap();
+
+    assert!(ended.duration_since(cancelled_at) < Duration::from_secs(2));
+    assert_eq!(
+        run_row(&world.pool, world.run_id).await,
+        ("cancelled".into(), Some("Arrêté par Alice".into()))
+    );
+    assert_eq!(*deleted.lock().unwrap(), [world.run_id]);
+    assert_eq!(
+        step_error(&world.pool, world.run_id).await,
+        ("failed".into(), Some("cancelled".into()))
+    );
+    let events = run_events(&world.pool, world.run_id).await;
+    let kinds: Vec<&str> = events.iter().map(|event| event.1.as_str()).collect();
+    assert_eq!(
+        kinds,
+        ["assistant_text", "tool_use", "tool_result", "system"]
+    );
+    assert_eq!(events[3].0, 4);
+    assert_eq!(events[3].2["text"], "Arrêté par Alice");
+    let posted = comments(&world.pool, world.card.id).await;
+    assert_stopped_once(&posted);
+    assert!(posted[0].2.contains("\n\nJe regarde le dépôt."));
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert_closed(&world).await;
+}
+
+#[tokio::test]
+async fn a_run_cancelled_before_it_is_claimed_starts_no_job() {
+    let Some(world) = world().await else { return };
+    cancel_run_row(&world.pool, world.run_id).await;
+    let pipeline = pipeline(&world, MockTaskRunner::new(), MockCodeHost::new());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "cancelled");
+}
+
+#[tokio::test]
+async fn a_run_cancelled_while_it_is_prepared_never_starts_a_job() {
+    let Some(world) = world().await else { return };
+    let (pool, run_id) = (world.pool.clone(), world.run_id);
+    let mut host = MockCodeHost::new();
+    host.expect_file_at().returning(move |_, _, _, _, _| {
+        let pool = pool.clone();
+        Box::pin(async move {
+            cancel_run_row(&pool, run_id).await;
+            Ok(None)
+        })
+    });
+    let pipeline = pipeline(&world, MockTaskRunner::new(), host);
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(
+        run_row(&world.pool, world.run_id).await,
+        ("cancelled".into(), Some("Arrêté par Alice".into()))
+    );
+    assert_eq!(
+        step_error(&world.pool, world.run_id).await,
+        ("failed".into(), Some("cancelled".into()))
+    );
+    let events = run_events(&world.pool, world.run_id).await;
+    assert_eq!(events.len(), 1);
+    assert_eq!((events[0].0, events[0].1.as_str()), (1, "system"));
+    assert_stopped_once(&comments(&world.pool, world.card.id).await);
+    assert_closed(&world).await;
+}
+
+#[tokio::test]
+async fn a_run_cancelled_after_the_agent_ended_pushes_nothing() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_start()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let (pool, run_id) = (world.pool.clone(), world.run_id);
+    let lines = lines_of(SAMPLE);
+    runner.expect_follow().returning(move |_, sender| {
+        let (pool, lines) = (pool.clone(), lines.clone());
+        Box::pin(async move {
+            for line in lines {
+                sender.send(line).await.unwrap();
+            }
+            cancel_run_row(&pool, run_id).await;
+            Ok(TaskOutcome::Succeeded)
+        })
+    });
+    let pipeline = pipeline(
+        &world,
+        deleting(runner),
+        host(&seen, world.organization_id, world.installation_id),
+    );
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(
+        run_row(&world.pool, world.run_id).await,
+        ("cancelled".into(), Some("Arrêté par Alice".into()))
+    );
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert_stopped_once(&comments(&world.pool, world.card.id).await);
+    assert_closed(&world).await;
+}

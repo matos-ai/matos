@@ -22,6 +22,10 @@ use crate::{
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+fn delete_params() -> DeleteParams {
+    DeleteParams::background().grace_period(0)
+}
+
 #[derive(Clone)]
 pub struct KubeTaskRunner {
     client: Client,
@@ -195,12 +199,27 @@ impl TaskRunner for KubeTaskRunner {
     async fn delete(&self, run_id: RunId) -> Result<(), CoreError> {
         match self
             .jobs()
-            .delete(&job_name(run_id), &DeleteParams::background())
+            .delete(&job_name(run_id), &delete_params())
             .await
         {
             Ok(_) => Ok(()),
             Err(error) if is_status(&error, 404) => Ok(()),
             Err(error) => Err(RunnerError::from(error).into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_job_is_deleted_without_grace_in_the_background() {
+        let params = delete_params();
+        assert_eq!(params.grace_period_seconds, Some(0));
+        assert!(matches!(
+            params.propagation_policy,
+            Some(kube::api::PropagationPolicy::Background)
+        ));
     }
 }

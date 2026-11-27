@@ -25,6 +25,7 @@ mod pipeline;
 mod provider;
 mod routine;
 mod run;
+mod run_cancel;
 mod run_event;
 mod run_stream;
 mod skill;
@@ -64,6 +65,7 @@ pub use intervention::StartedIntervention;
 pub use pipeline::{MeetingPipeline, PipelineConfig, RunContext};
 pub use provider::{ModelListing, ProviderFailure};
 pub use run::{AgentDelegation, RunTimeline, SubmittedTranscript};
+pub use run_cancel::RunCancellation;
 pub use transcription::PreparedTranscription;
 
 pub type MatosAuthorizer = AuditedAuthorizer<PolicyEngine>;

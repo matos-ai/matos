@@ -304,7 +304,7 @@ impl RunRepository for PgRunRepository<'_> {
             UPDATE runs
             SET status = $2, failure = $3, started_at = $4, finished_at = $5, trace_id = $6,
                 heartbeat_at = COALESCE($7, heartbeat_at)
-            WHERE id = $1
+            WHERE id = $1 AND status <> 'cancelled'
             "#,
             run.id.0,
             run.status.as_str(),
