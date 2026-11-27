@@ -542,3 +542,74 @@ async fn the_run_list_names_the_agent_and_filters_by_status_and_agent() {
     let (status, _) = fixture.runs("?status=maybe").await;
     assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
 }
+
+impl Fixture {
+    async fn event(&self, run: RunId, organization_id: OrganizationId, seq: i64, kind: &str) {
+        sqlx::query(
+            "INSERT INTO run_events (run_id, organization_id, seq, kind, payload) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(run.0)
+        .bind(organization_id.0)
+        .bind(seq)
+        .bind(kind)
+        .bind(json!({ "text": format!("event {seq}") }))
+        .execute(&self.pool)
+        .await
+        .unwrap();
+    }
+
+    async fn events(&self, run: RunId, query: &str) -> (reqwest::StatusCode, Value) {
+        let response = reqwest::get(format!("{}/api/v1/runs/{}/events{query}", self.base, run.0))
+            .await
+            .unwrap();
+        let status = response.status();
+        (status, response.json().await.unwrap())
+    }
+}
+
+#[tokio::test]
+async fn events_come_back_after_the_cursor_with_a_cursor_only_when_the_page_is_full() {
+    let Some(f) = fixture().await else { return };
+    let run = f.submit(f.organization.id, "Run").await;
+    for (seq, kind) in [(1, "system"), (2, "assistant_text"), (3, "tool_use")] {
+        f.event(run, f.organization.id, seq, kind).await;
+    }
+
+    let (status, all) = f.events(run, "").await;
+    let (_, first) = f.events(run, "?limit=2").await;
+    let (_, rest) = f.events(run, "?after=2&limit=2").await;
+
+    assert_eq!(status, 200);
+    assert_eq!(all["events"].as_array().unwrap().len(), 3);
+    assert_eq!(all["next_after"], Value::Null);
+    assert_eq!(first["events"][1]["seq"], 2);
+    assert_eq!(first["events"][1]["kind"], "assistant_text");
+    assert_eq!(first["events"][1]["payload"], json!({ "text": "event 2" }));
+    assert!(first["events"][1]["created_at"].is_string());
+    assert_eq!(first["next_after"], 2);
+    assert_eq!(rest["events"].as_array().unwrap().len(), 1);
+    assert_eq!(rest["events"][0]["kind"], "tool_use");
+    assert_eq!(rest["next_after"], Value::Null);
+}
+
+#[tokio::test]
+async fn a_negative_cursor_is_a_422() {
+    let Some(f) = fixture().await else { return };
+    let run = f.submit(f.organization.id, "Run").await;
+
+    let (status, _) = f.events(run, "?after=-1").await;
+
+    assert_eq!(status, 422);
+}
+
+#[tokio::test]
+async fn another_organizations_run_events_are_a_404() {
+    let Some(f) = fixture().await else { return };
+    let other = organization(&f.pool).await;
+    let foreign = f.submit(other.id, "Autre organisation").await;
+    f.event(foreign, other.id, 1, "system").await;
+
+    let (status, _) = f.events(foreign, "").await;
+
+    assert_eq!(status, 404);
+}

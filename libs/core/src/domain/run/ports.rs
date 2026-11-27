@@ -1,7 +1,11 @@
 use chrono::{DateTime, Utc};
 use matos_common::{CardId, CoreError, OrganizationId, RunId};
 
-use super::{Run, RunFilter, RunOverview, step::Step};
+use super::{
+    Run, RunFilter, RunOverview,
+    event::{RunEvent, SequencedRunEvent},
+    step::Step,
+};
 
 #[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 pub trait RunRepository: Send {
@@ -79,4 +83,22 @@ pub trait StepRepository: Send {
 
     /// Inserts the step, or replaces the one at the same `(run_id, seq)`.
     fn save(&mut self, step: &Step) -> impl Future<Output = Result<(), CoreError>> + Send;
+}
+
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
+pub trait RunEventRepository: Send {
+    fn append(
+        &mut self,
+        organization_id: OrganizationId,
+        run_id: RunId,
+        events: &[SequencedRunEvent],
+    ) -> impl Future<Output = Result<(), CoreError>> + Send;
+
+    fn list_after(
+        &mut self,
+        organization_id: OrganizationId,
+        run_id: RunId,
+        after_seq: i64,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<RunEvent>, CoreError>> + Send;
 }

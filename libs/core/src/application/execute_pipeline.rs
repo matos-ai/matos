@@ -50,6 +50,7 @@ use crate::{
         provider::{ModelAssignments, ModelRef},
         run::{
             Run, RunStatus, RunSubject, StepKind,
+            event::SequencedRunEvent,
             ports::{RunRepository, StepRepository},
             step::{Pricing, Step, StepStatus},
         },
@@ -58,6 +59,7 @@ use crate::{
     infrastructure::delegation::PgDelegationVault,
 };
 
+const EVENT_FLUSH_EVERY: Duration = Duration::from_millis(250);
 const TASK_TOKEN_SLOT: &str = "matos-task-token";
 const GRANT_GRACE: Duration = Duration::from_secs(5 * 60);
 const MEMBER_TOKEN_MARGIN: Duration = Duration::from_secs(10 * 60);
@@ -397,6 +399,7 @@ struct Progress {
     reader: StreamReader,
     step: Step,
     extras: Extras,
+    pending_events: Vec<SequencedRunEvent>,
 }
 
 #[derive(serde::Serialize)]
@@ -689,6 +692,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             reader: StreamReader::new(prepared.spec.model.harness(), prepared.redactor.clone()),
             step,
             extras,
+            pending_events: Vec::new(),
         });
         let result = self
             .drive(context, runner, host, &prepared, &progress, never_started)
@@ -700,6 +704,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             reader,
             step,
             mut extras,
+            ..
         } = progress.into_inner();
         extras.companions = companion_note(&prepared.skipped_companions, reader.companions());
         if let Ok(Finish::Audited {
@@ -1252,6 +1257,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
             |_| async {
                 let mut progress = progress.lock().await;
                 progress.reader.reset();
+                progress.pending_events.clear();
                 self.follow_once(context, runner, &mut progress).await
             },
         )
@@ -1334,10 +1340,16 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         let every = self.config.progress_every;
         let mut tick = tokio::time::interval_at(tokio::time::Instant::now() + every, every);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        let outcome = loop {
+        let mut events_tick = tokio::time::interval_at(
+            tokio::time::Instant::now() + EVENT_FLUSH_EVERY,
+            EVENT_FLUSH_EVERY,
+        );
+        events_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let result = loop {
             tokio::select! {
-                result = &mut follow => break result?,
+                result = &mut follow => break result,
                 Some(line) = lines.recv() => progress.reader.accept(&line),
+                _ = events_tick.tick() => self.flush_events(context, progress).await,
                 _ = tick.tick() => {
                     let refresh = progress.reader.take_dirty();
                     self.save_progress(context, progress, refresh).await;
@@ -1347,7 +1359,29 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         while let Ok(line) = lines.try_recv() {
             progress.reader.accept(&line);
         }
-        Ok(outcome)
+        self.flush_events(context, progress).await;
+        result
+    }
+
+    async fn flush_events(&self, context: &ExecutionContext, progress: &mut Progress) {
+        let fresh = progress.reader.take_events();
+        progress.pending_events.extend(fresh);
+        if progress.pending_events.is_empty() {
+            return;
+        }
+        if let Err(error) = self
+            .usecase
+            .append_run_events(
+                context.run.organization_id,
+                context.run.id,
+                progress.pending_events.clone(),
+            )
+            .await
+        {
+            tracing::warn!(run_id = %context.run.id, %error, "saving the run events failed");
+        } else {
+            progress.pending_events.clear();
+        }
     }
 
     /// Writes the step and stamps the run's heartbeat; `refresh` rebuilds the

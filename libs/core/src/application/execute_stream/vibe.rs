@@ -19,19 +19,16 @@ pub(super) struct VibeParser {
 impl VibeParser {
     pub(super) fn events(&mut self, line: &Value) -> Vec<AgentEvent> {
         match line["type"].as_str() {
-            Some("message") => {
-                self.message(line);
-                Vec::new()
-            }
+            Some("message") => self.message(line),
             Some("effect") => effect(line),
             Some("vibe_export") => vec![AgentEvent::Finished(self.finish(&line["export"]))],
             _ => Vec::new(),
         }
     }
 
-    fn message(&mut self, line: &Value) {
+    fn message(&mut self, line: &Value) -> Vec<AgentEvent> {
         if line["role"] != "assistant" {
-            return;
+            return Vec::new();
         }
         let text: String = line["content"]
             .as_array()
@@ -40,9 +37,11 @@ impl VibeParser {
             .filter(|part| part["type"] == "text")
             .filter_map(|part| part["text"].as_str())
             .collect();
-        if !text.is_empty() {
-            self.summary = Some(text);
+        if text.is_empty() {
+            return Vec::new();
         }
+        self.summary = Some(text.clone());
+        vec![AgentEvent::Text { text }]
     }
 
     fn finish(&self, export: &Value) -> AgentFinish {
@@ -208,7 +207,11 @@ mod tests {
         );
         assert!(parser.events(&json!({})).is_empty());
         assert!(parser.events(&json!("text")).is_empty());
-        assert!(parser.events(&assistant("hi")).is_empty());
+        assert_eq!(
+            parser.events(&assistant("hi")),
+            [AgentEvent::Text { text: "hi".into() }]
+        );
+        assert!(parser.events(&assistant("")).is_empty());
     }
 
     #[test]

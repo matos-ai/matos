@@ -138,6 +138,9 @@ impl fmt::Display for Harness {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AgentEvent {
+    Text {
+        text: String,
+    },
     ToolCall {
         id: String,
         tool: String,

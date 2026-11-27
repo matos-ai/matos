@@ -769,6 +769,8 @@ export namespace Schemas {
     repository?: (string | null) | undefined;
   };
   export type RunAgentResponse = { run_id: RunId };
+  export type RunEventResponse = { created_at: string; kind: string; payload: unknown; seq: number };
+  export type RunEventsResponse = { events: Array<RunEventResponse>; next_after?: (number | null) | undefined };
   export type RunListResponse = { items: Array<RunResponse>; total: number };
   export type StepStatusResponse = "running" | "succeeded" | "failed" | "skipped";
   export type ToolCallResponse = { latency_ms: number; succeeded: boolean; summary: string; tool: string };
@@ -2383,6 +2385,21 @@ export namespace Endpoints {
     };
     responses: { 200: Schemas.RunResponse; 401: Schemas.ApiErrorResponse; 404: Schemas.ApiErrorResponse };
   };
+  export type get_ListRunEvents = {
+    method: "GET";
+    path: "/api/v1/runs/{run_id}/events";
+    requestFormat: "json";
+    parameters: {
+      query: Partial<{ after: number; limit: number }>;
+      path: { run_id: string };
+    };
+    responses: {
+      200: Schemas.RunEventsResponse;
+      401: Schemas.ApiErrorResponse;
+      404: Schemas.ApiErrorResponse;
+      422: Schemas.ApiErrorResponse;
+    };
+  };
   export type get_ListRunIntegrationActions = {
     method: "GET";
     path: "/api/v1/runs/{run_id}/integration-actions";
@@ -2816,6 +2833,7 @@ export type EndpointByMethod = {
     "/api/v1/runs": Endpoints.get_ListRuns;
     "/api/v1/runs/active": Endpoints.get_ListActiveRuns;
     "/api/v1/runs/{run_id}": Endpoints.get_GetRun;
+    "/api/v1/runs/{run_id}/events": Endpoints.get_ListRunEvents;
     "/api/v1/runs/{run_id}/integration-actions": Endpoints.get_ListRunIntegrationActions;
     "/api/v1/runs/{run_id}/timeline": Endpoints.get_GetRunTimeline;
     "/api/v1/skills": Endpoints.get_ListSkills;

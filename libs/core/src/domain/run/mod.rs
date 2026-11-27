@@ -1,4 +1,5 @@
 pub mod active;
+pub mod event;
 pub mod locate;
 pub mod ports;
 pub mod service;

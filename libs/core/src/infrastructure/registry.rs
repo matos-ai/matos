@@ -29,6 +29,7 @@ pub mod domain {
     pub struct Routine;
     pub struct RoutineRun;
     pub struct Run;
+    pub struct RunEvent;
     pub struct Skill;
     pub struct Source;
     pub struct SourceEvent;
