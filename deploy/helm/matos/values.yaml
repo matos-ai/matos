@@ -262,6 +262,15 @@ egressProxy:
     tag: ""
   # -- Value of EGRESS_PROXY_PORT.
   port: 4130
+  # -- Package registries a build may reach through the proxy, GET and HEAD only and without a task token.
+  # These are the only hosts the proxy contacts for them; nothing else is reachable.
+  registries:
+    # -- Sparse index of crates.io (EGRESS_CRATES_INDEX_BASE), served under /crates-index/.
+    cratesIndex: https://index.crates.io
+    # -- Where the .crate files come from (EGRESS_CRATES_STATIC_BASE), served under /crates/.
+    cratesStatic: https://static.crates.io/crates
+    # -- The npm registry (EGRESS_NPM_BASE), served under /npm/.
+    npm: https://registry.npmjs.org
   # -- Key of the Secret holding the proxy's own DATABASE_URL. Point it at a
   # connection string for the matos_egress_proxy role (deploy/postgres/egress-proxy-role.sql),
   # which can only read the three tables the proxy needs. The default is the shared DATABASE_URL.
@@ -438,7 +447,7 @@ networkPolicy:
     kubeApi:
       to: []
       ports: [443, 6443]
-    # -- api.anthropic.com and github.com, reached by the egress proxy.
+    # -- api.anthropic.com, github.com, index.crates.io, static.crates.io and registry.npmjs.org, reached by the egress proxy.
     upstream:
       to: []
       ports: [443]

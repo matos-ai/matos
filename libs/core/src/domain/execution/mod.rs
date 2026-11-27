@@ -1,3 +1,4 @@
+pub mod companion;
 pub mod contribution;
 pub mod guard;
 pub mod harness;
@@ -11,8 +12,8 @@ use chrono::{DateTime, Utc};
 use matos_common::{CoreError, OrganizationId, RunId};
 use serde::{Deserialize, Serialize};
 
-pub use self::guard::PushGuard;
 use self::harness::{ANTIGRAVITY_MODELS, CODEX_MODELS, Harness};
+pub use self::{companion::Companion, guard::PushGuard};
 use crate::domain::{
     agent::SecretToken,
     card::{Card, Column},
@@ -380,6 +381,7 @@ pub struct TaskSpec {
     pub task_token: SecretToken,
     pub commit: CommitSettings,
     pub push_guard: PushGuard,
+    pub companions: Vec<Companion>,
 }
 
 /// How a change run commits: as whom, what its message may not contain, and
@@ -422,6 +424,12 @@ pub enum TaskLine {
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum TaskMarker {
     Cloned,
+    Companions {
+        #[serde(default)]
+        cloned: Vec<String>,
+        #[serde(default)]
+        failed: Vec<String>,
+    },
     Pushed {
         sha: String,
     },
@@ -511,6 +519,7 @@ pub struct TaskGrant {
     /// The only model the proxy lets the task ask Anthropic for.
     pub model: String,
     pub mode: ExecutionMode,
+    pub companions: Vec<RepositoryRef>,
     /// Who started the run, whose own Anthropic key is used before the
     /// organization's; `None` on grants issued before it was recorded.
     pub initiated_by: Option<String>,
@@ -587,6 +596,7 @@ mod tests {
             branch: "matos/0a1b2c3d4e5f".into(),
             model: "claude-sonnet-5-5".into(),
             mode: ExecutionMode::Change,
+            companions: Vec::new(),
             initiated_by: None,
             expires_at: now + chrono::Duration::minutes(5),
             revoked_at: None,
@@ -733,6 +743,30 @@ mod tests {
         let done: TaskMarker =
             serde_json::from_str(r#"{"type":"matos","event":"audit_done"}"#).unwrap();
         assert_eq!(done, TaskMarker::AuditDone);
+    }
+
+    #[test]
+    fn the_companions_marker_lists_what_was_cloned_and_what_failed() {
+        let marker: TaskMarker = serde_json::from_str(
+            r#"{"type":"matos","event":"companions","cloned":["acme/sdk"],"failed":["acme/docs"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            marker,
+            TaskMarker::Companions {
+                cloned: vec!["acme/sdk".into()],
+                failed: vec!["acme/docs".into()]
+            }
+        );
+        let bare: TaskMarker =
+            serde_json::from_str(r#"{"type":"matos","event":"companions"}"#).unwrap();
+        assert_eq!(
+            bare,
+            TaskMarker::Companions {
+                cloned: vec![],
+                failed: vec![]
+            }
+        );
     }
 
     #[test]

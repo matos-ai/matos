@@ -2,6 +2,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/guard.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/companions.sh"
 
 marker() {
   printf '{"type":"matos","event":"%s"%s}\n' "$1" "${2:-}"
@@ -74,6 +75,11 @@ git config --global user.email "${COMMIT_AUTHOR_EMAIL:-executor@localhost}"
 
 git clone --depth 50 --branch "$BASE_BRANCH" "$GIT_REMOTE" repo >&2
 marker cloned
+
+export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$COMPANION_WORKSPACE/.matos/target}"
+companions_clone
+write_registry_config
 
 write_codex_config() {
   mkdir -p "$CODEX_HOME"
