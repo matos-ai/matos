@@ -8,9 +8,11 @@ import { Button } from '#/components/ui/button'
 import {
 	describeConnectError,
 	describeCreateAppError,
+	describeMyConnectError,
 } from '#/domain/integrations/github-errors'
 import {
 	useConnectGithub,
+	useConnectMyGithub,
 	useCreateGithubApp,
 } from '#/domain/integrations/hooks/use-github'
 import { hasErrorKey } from '#/lib/api-error'
@@ -174,6 +176,41 @@ export function GithubInstallCallbackPage({
 						: undefined
 			}
 			pending="Connexion de l'installation…"
+		/>
+	)
+}
+
+interface MemberCallbackProps {
+	code: string
+	state: string
+}
+
+/** Retour de GitHub après l'autorisation du compte personnel du membre. */
+export function GithubMemberCallbackPage({ code, state }: MemberCallbackProps) {
+	const { mutateAsync } = useConnectMyGithub()
+	const navigate = useNavigate()
+	const submitted = useRef(false)
+	const [failure, setFailure] = useState<unknown>(null)
+
+	useEffect(() => {
+		if (submitted.current) return
+		submitted.current = true
+		mutateAsync({ body: { code, state } }).then(
+			(connection) =>
+				void navigate({
+					to: '/settings/integrations/github',
+					search: connection.login ? { compte: connection.login } : {},
+					replace: true,
+				}),
+			(error: unknown) => setFailure(error ?? new Error('échec')),
+		)
+	}, [code, state, mutateAsync, navigate])
+
+	return (
+		<Shell
+			title="Connexion de ton compte GitHub"
+			problem={failure ? describeMyConnectError(failure) : null}
+			pending="Connexion de ton compte GitHub…"
 		/>
 	)
 }

@@ -186,7 +186,7 @@ describe('GitHub settings page', () => {
 				'Application GitHub créée. Installe-la maintenant sur GitHub.',
 			),
 		).toBeTruthy()
-		expect(screen.getByText(APP.slug)).toBeTruthy()
+		expect(await screen.findByText(APP.slug)).toBeTruthy()
 		await user.click(
 			screen.getByRole('button', { name: 'Installer sur GitHub' }),
 		)
@@ -238,5 +238,266 @@ describe('GitHub settings page', () => {
 			]),
 		)
 		expect(await screen.findByText('GitHub déconnecté')).toBeTruthy()
+	})
+	describe('personal account', () => {
+		const ORG = { app: null, installation: null }
+
+		it('shows the connected login and disconnects after confirmation', async () => {
+			const user = userEvent.setup()
+			const fetchMock = await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': {
+					connected: true,
+					login: 'octo',
+					connected_at: '2026-11-03T00:00:00Z',
+				},
+				'DELETE /api/v1/me/github': { status: 204, body: null },
+			})
+
+			expect(await screen.findByText('@octo')).toBeTruthy()
+			await user.click(screen.getByRole('button', { name: 'Déconnecter' }))
+			const dialog = await screen.findByRole('alertdialog')
+			await user.click(
+				within(dialog).getByRole('button', { name: 'Déconnecter' }),
+			)
+
+			await waitFor(() =>
+				expect(calls(fetchMock, 'DELETE')).toEqual([
+					{ path: '/api/v1/me/github', body: undefined },
+				]),
+			)
+		})
+
+		it('fetches the authorize url and sends the browser there', async () => {
+			const user = userEvent.setup()
+			const assign = vi.fn()
+			vi.stubGlobal('location', { ...window.location, assign })
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { connected: false },
+				'GET /api/v1/me/github/authorize': {
+					url: 'https://github.com/login/oauth/authorize?client_id=x',
+				},
+			})
+
+			expect(await screen.findByText(/seront faits en ton nom/)).toBeTruthy()
+			await user.click(
+				screen.getByRole('button', { name: 'Connecter mon compte GitHub' }),
+			)
+
+			await waitFor(() =>
+				expect(assign).toHaveBeenCalledWith(
+					'https://github.com/login/oauth/authorize?client_id=x',
+				),
+			)
+		})
+
+		it('says an admin must create the app when the organization has none', async () => {
+			const user = userEvent.setup()
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { connected: false },
+				'GET /api/v1/me/github/authorize': {
+					status: 409,
+					body: { code: 'github_app_missing', message: 'x', status: 409 },
+				},
+			})
+
+			await user.click(
+				await screen.findByRole('button', {
+					name: 'Connecter mon compte GitHub',
+				}),
+			)
+
+			expect(
+				await screen.findByText(
+					"L'organisation n'a pas encore d'application GitHub : un admin doit la créer.",
+				),
+			).toBeTruthy()
+		})
+
+		it('stays visible when the organization integration cannot be read', async () => {
+			await open({
+				'GET /api/v1/integrations/github': {
+					status: 403,
+					body: { code: 'forbidden', message: 'x', status: 403 },
+				},
+				'GET /api/v1/me/github': { connected: false },
+			})
+
+			expect(
+				await screen.findByRole('button', {
+					name: 'Connecter mon compte GitHub',
+				}),
+			).toBeTruthy()
+		})
+	})
+
+	describe('personal token', () => {
+		const ORG = { app: null, installation: null }
+		const SECRET = 'github_pat_SECRET123456'
+		const CONNECTED = {
+			connected: true,
+			login: 'octo',
+			connected_at: '2026-11-03T00:00:00Z',
+		}
+		const TOKEN = {
+			login: 'octo',
+			preview: 'f3a9',
+			expires_at: '2099-01-01T00:00:00Z',
+			active: true,
+		}
+
+		it('offers a password input when there is no token', async () => {
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { ...CONNECTED, personal_token: null },
+			})
+
+			expect(
+				await screen.findByText('Jeton personnel (optionnel)'),
+			).toBeTruthy()
+			const input = screen.getByLabelText('Jeton GitHub') as HTMLInputElement
+			expect(input.type).toBe('password')
+			expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeTruthy()
+			const link = screen.getByRole('link', { name: /Créer un jeton/ })
+			expect(link.getAttribute('href')).toBe(
+				'https://github.com/settings/personal-access-tokens/new',
+			)
+			expect(link.getAttribute('target')).toBe('_blank')
+		})
+
+		it('saves the token, clears the input and never renders it back', async () => {
+			const user = userEvent.setup()
+			const fetchMock = mockApi({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { ...CONNECTED, personal_token: null },
+				'PUT /api/v1/me/github/token': {
+					...CONNECTED,
+					personal_token: TOKEN,
+				},
+			})
+			await renderAtPath(
+				withQueryClient(<GithubPage />),
+				'/settings/integrations/github',
+			)
+
+			const input = (await screen.findByLabelText(
+				'Jeton GitHub',
+			)) as HTMLInputElement
+			await user.type(input, SECRET)
+			expect(input.value).toBe(SECRET)
+			await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+			await waitFor(() =>
+				expect(calls(fetchMock, 'PUT')).toEqual([
+					{ path: '/api/v1/me/github/token', body: { token: SECRET } },
+				]),
+			)
+			expect(input.value).toBe('')
+			expect(document.body.innerHTML).not.toContain(SECRET)
+		})
+
+		it('says GitHub refused the token on a 400', async () => {
+			const user = userEvent.setup()
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { ...CONNECTED, personal_token: null },
+				'PUT /api/v1/me/github/token': {
+					status: 400,
+					body: { code: 'github_token_refused', message: 'x', status: 400 },
+				},
+			})
+
+			await user.type(await screen.findByLabelText('Jeton GitHub'), SECRET)
+			await user.click(screen.getByRole('button', { name: 'Enregistrer' }))
+
+			expect(await screen.findByText('GitHub a refusé ce jeton.')).toBeTruthy()
+		})
+
+		it('shows the saved token and its priority line without the secret', async () => {
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { ...CONNECTED, personal_token: TOKEN },
+			})
+
+			expect(await screen.findByText(/Jeton de/)).toBeTruthy()
+			expect(screen.getByText('(…f3a9)')).toBeTruthy()
+			expect(screen.getByText(/expire le/)).toBeTruthy()
+			expect(
+				screen.getByText(
+					"Utilisé à la place de l'autorisation via l'application.",
+				),
+			).toBeTruthy()
+			expect(screen.queryByLabelText('Jeton GitHub')).toBeNull()
+		})
+
+		it('toggles the token off', async () => {
+			const user = userEvent.setup()
+			const fetchMock = await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { ...CONNECTED, personal_token: TOKEN },
+				'PATCH /api/v1/me/github/token': {
+					...CONNECTED,
+					personal_token: { ...TOKEN, active: false },
+				},
+			})
+
+			await user.click(
+				await screen.findByRole('switch', { name: 'Utiliser ce jeton' }),
+			)
+
+			await waitFor(() =>
+				expect(calls(fetchMock, 'PATCH')).toEqual([
+					{ path: '/api/v1/me/github/token', body: { active: false } },
+				]),
+			)
+		})
+
+		it('shows the input again on Remplacer', async () => {
+			const user = userEvent.setup()
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { ...CONNECTED, personal_token: TOKEN },
+			})
+
+			await user.click(await screen.findByRole('button', { name: 'Remplacer' }))
+
+			expect(screen.getByLabelText('Jeton GitHub')).toBeTruthy()
+		})
+
+		it('deletes the token after confirmation', async () => {
+			const user = userEvent.setup()
+			const fetchMock = await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': { ...CONNECTED, personal_token: TOKEN },
+				'DELETE /api/v1/me/github/token': { status: 204, body: null },
+			})
+
+			await user.click(await screen.findByRole('button', { name: 'Supprimer' }))
+			const dialog = await screen.findByRole('alertdialog')
+			await user.click(
+				within(dialog).getByRole('button', { name: 'Supprimer' }),
+			)
+
+			await waitFor(() =>
+				expect(calls(fetchMock, 'DELETE')).toEqual([
+					{ path: '/api/v1/me/github/token', body: undefined },
+				]),
+			)
+		})
+
+		it('warns when the token has expired', async () => {
+			await open({
+				'GET /api/v1/integrations/github': ORG,
+				'GET /api/v1/me/github': {
+					...CONNECTED,
+					personal_token: { ...TOKEN, expires_at: '2020-01-01T00:00:00Z' },
+				},
+			})
+
+			expect(await screen.findByText(/expiré le/)).toBeTruthy()
+			expect(screen.getByText(/Ce jeton a expiré/)).toBeTruthy()
+		})
 	})
 })

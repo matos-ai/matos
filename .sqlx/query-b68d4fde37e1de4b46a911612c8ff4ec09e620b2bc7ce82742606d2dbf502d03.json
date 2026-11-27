@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM github_personal_tokens WHERE organization_id = $1 AND subject = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b68d4fde37e1de4b46a911612c8ff4ec09e620b2bc7ce82742606d2dbf502d03"
+}

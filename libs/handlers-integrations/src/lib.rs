@@ -12,6 +12,7 @@ pub mod instances;
 pub mod list_issues;
 pub mod list_repositories;
 mod manifest;
+pub mod me_github;
 pub mod signer;
 pub mod state;
 
@@ -27,9 +28,11 @@ pub use actions::{
     revert::RevertIntegrationActionRequest,
 };
 pub use dto::{
-    ConnectGithubRequest, CreateGithubAppRequest, CreateManifestRequest, GithubAppResponse,
-    GithubInstallationResponse, GithubIntegrationResponse, InstallUrlResponse, ManifestOwner,
-    ManifestResponse, RepositoryListResponse, RepositoryResponse,
+    ConnectGithubRequest, ConnectGithubUserRequest, CreateGithubAppRequest, CreateManifestRequest,
+    GithubAppResponse, GithubConnectionResponse, GithubInstallationResponse,
+    GithubIntegrationResponse, GithubPersonalTokenResponse, InstallUrlResponse, ManifestOwner,
+    ManifestResponse, PutGithubPersonalTokenRequest, RepositoryListResponse, RepositoryResponse,
+    SetGithubPersonalTokenActiveRequest,
 };
 pub use error::IntegrationError;
 pub use instances::dto::{
@@ -58,6 +61,13 @@ where
         .typed_delete(delete_app::handler)
         .typed_get(install_url::handler)
         .typed_post(callback::handler)
+        .typed_get(me_github::status::handler)
+        .typed_get(me_github::authorize::handler)
+        .typed_post(me_github::callback::handler)
+        .typed_delete(me_github::disconnect::handler)
+        .typed_put(me_github::put_token::handler)
+        .typed_patch(me_github::patch_token::handler)
+        .typed_delete(me_github::delete_token::handler)
         .typed_get(list_repositories::handler)
         .typed_get(list_issues::handler)
         .typed_get(instances::list::handler)

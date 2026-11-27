@@ -9,6 +9,7 @@ use axum::{
     Extension, Json, Router,
     extract::{Path, Request},
     http::StatusCode,
+    response::IntoResponse,
     routing::{get, post},
 };
 use chrono::{Duration, Utc};
@@ -144,6 +145,38 @@ async fn fake_github(conversions: Arc<AtomicUsize>) -> String {
                 assert_eq!(body["client_secret"], "oauth-secret");
                 Json(json!({"access_token": format!("ghu_{}", body["code"].as_str().unwrap())}))
             }),
+        )
+        .route(
+            "/user",
+            get(|request: Request| async move {
+                let token = request.headers()["authorization"].to_str().unwrap();
+                if let Some(pat) = token.strip_prefix("Bearer github_pat_") {
+                    if pat.starts_with("bad") {
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(json!({"message": "Bad credentials"})),
+                        )
+                            .into_response();
+                    }
+                    return (
+                        [("github-authentication-token-expiration", "2099-12-31 00:00:00 UTC")],
+                        Json(json!({"id": 4242, "login": format!("pat-{pat}")})),
+                    )
+                        .into_response();
+                }
+                let login = token.trim_start_matches("Bearer ghu_").to_owned();
+                Json(json!({"id": login.len(), "login": login})).into_response()
+            }),
+        )
+        .route(
+            "/applications/{client_id}/grant",
+            axum::routing::delete(
+                |Path(client_id): Path<String>, Json(body): Json<Value>| async move {
+                    assert_eq!(client_id, "Iv1.test");
+                    assert!(body["access_token"].as_str().unwrap().starts_with("ghu_"));
+                    StatusCode::NO_CONTENT
+                },
+            ),
         )
         .route(
             "/user/installations",
@@ -1077,4 +1110,344 @@ async fn open_issues_are_listed_without_pull_requests_and_refused_outside_the_in
     assert!(listed[0]["card_id"].is_null());
     assert_eq!(outside.status(), 403);
     assert_eq!(malformed.status(), 422);
+}
+
+fn connect_state(organization: &Organization, subject: &str, purpose: StatePurpose) -> String {
+    signer().sign(purpose, organization.id, subject, Utc::now())
+}
+
+async fn member_callback(
+    client: &reqwest::Client,
+    base: &str,
+    state: &str,
+    code: &str,
+) -> reqwest::Response {
+    client
+        .post(format!("{base}/api/v1/me/github/callback"))
+        .json(&json!({"code": code, "state": state}))
+        .send()
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_member_connects_reads_and_disconnects_their_own_github_account() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    admin_with_app(&pool, &organization, &backend).await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+    let client = reqwest::Client::new();
+
+    let before = json_of(
+        client
+            .get(format!("{member}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        before,
+        json!({"connected": false, "login": null, "connected_at": null, "personal_token": null})
+    );
+
+    let authorize = client
+        .get(format!("{member}/api/v1/me/github/authorize"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(authorize.status(), 200);
+    let url = json_of(authorize).await["url"].as_str().unwrap().to_owned();
+    assert!(
+        url.starts_with(&format!(
+            "{}/login/oauth/authorize?client_id=Iv1.test&state=",
+            backend.base
+        )),
+        "{url}"
+    );
+    let state = url.split("state=").nth(1).unwrap();
+
+    let connected = member_callback(&client, &member, state, "octocat").await;
+    assert_eq!(connected.status(), 200);
+    let body = json_of(connected).await;
+    assert_eq!(body["connected"], true);
+    assert_eq!(body["login"], "octocat");
+    assert!(body["connected_at"].is_string());
+
+    let after = json_of(
+        client
+            .get(format!("{member}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(after["login"], "octocat");
+
+    let removed = client
+        .delete(format!("{member}/api/v1/me/github"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(removed.status(), 204);
+    let gone = json_of(
+        client
+            .get(format!("{member}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(gone["connected"], false);
+    assert_eq!(
+        count(&pool, "github_user_connections", &organization).await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn a_bad_state_is_a_400_and_stores_nothing() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    admin_with_app(&pool, &organization, &backend).await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+    let client = reqwest::Client::new();
+
+    let expired = signer().sign(
+        StatePurpose::UserConnect,
+        organization.id,
+        "member-1",
+        Utc::now() - Duration::minutes(11),
+    );
+    for state in [
+        connect_state(&organization, "member-1", StatePurpose::Install),
+        connect_state(&organization, "member-2", StatePurpose::UserConnect),
+        expired,
+        "garbage".to_owned(),
+    ] {
+        let response = member_callback(&client, &member, &state, "octocat").await;
+        assert_eq!(response.status(), 400, "{state}");
+        assert_eq!(json_of(response).await["code"], "invalid_state");
+    }
+    assert_eq!(
+        count(&pool, "github_user_connections", &organization).await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn without_a_github_app_authorizing_is_a_409() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+    let client = reqwest::Client::new();
+
+    let response = client
+        .get(format!("{member}/api/v1/me/github/authorize"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 409);
+
+    let state = connect_state(&organization, "member-1", StatePurpose::UserConnect);
+    let response = member_callback(&client, &member, &state, "octocat").await;
+    assert_eq!(response.status(), 409);
+}
+
+#[tokio::test]
+async fn a_member_never_sees_or_removes_another_members_connection() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    admin_with_app(&pool, &organization, &backend).await;
+    let alice = serve(&pool, caller(&organization, "alice", &[]), &backend).await;
+    let bob = serve(&pool, caller(&organization, "bob", &[]), &backend).await;
+    let client = reqwest::Client::new();
+
+    let state = connect_state(&organization, "alice", StatePurpose::UserConnect);
+    assert_eq!(
+        member_callback(&client, &alice, &state, "alice-login")
+            .await
+            .status(),
+        200
+    );
+
+    let seen_by_bob = json_of(
+        client
+            .get(format!("{bob}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(seen_by_bob["connected"], false);
+    assert_eq!(seen_by_bob["login"], Value::Null);
+
+    let removed_by_bob = client
+        .delete(format!("{bob}/api/v1/me/github"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(removed_by_bob.status(), 204);
+    let still_alice = json_of(
+        client
+            .get(format!("{alice}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(still_alice["login"], "alice-login");
+}
+
+#[tokio::test]
+async fn a_member_saves_deactivates_and_deletes_a_personal_token() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+    let client = reqwest::Client::new();
+    let url = format!("{member}/api/v1/me/github/token");
+
+    let saved = client
+        .put(&url)
+        .json(&json!({"token": "github_pat_abcdefgh1234"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let raw = saved.text().await.unwrap();
+    assert!(!raw.contains("github_pat_abcdefgh1234"), "{raw}");
+    let body: Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(body["connected"], false);
+    let token = &body["personal_token"];
+    assert_eq!(token["login"], "pat-abcdefgh1234");
+    assert_eq!(token["preview"], "…1234");
+    assert_eq!(token["active"], true);
+    assert_eq!(token["expires_at"], "2099-12-31T00:00:00Z");
+
+    let status = json_of(
+        client
+            .get(format!("{member}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status["personal_token"], *token);
+
+    let off = client
+        .patch(&url)
+        .json(&json!({"active": false}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(off.status(), 200);
+    assert_eq!(json_of(off).await["personal_token"]["active"], false);
+
+    let removed = client.delete(&url).send().await.unwrap();
+    assert_eq!(removed.status(), 204);
+    assert_eq!(client.delete(&url).send().await.unwrap().status(), 204);
+    let gone = json_of(
+        client
+            .get(format!("{member}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(gone["personal_token"], Value::Null);
+    assert_eq!(
+        count(&pool, "github_personal_tokens", &organization).await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn a_token_github_refuses_is_a_400_and_stores_nothing() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+    let client = reqwest::Client::new();
+
+    let refused = client
+        .put(format!("{member}/api/v1/me/github/token"))
+        .json(&json!({"token": "github_pat_bad1"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 400);
+    assert_eq!(json_of(refused).await["code"], "github_token_refused");
+    assert_eq!(
+        count(&pool, "github_personal_tokens", &organization).await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn patching_without_a_personal_token_is_a_404() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let member = serve(&pool, caller(&organization, "member-1", &[]), &backend).await;
+
+    let response = reqwest::Client::new()
+        .patch(format!("{member}/api/v1/me/github/token"))
+        .json(&json!({"active": true}))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 404);
+}
+
+#[tokio::test]
+async fn a_member_never_sees_or_changes_another_members_personal_token() {
+    let Some(pool) = pool().await else { return };
+    let organization = organization(&pool).await;
+    let backend = backend().await;
+    let alice = serve(&pool, caller(&organization, "alice", &[]), &backend).await;
+    let bob = serve(&pool, caller(&organization, "bob", &[]), &backend).await;
+    let client = reqwest::Client::new();
+    client
+        .put(format!("{alice}/api/v1/me/github/token"))
+        .json(&json!({"token": "github_pat_alicealice"}))
+        .send()
+        .await
+        .unwrap();
+
+    let seen = json_of(
+        client
+            .get(format!("{bob}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(seen["personal_token"], Value::Null);
+    let patched = client
+        .patch(format!("{bob}/api/v1/me/github/token"))
+        .json(&json!({"active": false}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), 404);
+    client
+        .delete(format!("{bob}/api/v1/me/github/token"))
+        .send()
+        .await
+        .unwrap();
+    let still = json_of(
+        client
+            .get(format!("{alice}/api/v1/me/github"))
+            .send()
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(still["personal_token"]["active"], true);
 }

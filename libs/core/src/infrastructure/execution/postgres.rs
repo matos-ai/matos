@@ -10,6 +10,7 @@ use crate::{
             GithubInstallation, TaskGrant,
             ports::{GithubAppRepository, GithubInstallationRepository, TaskGrantRepository},
         },
+        github_user::GitIdentity,
     },
     infrastructure::{
         crypto::{Sealed, SecretCipher},
@@ -75,9 +76,9 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
             r#"
             INSERT INTO task_grants (
                 token_sha256, run_id, organization_id, repository, branch, model, expires_at,
-                revoked_at, mode, initiated_by, companions
+                revoked_at, mode, initiated_by, companions, git_identity
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
             token_sha256.as_slice(),
             grant.run_id.0,
@@ -94,6 +95,7 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
+            grant.git_identity.as_str(),
         )
         .execute(&mut ***tx)
         .await
@@ -106,7 +108,7 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
         let row = sqlx::query!(
             r#"
             SELECT run_id, organization_id, repository, branch, model, expires_at, revoked_at,
-                   mode, initiated_by, companions
+                   mode, initiated_by, companions, git_identity
             FROM task_grants
             WHERE token_sha256 = $1
             "#,
@@ -129,6 +131,7 @@ impl TaskGrantRepository for PgTaskGrantRepository<'_> {
                     .map(|companion| companion.parse())
                     .collect::<Result<_, _>>()?,
                 initiated_by: row.initiated_by,
+                git_identity: GitIdentity::try_from(row.git_identity.as_str())?,
                 expires_at: row.expires_at,
                 revoked_at: row.revoked_at,
             })

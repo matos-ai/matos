@@ -76,3 +76,37 @@ export function describeDeleteAppError(error: unknown): string {
 	if (statusOf(error) === 404) return "L'application n'existe déjà plus."
 	return common(error) ?? "La suppression de l'application a échoué. Réessaie."
 }
+
+const NO_APP =
+	"L'organisation n'a pas encore d'application GitHub : un admin doit la créer."
+
+export function describeMyAuthorizeError(error: unknown): string {
+	if (statusOf(error) === 409) return NO_APP
+	if (statusOf(error) === 503) return NOT_CONFIGURED
+	return "Le lien de connexion n'a pas pu être obtenu. Réessaie."
+}
+
+export function describeMyConnectError(error: unknown): string {
+	if (hasErrorKey(error, 'invalid_state') || statusOf(error) === 400) {
+		return 'Le lien a expiré, recommence la connexion.'
+	}
+	if (statusOf(error) === 409) return NO_APP
+	if (statusOf(error) === 503) return NOT_CONFIGURED
+	return "Ton compte GitHub n'a pas pu être connecté. Recommence la connexion."
+}
+
+export function describeMyDisconnectError(): string {
+	return 'La déconnexion de ton compte GitHub a échoué. Réessaie.'
+}
+
+export function describePutTokenError(error: unknown): string {
+	if (hasErrorKey(error, 'github_token_refused')) {
+		return 'GitHub a refusé ce jeton.'
+	}
+	if (statusOf(error) === 503) return NOT_CONFIGURED
+	return "Le jeton n'a pas pu être enregistré. Réessaie."
+}
+
+export function describeTokenActionError(): string {
+	return "Le jeton personnel n'a pas pu être modifié. Réessaie."
+}

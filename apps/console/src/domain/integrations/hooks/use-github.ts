@@ -93,6 +93,72 @@ export function useDisconnectGithub() {
 	})
 }
 
+function invalidateMyGithub(client: QueryClient) {
+	return client.invalidateQueries({
+		predicate: (query) => {
+			const [key] = query.queryKey as [{ _id?: string }?]
+			return key?._id?.startsWith('/api/v1/me/github') ?? false
+		},
+	})
+}
+
+export function useMyGithubConnection() {
+	const accessToken = useAccessToken()
+	return useQuery({
+		...tanstackApi.get('/api/v1/me/github').queryOptions,
+		enabled: Boolean(accessToken),
+	})
+}
+
+export function useMyGithubAuthorizeUrl() {
+	return useMutation({
+		mutationFn: () => api.get('/api/v1/me/github/authorize'),
+	})
+}
+
+export function useConnectMyGithub() {
+	const client = useQueryClient()
+	return useMutation({
+		...tanstackApi.mutation('post', '/api/v1/me/github/callback')
+			.mutationOptions,
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
+export function useDisconnectMyGithub() {
+	const client = useQueryClient()
+	return useMutation({
+		mutationFn: () => api.delete('/api/v1/me/github'),
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
+export function usePutMyGithubToken() {
+	const client = useQueryClient()
+	return useMutation({
+		mutationFn: (token: string) =>
+			api.put('/api/v1/me/github/token', { body: { token } }),
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
+export function useSetMyGithubTokenActive() {
+	const client = useQueryClient()
+	return useMutation({
+		mutationFn: (active: boolean) =>
+			api.patch('/api/v1/me/github/token', { body: { active } }),
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
+export function useDeleteMyGithubToken() {
+	const client = useQueryClient()
+	return useMutation({
+		mutationFn: () => api.delete('/api/v1/me/github/token'),
+		onSuccess: () => invalidateMyGithub(client),
+	})
+}
+
 export type RepositoriesState =
 	| { kind: 'loading' }
 	| { kind: 'not_connected' }

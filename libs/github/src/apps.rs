@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt, time::Duration};
 
+use chrono::{DateTime, NaiveDateTime, Utc};
 use matos_common::{CoreError, OrganizationId};
 use matos_core::{
     MatosUseCase,
@@ -9,9 +10,13 @@ use matos_core::{
             DraftPullRequest, GithubAppCredentials, PullRequestUrl, RepositoryIssue,
             RepositoryListing, RepositoryRef, ports::CodeHost,
         },
+        github_user::{
+            GithubUser, PersonalTokenCheck, UserTokens,
+            ports::{GithubUserOAuth, PersonalTokenValidator},
+        },
     },
 };
-use reqwest::header::{ACCEPT, USER_AGENT};
+use reqwest::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
 use serde::Deserialize;
 use tokio::{sync::Mutex, time::Instant};
 
@@ -21,6 +26,7 @@ use crate::{
 };
 
 const CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const TOKEN_EXPIRATION_HEADER: &str = "github-authentication-token-expiration";
 const APP_MISSING: &str = "application GitHub absente";
 
 #[derive(Deserialize)]
@@ -87,6 +93,24 @@ impl ManifestConversion {
             created_by,
             created_at: chrono::Utc::now(),
         }
+    }
+}
+
+#[derive(Deserialize)]
+struct UserBody {
+    id: i64,
+    login: String,
+}
+
+fn parse_token_expiration(value: &str) -> Option<DateTime<Utc>> {
+    let value = value.trim();
+    match value.strip_suffix(" UTC") {
+        Some(naive) => NaiveDateTime::parse_from_str(naive, "%Y-%m-%d %H:%M:%S")
+            .ok()
+            .map(|naive| naive.and_utc()),
+        None => DateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S %z")
+            .ok()
+            .map(|parsed| parsed.with_timezone(&Utc)),
     }
 }
 
@@ -161,10 +185,45 @@ impl GithubApps {
         Ok(Some(client))
     }
 
+    pub async fn personal_token_check(
+        &self,
+        token: &SecretToken,
+    ) -> Result<PersonalTokenCheck, GithubError> {
+        let url = format!("{}/user", self.bases.api_base.trim_end_matches('/'));
+        let response = GithubClient::send(
+            self.http
+                .get(url)
+                .header(ACCEPT, "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", API_VERSION)
+                .header(USER_AGENT, AGENT)
+                .header(AUTHORIZATION, format!("Bearer {}", token.expose())),
+        )
+        .await?;
+        let expires_at = response
+            .headers()
+            .get(TOKEN_EXPIRATION_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(parse_token_expiration);
+        let user: UserBody = GithubClient::decode(response).await?;
+        Ok(PersonalTokenCheck {
+            user: GithubUser {
+                id: user.id,
+                login: user.login,
+            },
+            expires_at,
+        })
+    }
+
     async fn required(&self, organization_id: OrganizationId) -> Result<GithubClient, CoreError> {
         self.client(organization_id)
             .await?
             .ok_or_else(|| CoreError::Invalid(APP_MISSING.into()))
+    }
+
+    async fn for_member(&self, organization_id: OrganizationId) -> Result<GithubClient, CoreError> {
+        self.client(organization_id)
+            .await?
+            .ok_or_else(|| CoreError::Conflict(APP_MISSING.into()))
     }
 
     pub async fn default_branch(
@@ -303,12 +362,111 @@ impl CodeHost for GithubApps {
             .create_draft_pr(installation_id, &pull_request)
             .await?)
     }
+
+    async fn open_draft_pr_as_member(
+        &self,
+        organization_id: OrganizationId,
+        token: &SecretToken,
+        pull_request: DraftPullRequest,
+    ) -> Result<PullRequestUrl, CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .create_draft_pr_as_user(token.expose(), &pull_request)
+            .await?)
+    }
+
+    async fn member_can_push(
+        &self,
+        organization_id: OrganizationId,
+        token: &SecretToken,
+        repository: &RepositoryRef,
+    ) -> Result<bool, CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .user_can_push(token.expose(), repository)
+            .await?)
+    }
+
+    async fn refresh_user_token(
+        &self,
+        organization_id: OrganizationId,
+        refresh_token: &SecretToken,
+    ) -> Result<UserTokens, CoreError> {
+        Ok(self
+            .required(organization_id)
+            .await?
+            .refresh_user_token(refresh_token.expose())
+            .await?
+            .into_tokens())
+    }
+}
+
+impl GithubUserOAuth for GithubApps {
+    async fn authorize_url(
+        &self,
+        organization_id: OrganizationId,
+        state: &str,
+    ) -> Result<String, CoreError> {
+        Ok(self.for_member(organization_id).await?.authorize_url(state))
+    }
+
+    async fn exchange_code(
+        &self,
+        organization_id: OrganizationId,
+        code: &str,
+    ) -> Result<UserTokens, CoreError> {
+        Ok(self
+            .for_member(organization_id)
+            .await?
+            .exchange_user_code(code)
+            .await?
+            .into_tokens())
+    }
+
+    async fn user(
+        &self,
+        organization_id: OrganizationId,
+        access_token: &SecretToken,
+    ) -> Result<GithubUser, CoreError> {
+        Ok(self
+            .for_member(organization_id)
+            .await?
+            .authenticated_user(access_token.expose())
+            .await?)
+    }
+
+    async fn revoke(
+        &self,
+        organization_id: OrganizationId,
+        access_token: &SecretToken,
+    ) -> Result<(), CoreError> {
+        Ok(self
+            .for_member(organization_id)
+            .await?
+            .revoke_user_grant(access_token.expose())
+            .await?)
+    }
+}
+
+impl PersonalTokenValidator for GithubApps {
+    async fn validate(&self, token: &SecretToken) -> Result<PersonalTokenCheck, CoreError> {
+        Ok(self.personal_token_check(token).await?)
+    }
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use axum::{Json, Router, extract::Path, http::StatusCode, routing::post};
+    use axum::{
+        Json, Router,
+        extract::{Path, Request},
+        http::StatusCode,
+        response::IntoResponse,
+        routing::{get, post},
+    };
+    use chrono::TimeZone;
     use serde_json::{Value, json};
 
     use super::*;
@@ -332,8 +490,32 @@ mod tests {
         )
     }
 
+    async fn user(request: Request) -> axum::response::Response {
+        let token = request.headers()["authorization"].to_str().unwrap();
+        let expiry = match token {
+            "Bearer github_pat_utc" => Some("2026-12-31 00:00:00 UTC"),
+            "Bearer github_pat_offset" => Some("2026-12-31 00:00:00 +0100"),
+            "Bearer github_pat_garbled" => Some("someday"),
+            "Bearer github_pat_forever" => None,
+            _ => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({"message": "Bad credentials"})),
+                )
+                    .into_response();
+            }
+        };
+        let mut headers = axum::http::HeaderMap::new();
+        if let Some(expiry) = expiry {
+            headers.insert(TOKEN_EXPIRATION_HEADER, expiry.parse().unwrap());
+        }
+        (headers, Json(json!({"id": 583231, "login": "octocat"}))).into_response()
+    }
+
     async fn apps_against_fake() -> GithubApps {
-        let app = Router::new().route("/app-manifests/{code}/conversions", post(conversions));
+        let app = Router::new()
+            .route("/app-manifests/{code}/conversions", post(conversions))
+            .route("/user", get(user));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
         tokio::spawn(async move { axum::serve(listener, app).await });
@@ -384,5 +566,54 @@ mod tests {
                 "{code:?}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn a_personal_token_is_checked_and_its_expiry_read_from_the_header() {
+        let apps = apps_against_fake().await;
+        let midnight = Utc.with_ymd_and_hms(2026, 12, 31, 0, 0, 0).unwrap();
+
+        let utc = apps
+            .personal_token_check(&SecretToken::new("github_pat_utc"))
+            .await
+            .unwrap();
+        assert_eq!(utc.user.login, "octocat");
+        assert_eq!(utc.user.id, 583231);
+        assert_eq!(utc.expires_at, Some(midnight));
+
+        let offset = apps
+            .personal_token_check(&SecretToken::new("github_pat_offset"))
+            .await
+            .unwrap();
+        assert_eq!(
+            offset.expires_at,
+            Some(midnight - chrono::Duration::hours(1))
+        );
+
+        for token in ["github_pat_forever", "github_pat_garbled"] {
+            let check = apps
+                .personal_token_check(&SecretToken::new(token))
+                .await
+                .unwrap();
+            assert_eq!(check.expires_at, None, "{token}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_personal_token_github_refuses_is_invalid() {
+        let apps = apps_against_fake().await;
+        let error = apps
+            .validate(&SecretToken::new("github_pat_nope"))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, CoreError::Invalid(_)), "{error:?}");
+    }
+
+    #[test]
+    fn the_expiration_header_reads_both_of_githubs_formats() {
+        assert!(parse_token_expiration("2026-12-31 00:00:00 UTC").is_some());
+        assert!(parse_token_expiration("2026-12-31 00:00:00 -0500").is_some());
+        assert!(parse_token_expiration("").is_none());
+        assert!(parse_token_expiration("31/12/2026").is_none());
     }
 }

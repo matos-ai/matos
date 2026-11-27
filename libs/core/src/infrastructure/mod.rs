@@ -13,6 +13,7 @@ pub mod crypto;
 pub mod delegation;
 pub mod event;
 pub mod execution;
+pub mod github_user;
 pub mod inbox;
 pub mod integration;
 pub mod mcp;

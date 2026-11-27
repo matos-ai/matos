@@ -10,13 +10,14 @@ use std::{
 
 use axum::{Json, Router, routing::post};
 use chrono::Utc;
-use matos_common::OrganizationId;
+use matos_common::{CoreError, OrganizationId};
 use matos_core::{
     MatosUseCase,
     domain::{
         agent::SecretToken,
         authorization::Subject,
         execution::{GithubAppCredentials, RepositoryRef},
+        github_user::ports::GithubUserOAuth,
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
@@ -128,6 +129,48 @@ async fn an_organization_without_an_app_has_no_client() {
             .await
             .unwrap()
             .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_member_cannot_connect_without_an_organization_app() {
+    let Some(usecase) = usecase().await else {
+        return;
+    };
+    let subject = organization().await;
+    let apps = apps(&usecase, "http://127.0.0.1:1", Duration::from_secs(300));
+
+    let organization_id = subject.organization_id;
+    assert!(matches!(
+        apps.authorize_url(organization_id, "state").await,
+        Err(CoreError::Conflict(_))
+    ));
+    assert!(matches!(
+        apps.exchange_code(organization_id, "code").await,
+        Err(CoreError::Conflict(_))
+    ));
+}
+
+#[tokio::test]
+async fn the_authorize_url_of_an_app_names_its_client_and_the_state() {
+    let Some(usecase) = usecase().await else {
+        return;
+    };
+    let subject = organization().await;
+    usecase
+        .save_github_app(subject.clone(), credentials(&subject))
+        .await
+        .unwrap();
+    let apps = apps(&usecase, "http://127.0.0.1:1", Duration::from_secs(300));
+
+    let url = apps
+        .authorize_url(subject.organization_id, "signed.state")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        url,
+        "http://127.0.0.1:1/login/oauth/authorize?client_id=Iv1.test&state=signed.state"
     );
 }
 

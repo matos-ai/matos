@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT run_id, organization_id, repository, branch, model, expires_at, revoked_at,\n                   mode, initiated_by, companions\n            FROM task_grants\n            WHERE token_sha256 = $1\n            ",
+  "query": "\n            SELECT run_id, organization_id, repository, branch, model, expires_at, revoked_at,\n                   mode, initiated_by, companions, git_identity\n            FROM task_grants\n            WHERE token_sha256 = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -52,6 +52,11 @@
         "ordinal": 9,
         "name": "companions",
         "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "git_identity",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -69,8 +74,9 @@
       true,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "5050d52e7e0303fe4b45ec0e9372ac584460903220f8db095cda05c23ce8bd81"
+  "hash": "aaffddbca23875588407f8829b7603d4a66c1956ea6c378a5e79a43a04f5267f"
 }

@@ -42,6 +42,7 @@ use crate::{
             report::ReportOutcome,
             repository_config::{REPOSITORY_CONFIG_PATH, RepositoryConfig},
         },
+        github_user::GitIdentity,
         member::Member,
         provider::{ModelAssignments, ModelRef},
         run::{
@@ -56,6 +57,9 @@ use crate::{
 
 const TASK_TOKEN_SLOT: &str = "matos-task-token";
 const GRANT_GRACE: Duration = Duration::from_secs(5 * 60);
+const MEMBER_TOKEN_MARGIN: Duration = Duration::from_secs(10 * 60);
+const APP_PULL_REQUEST_NOTE: &str = "Pull request ouverte par l'application GitHub : connecte ton compte GitHub dans Matos (Paramètres › Intégrations › GitHub) pour qu'elle soit ouverte à ton nom.";
+const PULL_REQUEST_EXISTS: &str = "already exists";
 const COMMENT_MAX_CHARS: usize = 5_000;
 const FIELD_MAX_CHARS: usize = 8_000;
 const REPLIES_MAX: usize = 10;
@@ -247,8 +251,39 @@ struct Rules {
     skipped: Vec<SkippedCompanion>,
 }
 
+enum GitAccess {
+    Member(SecretToken),
+    App { note: bool },
+}
+
+impl GitAccess {
+    fn identity(&self) -> GitIdentity {
+        match self {
+            Self::Member(_) => GitIdentity::Member,
+            Self::App { .. } => GitIdentity::App,
+        }
+    }
+
+    fn note(&self) -> bool {
+        matches!(self, Self::App { note: true })
+    }
+
+    fn within(self, granted: GitIdentity) -> Self {
+        match (self, granted) {
+            (Self::Member(_), GitIdentity::App) => Self::App { note: true },
+            (access, _) => access,
+        }
+    }
+}
+
+struct OpenedPullRequest {
+    url: String,
+    app_note: bool,
+}
+
 struct Prepared {
     spec: TaskSpec,
+    git: GitAccess,
     skipped_companions: Vec<SkippedCompanion>,
     organization_id: OrganizationId,
     installation_id: i64,
@@ -297,6 +332,7 @@ struct Extras {
     contribution: Option<String>,
     config_invalid: bool,
     companions: Option<String>,
+    app_note: bool,
 }
 
 impl Extras {
@@ -315,6 +351,7 @@ impl Extras {
             contribution: text("contribution"),
             companions: text("companions"),
             job_started: output.is_some_and(|output| output["job_started"] == true),
+            app_note: output.is_some_and(|output| output["app_note"] == true),
             ..Self::default()
         }
     }
@@ -348,6 +385,7 @@ struct ExecuteOutput<'a> {
     plan: Option<&'a str>,
     contribution: Option<&'a str>,
     companions: Option<&'a str>,
+    app_note: bool,
 }
 
 fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, CoreError> {
@@ -372,6 +410,7 @@ fn output_of(digest: &Digest, extras: &Extras) -> Result<serde_json::Value, Core
         plan: extras.plan.as_deref(),
         contribution: extras.contribution.as_deref(),
         companions: extras.companions.as_deref(),
+        app_note: extras.app_note,
     })
     .map_err(|error| CoreError::Internal(format!("encoding the execution report: {error}")))
 }
@@ -709,11 +748,25 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 mode,
             )
             .await?;
-        let (token, branch) = self
-            .task_token(context, &model, mode, branch, &rules.companions)
+        let member = self
+            .usecase
+            .member_of(organization_id, &context.run.initiated_by)
+            .await?;
+        let access = self
+            .git_access(host, context, mode, member.is_some())
+            .await?;
+        let (token, branch, granted) = self
+            .task_token(
+                context,
+                &model,
+                mode,
+                branch,
+                &rules.companions,
+                access.identity(),
+            )
             .await?;
         let commit = CommitSettings {
-            author: self.commit_author(context, &app.slug).await?,
+            author: commit_author(member.as_ref(), &app.slug),
             leak_terms: guard.as_lines(),
             fallback_message: fallback_contribution(&guard, card.title.as_str()).commit_message(),
         };
@@ -734,6 +787,7 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         };
         Ok(Prepared {
             spec,
+            git: access.within(granted),
             skipped_companions: rules.skipped,
             organization_id,
             installation_id: installation.installation_id,
@@ -831,21 +885,43 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         .await
     }
 
-    /// The member who started the run, when their name and email are known;
-    /// the GitHub App's bot otherwise.
-    async fn commit_author(
+    async fn git_access(
         &self,
+        host: &H,
         context: &ExecutionContext,
-        app_slug: &str,
-    ) -> Result<CommitAuthor, CoreError> {
+        mode: ExecutionMode,
+        initiated_by_member: bool,
+    ) -> Result<GitAccess, CoreError> {
+        if mode != ExecutionMode::Change || !initiated_by_member {
+            return Ok(GitAccess::App { note: false });
+        }
         let run = &context.run;
-        let member = self
+        let validity = chrono::Duration::from_std(self.config.deadline + MEMBER_TOKEN_MARGIN)
+            .unwrap_or(chrono::Duration::minutes(40));
+        let token = match self
             .usecase
-            .member_of(run.organization_id, &run.initiated_by)
-            .await?;
-        Ok(member
-            .and_then(|member| member_author(&member))
-            .unwrap_or_else(|| CommitAuthor::app_bot(app_slug)))
+            .member_git_token(run.organization_id, &run.initiated_by, validity, host)
+            .await
+        {
+            Ok(Some(token)) => token,
+            Ok(None) => return Ok(GitAccess::App { note: true }),
+            Err(error @ CoreError::Database(_)) => return Err(error),
+            Err(error) => {
+                tracing::warn!(run_id = %run.id, %error, "the member's GitHub token is unusable, the App is used");
+                return Ok(GitAccess::App { note: true });
+            }
+        };
+        match host
+            .member_can_push(run.organization_id, &token, &context.repository)
+            .await
+        {
+            Ok(true) => Ok(GitAccess::Member(token)),
+            Ok(false) => Ok(GitAccess::App { note: true }),
+            Err(error) => {
+                tracing::warn!(run_id = %run.id, %error, "the member's push access could not be checked, the App is used");
+                Ok(GitAccess::App { note: true })
+            }
+        }
     }
 
     /// The model the agent's run keeps from its first attempt on: the
@@ -900,16 +976,19 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         mode: ExecutionMode,
         branch: String,
         companions: &[Companion],
-    ) -> Result<(String, String), CoreError> {
+        identity: GitIdentity,
+    ) -> Result<(String, String, GitIdentity), CoreError> {
         let run_id = context.run.id;
         if let Some(stored) = self.usecase.delegation_for(run_id, TASK_TOKEN_SLOT).await? {
             let token = stored.token.expose().to_owned();
-            let granted = self
+            let (granted, identity) = self
                 .usecase
                 .find_task_grant(token_sha256(&token))
                 .await?
-                .map_or(branch, |grant| grant.branch);
-            return Ok((token, granted));
+                .map_or((branch, identity), |grant| {
+                    (grant.branch, grant.git_identity)
+                });
+            return Ok((token, granted, identity));
         }
         let token = new_task_token()?;
         let expires_at = Utc::now()
@@ -934,12 +1013,13 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                         .map(|companion| companion.repository.clone())
                         .collect(),
                     initiated_by: Some(context.run.initiated_by.clone()),
+                    git_identity: identity,
                     expires_at,
                     revoked_at: None,
                 },
             )
             .await?;
-        Ok((token, branch))
+        Ok((token, branch, identity))
     }
 
     /// A resumed run follows the Job it left running and never starts a
@@ -1023,13 +1103,14 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                                 progress.reader.snapshot().summary.as_deref(),
                             );
                             let quality = quality_of(&prepared.guard, progress.reader.quality());
-                            let url = self
+                            let opened = self
                                 .open_pull_request(host, prepared, &contribution, &quality)
                                 .await?;
                             progress.extras.contribution = Some(source);
-                            progress.extras.pull_request = Some(url.clone());
+                            progress.extras.app_note |= opened.app_note;
+                            progress.extras.pull_request = Some(opened.url.clone());
                             self.persist_progress(context, &mut progress, true).await?;
-                            url
+                            opened.url
                         }
                     };
                     let fallback = progress
@@ -1143,36 +1224,63 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         prepared: &Prepared,
         contribution: &Contribution,
         quality: &Quality,
-    ) -> Result<String, CoreError> {
+    ) -> Result<OpenedPullRequest, CoreError> {
         let title = prepared.redactor.apply(&contribution.title);
         let body = defang_mentions(&format!(
             "{}{}",
             prepared.redactor.apply(&contribution.body).trim_end(),
             quality_section(quality)
         ));
+        let request = || DraftPullRequest {
+            repository: prepared.spec.repository.clone(),
+            base: prepared.spec.base_branch.clone(),
+            head: prepared.spec.branch.clone(),
+            title: title.clone(),
+            body: body.clone(),
+        };
+        let unopened = |error: &CoreError| {
+            CoreError::Internal(format!(
+                "la branche {} est poussée mais la pull request n'a pas pu être ouverte : {}",
+                prepared.spec.branch,
+                reason_of(error)
+            ))
+        };
+        let mut fell_back = false;
+        if let GitAccess::Member(token) = &prepared.git {
+            let opened = retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
+                host.open_draft_pr_as_member(prepared.organization_id, token, request())
+            })
+            .await;
+            match opened {
+                Ok(url) => {
+                    return Ok(OpenedPullRequest {
+                        url: url.0,
+                        app_note: false,
+                    });
+                }
+                Err(error) if reason_of(&error).contains(PULL_REQUEST_EXISTS) => {
+                    return Err(unopened(&error));
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "the pull request was refused with the member's token, the App opens it");
+                    fell_back = true;
+                }
+            }
+        }
         let pull_request =
             retry_transient(self.config.max_attempts, self.config.retry_base, |_| {
                 host.open_draft_pr(
                     prepared.organization_id,
                     prepared.installation_id,
-                    DraftPullRequest {
-                        repository: prepared.spec.repository.clone(),
-                        base: prepared.spec.base_branch.clone(),
-                        head: prepared.spec.branch.clone(),
-                        title: title.clone(),
-                        body: body.clone(),
-                    },
+                    request(),
                 )
             })
             .await
-            .map_err(|error| {
-                CoreError::Internal(format!(
-                    "la branche {} est poussée mais la pull request n'a pas pu être ouverte : {}",
-                    prepared.spec.branch,
-                    reason_of(&error)
-                ))
-            })?;
-        Ok(pull_request.0)
+            .map_err(|error| unopened(&error))?;
+        Ok(OpenedPullRequest {
+            url: pull_request.0,
+            app_note: fell_back || prepared.git.note(),
+        })
     }
 
     async fn conclude(
@@ -1218,10 +1326,15 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
                 finished.extras.companions.as_deref(),
             ),
         };
-        let body = defang_mentions(&truncate_chars(
-            &finished.redactor.apply(&body),
-            COMMENT_MAX_CHARS,
-        ));
+        let note = (finished.extras.app_note
+            && matches!(finished.result, Ok(Finish::Pushed { .. })))
+        .then_some(APP_PULL_REQUEST_NOTE);
+        let room =
+            COMMENT_MAX_CHARS.saturating_sub(note.map_or(0, |note| note.chars().count() + 2));
+        let body = with_companion_note(
+            defang_mentions(&truncate_chars(&finished.redactor.apply(&body), room)),
+            note,
+        );
         let actor = finished.actor.clone();
         self.comment(context, actor, body, &mut finished.extras)
             .await;
@@ -1647,6 +1760,12 @@ fn pull_request_text(
         fallback.body = summary.to_owned();
     }
     (fallback, format!("fallback: {why}"))
+}
+
+fn commit_author(member: Option<&Member>, app_slug: &str) -> CommitAuthor {
+    member
+        .and_then(member_author)
+        .unwrap_or_else(|| CommitAuthor::app_bot(app_slug))
 }
 
 /// The commit author a member makes, when their name and email can go on a

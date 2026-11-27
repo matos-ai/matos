@@ -5,6 +5,7 @@ import { renderAtPath } from '#/components/layout/test-router'
 import {
 	GithubAppCallbackPage,
 	GithubInstallCallbackPage,
+	GithubMemberCallbackPage,
 } from '#/domain/integrations/feature/github-callback-pages'
 import { clearAuth } from '#/store/auth.store'
 import { mockApi, withQueryClient } from '#/test-utils/api-mock'
@@ -220,5 +221,43 @@ describe('GitHub installation return', () => {
 
 		expect(screen.getByText(/Retour de GitHub incomplet/)).toBeTruthy()
 		expect(posts(fetchMock)).toEqual([])
+	})
+})
+
+describe('personal GitHub account return', () => {
+	it('posts the code and state once, then goes back with the login', async () => {
+		const { fetchMock, router } = await mount(
+			<GithubMemberCallbackPage code="c9" state="s9" />,
+			{
+				'POST /api/v1/me/github/callback': {
+					connected: true,
+					login: 'octo',
+					connected_at: '2026-11-03T00:00:00Z',
+				},
+			},
+		)
+
+		await waitFor(() =>
+			expect(router.state.location.pathname).toBe(
+				'/settings/integrations/github',
+			),
+		)
+		expect(router.state.location.search).toEqual({ compte: 'octo' })
+		expect(posts(fetchMock)).toEqual([
+			{ path: '/api/v1/me/github/callback', body: { code: 'c9', state: 's9' } },
+		])
+	})
+
+	it('tells the link expired on an invalid state', async () => {
+		await mount(<GithubMemberCallbackPage code="c9" state="bad" />, {
+			'POST /api/v1/me/github/callback': {
+				status: 400,
+				body: { code: 'invalid_state', message: 'x', status: 400 },
+			},
+		})
+
+		expect(
+			await screen.findByText('Le lien a expiré, recommence la connexion.'),
+		).toBeTruthy()
 	})
 })

@@ -8,6 +8,7 @@ use matos_core::{
     MatosUseCase,
     domain::{
         execution::{ExecutionMode, TaskGrant},
+        github_user::GitIdentity,
         provider::ProviderKind,
     },
 };
@@ -103,6 +104,14 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
             .is_none()
     );
 
+    assert!(
+        usecase
+            .member_git_access_token(organization, "user-1")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
     let grant = TaskGrant {
         run_id: RunId::new(),
         organization_id: organization,
@@ -112,6 +121,7 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         mode: ExecutionMode::Change,
         companions: Vec::new(),
         initiated_by: None,
+        git_identity: GitIdentity::App,
         expires_at: Utc::now() + chrono::Duration::minutes(1),
         revoked_at: None,
     };
@@ -126,6 +136,9 @@ async fn the_proxy_role_reads_what_the_proxy_reads_and_writes_nothing() {
         "INSERT INTO authorization_decisions (id, organization_id, subject, action, resource_kind, allowed) VALUES (gen_random_uuid(), gen_random_uuid(), 's', 'a', 'k', true)",
         "DELETE FROM github_installations",
         "DELETE FROM github_apps",
+        "DELETE FROM github_user_connections",
+        "DELETE FROM github_personal_tokens",
+        "UPDATE github_personal_tokens SET active = FALSE",
         "SELECT count(*) FROM runs",
     ] {
         assert!(

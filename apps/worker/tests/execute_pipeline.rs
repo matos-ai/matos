@@ -23,6 +23,10 @@ use matos_core::{
             harness::Harness,
             ports::{MockCodeHost, MockTaskRunner},
         },
+        github_user::{
+            GitIdentity, GithubUser, PersonalTokenCheck, UserTokens,
+            ports::{MockGithubUserOAuth, MockPersonalTokenValidator},
+        },
         member::Member,
         provider::ModelAssignments,
         run::{
@@ -957,6 +961,7 @@ async fn crashed_attempt(world: &World, token: &str, output: Option<serde_json::
                 mode: ExecutionMode::Change,
                 companions: Vec::new(),
                 initiated_by: None,
+                git_identity: GitIdentity::App,
                 expires_at,
                 revoked_at: None,
             },
@@ -1650,4 +1655,428 @@ async fn a_lint_excerpt_naming_the_model_is_dropped() {
     let body = seen.pull_requests.lock().unwrap()[0].body.clone();
     assert!(body.ends_with("Lint: failed"), "{body}");
     assert!(!body.contains("claude-sonnet"));
+}
+
+const MEMBER_ACCESS: &str = "ghu_member_access_secret";
+const MEMBER_REFRESH: &str = "ghr_member_refresh_secret";
+const APP_NOTE: &str = "Pull request ouverte par l'application GitHub : connecte ton compte GitHub dans Matos (Paramètres › Intégrations › GitHub) pour qu'elle soit ouverte à ton nom.";
+
+fn user_tokens(access: &str, expires_in: chrono::Duration, refresh: &str) -> UserTokens {
+    UserTokens {
+        access_token: SecretToken::new(access),
+        expires_at: Some(Utc::now() + expires_in),
+        refresh_token: Some(SecretToken::new(refresh)),
+        refresh_expires_at: Some(Utc::now() + chrono::Duration::days(180)),
+    }
+}
+
+async fn record_ada(world: &World) {
+    world
+        .usecase
+        .record_member(Member {
+            organization_id: world.organization_id,
+            subject: "user-1".into(),
+            name: "Ada Lovelace".into(),
+            email: Some("ada@example.test".into()),
+            last_seen_at: Utc::now(),
+        })
+        .await
+        .unwrap();
+}
+
+async fn connect_ada(world: &World, tokens: UserTokens) {
+    record_ada(world).await;
+    let mut oauth = MockGithubUserOAuth::new();
+    oauth
+        .expect_exchange_code()
+        .returning(move |_, _| Box::pin(std::future::ready(Ok(tokens.clone()))));
+    oauth.expect_user().returning(|_, _| {
+        Box::pin(std::future::ready(Ok(GithubUser {
+            id: 583231,
+            login: "ada".into(),
+        })))
+    });
+    world
+        .usecase
+        .connect_github_user(human(world.organization_id), "code", &oauth)
+        .await
+        .unwrap();
+}
+
+#[derive(Clone, Default)]
+struct MemberSeen {
+    pull_requests: Arc<Mutex<Vec<(String, DraftPullRequest)>>>,
+    refreshed_with: Arc<Mutex<Vec<String>>>,
+}
+
+struct MemberHost {
+    can_push: bool,
+    pull_request: Result<(), &'static str>,
+    refresh: Option<UserTokens>,
+}
+
+impl Default for MemberHost {
+    fn default() -> Self {
+        Self {
+            can_push: true,
+            pull_request: Ok(()),
+            refresh: None,
+        }
+    }
+}
+
+fn member_host(
+    seen: &Seen,
+    member_seen: &MemberSeen,
+    world: &World,
+    behaviour: MemberHost,
+) -> MockCodeHost {
+    let mut host = host(seen, world.organization_id, world.installation_id);
+    let can_push = behaviour.can_push;
+    host.expect_member_can_push()
+        .returning(move |_, _, repository| {
+            assert_eq!(repository.to_string(), "acme/web");
+            Box::pin(std::future::ready(Ok(can_push)))
+        });
+    let recorded = member_seen.pull_requests.clone();
+    let outcome = behaviour.pull_request;
+    host.expect_open_draft_pr_as_member()
+        .returning(move |_, token, pull_request| {
+            recorded
+                .lock()
+                .unwrap()
+                .push((token.expose().to_owned(), pull_request));
+            Box::pin(std::future::ready(match outcome {
+                Ok(()) => Ok(PullRequestUrl(PR_URL.into())),
+                Err(message) => Err(CoreError::Invalid(message.into())),
+            }))
+        });
+    let refreshed_with = member_seen.refreshed_with.clone();
+    let fresh = behaviour.refresh;
+    host.expect_refresh_user_token()
+        .returning(move |_, refresh_token| {
+            refreshed_with
+                .lock()
+                .unwrap()
+                .push(refresh_token.expose().to_owned());
+            Box::pin(std::future::ready(
+                fresh
+                    .clone()
+                    .ok_or_else(|| CoreError::Invalid("bad_refresh_token".into())),
+            ))
+        });
+    host
+}
+
+async fn git_identity_of(world: &World) -> String {
+    sqlx::query_scalar("SELECT git_identity FROM task_grants WHERE run_id = $1")
+        .bind(world.run_id.0)
+        .fetch_one(&world.pool)
+        .await
+        .unwrap()
+}
+
+async fn run_with_host(world: &World, host: MockCodeHost, seen: &Seen) {
+    let runner = runner_ending(seen, lines_of(SAMPLE), TaskOutcome::Succeeded);
+    pipeline(world, runner, host)
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_connected_member_has_the_pull_request_opened_with_their_own_token() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(&seen, &member_seen, &world, MemberHost::default());
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_eq!(git_identity_of(&world).await, "member");
+    let opened = member_seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, MEMBER_ACCESS);
+    assert_eq!(opened[0].1.head, branch_of(world.run_id));
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert!(member_seen.refreshed_with.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains(PR_URL));
+    assert!(!posted[0].2.contains(APP_NOTE));
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    for text in [posted[0].2.clone(), output.to_string()] {
+        assert!(!text.contains(MEMBER_ACCESS) && !text.contains(MEMBER_REFRESH));
+    }
+    assert_closed(&world).await;
+}
+
+#[tokio::test]
+async fn a_member_who_never_connected_gets_the_app_and_a_note_on_the_card() {
+    let Some(world) = world().await else { return };
+    record_ada(&world).await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(&seen, &member_seen, &world, MemberHost::default());
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_eq!(git_identity_of(&world).await, "app");
+    assert_eq!(seen.pull_requests.lock().unwrap().len(), 1);
+    assert!(member_seen.pull_requests.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains(PR_URL));
+    assert!(posted[0].2.ends_with(APP_NOTE), "{}", posted[0].2);
+}
+
+#[tokio::test]
+async fn an_initiator_who_is_no_member_gets_the_app_without_a_note() {
+    let Some(world) = world().await else { return };
+    let seen = Seen::default();
+    let host = host(&seen, world.organization_id, world.installation_id);
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_eq!(git_identity_of(&world).await, "app");
+    assert_eq!(seen.pull_requests.lock().unwrap().len(), 1);
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(!posted[0].2.contains("connecte ton compte GitHub"));
+}
+
+#[tokio::test]
+async fn an_expired_token_is_refreshed_when_the_run_is_prepared_and_the_new_pair_is_stored() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::minutes(-5), MEMBER_REFRESH),
+    )
+    .await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(
+        &seen,
+        &member_seen,
+        &world,
+        MemberHost {
+            refresh: Some(user_tokens(
+                "ghu_member_access_2",
+                chrono::Duration::hours(8),
+                "ghr_member_refresh_2",
+            )),
+            ..MemberHost::default()
+        },
+    );
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(
+        *member_seen.refreshed_with.lock().unwrap(),
+        [MEMBER_REFRESH]
+    );
+    let opened = member_seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened[0].0, "ghu_member_access_2");
+    assert_eq!(git_identity_of(&world).await, "member");
+    let stored = world
+        .usecase
+        .member_git_access_token(world.organization_id, "user-1")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.expose(), "ghu_member_access_2");
+}
+
+#[tokio::test]
+async fn a_refused_refresh_gives_the_app_and_the_note_without_failing_the_run() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::minutes(-5), MEMBER_REFRESH),
+    )
+    .await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(&seen, &member_seen, &world, MemberHost::default());
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(
+        run_row(&world.pool, world.run_id).await,
+        ("succeeded".into(), None)
+    );
+    assert_eq!(git_identity_of(&world).await, "app");
+    assert_eq!(seen.pull_requests.lock().unwrap().len(), 1);
+    assert!(member_seen.pull_requests.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.ends_with(APP_NOTE), "{}", posted[0].2);
+}
+
+#[tokio::test]
+async fn a_member_without_write_access_to_the_repository_gets_the_app_and_the_note() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(
+        &seen,
+        &member_seen,
+        &world,
+        MemberHost {
+            can_push: false,
+            ..MemberHost::default()
+        },
+    );
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(git_identity_of(&world).await, "app");
+    assert_eq!(seen.pull_requests.lock().unwrap().len(), 1);
+    assert!(member_seen.pull_requests.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.ends_with(APP_NOTE), "{}", posted[0].2);
+}
+
+#[tokio::test]
+async fn a_pull_request_refused_with_the_members_token_is_opened_by_the_app_with_the_note() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(
+        &seen,
+        &member_seen,
+        &world,
+        MemberHost {
+            pull_request: Err("Resource not accessible by personal access token"),
+            ..MemberHost::default()
+        },
+    );
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(
+        run_row(&world.pool, world.run_id).await,
+        ("succeeded".into(), None)
+    );
+    assert_eq!(git_identity_of(&world).await, "member");
+    assert_eq!(member_seen.pull_requests.lock().unwrap().len(), 1);
+    assert_eq!(seen.pull_requests.lock().unwrap().len(), 1);
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(posted[0].2.contains(PR_URL));
+    assert!(posted[0].2.ends_with(APP_NOTE), "{}", posted[0].2);
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    assert_eq!(output["pull_request"], PR_URL);
+}
+
+#[tokio::test]
+async fn a_pull_request_that_already_exists_is_not_retried_with_the_app() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(
+        &seen,
+        &member_seen,
+        &world,
+        MemberHost {
+            pull_request: Err("Validation Failed: A pull request already exists for acme:x."),
+            ..MemberHost::default()
+        },
+    );
+
+    let runner = deleting(runner_ending(
+        &seen,
+        lines_of(SAMPLE),
+        TaskOutcome::Succeeded,
+    ));
+    pipeline(&world, runner, host)
+        .execute(world.run_id, None)
+        .await
+        .unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "failed");
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+}
+
+const MEMBER_PAT: &str = "github_pat_member_personal_secret";
+
+async fn save_ada_personal_token(world: &World, expires_at: Option<chrono::DateTime<Utc>>) {
+    let mut validator = MockPersonalTokenValidator::new();
+    validator.expect_validate().returning(move |_| {
+        Box::pin(std::future::ready(Ok(PersonalTokenCheck {
+            user: GithubUser {
+                id: 583231,
+                login: "ada".into(),
+            },
+            expires_at,
+        })))
+    });
+    world
+        .usecase
+        .save_github_personal_token(
+            human(world.organization_id),
+            SecretToken::new(MEMBER_PAT),
+            &validator,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_personal_token_opens_the_pull_request_even_when_the_apps_authorization_exists() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    save_ada_personal_token(&world, None).await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(&seen, &member_seen, &world, MemberHost::default());
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert_eq!(git_identity_of(&world).await, "member");
+    let opened = member_seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].0, MEMBER_PAT);
+    assert!(seen.pull_requests.lock().unwrap().is_empty());
+    assert!(member_seen.refreshed_with.lock().unwrap().is_empty());
+    let posted = comments(&world.pool, world.card.id).await;
+    assert!(!posted[0].2.contains(APP_NOTE));
+    let (_, _, _, _, output) = step(&world.pool, world.run_id).await;
+    for text in [posted[0].2.clone(), output.to_string()] {
+        assert!(!text.contains(MEMBER_PAT));
+    }
+}
+
+#[tokio::test]
+async fn an_expired_personal_token_falls_back_to_the_apps_authorization() {
+    let Some(world) = world().await else { return };
+    connect_ada(
+        &world,
+        user_tokens(MEMBER_ACCESS, chrono::Duration::hours(8), MEMBER_REFRESH),
+    )
+    .await;
+    save_ada_personal_token(&world, Some(Utc::now() - chrono::Duration::minutes(1))).await;
+    let (seen, member_seen) = (Seen::default(), MemberSeen::default());
+    let host = member_host(&seen, &member_seen, &world, MemberHost::default());
+
+    run_with_host(&world, host, &seen).await;
+
+    assert_eq!(git_identity_of(&world).await, "member");
+    let opened = member_seen.pull_requests.lock().unwrap().clone();
+    assert_eq!(opened[0].0, MEMBER_ACCESS);
 }

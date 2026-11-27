@@ -11,5 +11,5 @@ GRANT USAGE ON SCHEMA public TO matos_egress_proxy;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM matos_egress_proxy;
 
 GRANT SELECT ON task_grants, provider_credentials, user_provider_credentials, github_installations,
-    github_apps
+    github_apps, github_user_connections, github_personal_tokens
     TO matos_egress_proxy;

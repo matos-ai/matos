@@ -11,19 +11,25 @@ import { Field } from '#/components/ui/field'
 import { Input } from '#/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '#/components/ui/radio-group'
 import { Skeleton } from '#/components/ui/skeleton'
+import { PersonalTokenSection } from '#/domain/integrations/feature/personal-token-section'
 import { RepositoriesSection } from '#/domain/integrations/feature/repositories-section'
 import {
 	describeDeleteAppError,
 	describeDisconnectError,
 	describeInstallError,
 	describeManifestError,
+	describeMyAuthorizeError,
+	describeMyDisconnectError,
 } from '#/domain/integrations/github-errors'
 import {
 	useCreateGithubManifest,
 	useDeleteGithubApp,
 	useDisconnectGithub,
+	useDisconnectMyGithub,
 	useGithubInstallUrl,
 	useGithubIntegration,
+	useMyGithubAuthorizeUrl,
+	useMyGithubConnection,
 } from '#/domain/integrations/hooks/use-github'
 import {
 	isValidGithubLogin,
@@ -180,38 +186,139 @@ function AppSummary({ app }: { app: Schemas.GithubAppResponse }) {
 	)
 }
 
+function MyAccount({ onNotice }: { onNotice: (message: string) => void }) {
+	const connection = useMyGithubConnection()
+	const authorize = useMyGithubAuthorizeUrl()
+	const disconnect = useDisconnectMyGithub()
+	const [confirming, setConfirming] = useState(false)
+
+	const connect = () =>
+		authorize.mutate(undefined, {
+			onSuccess: (result) => window.location.assign(result.url),
+		})
+
+	return (
+		<SectionCard title="Ton compte GitHub">
+			{connection.isPending ? (
+				<Skeleton className="h-10 rounded-lg" />
+			) : connection.isError ? (
+				<div className="grid justify-items-start gap-2">
+					<InlineAlert tone="danger">
+						Impossible de lire l'état de ton compte GitHub.
+					</InlineAlert>
+					<Button variant="outline" onClick={() => void connection.refetch()}>
+						Réessayer
+					</Button>
+				</div>
+			) : connection.data.connected ? (
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<p className="m-0">
+						Connecté en tant que{' '}
+						<b className="font-semibold">@{connection.data.login}</b>
+						{connection.data.connected_at ? (
+							<span className="text-muted-foreground">
+								{' '}
+								· depuis le {formatDate(connection.data.connected_at)}
+							</span>
+						) : null}
+					</p>
+					<Button
+						size="sm"
+						variant="outline"
+						disabled={disconnect.isPending}
+						onClick={() => setConfirming(true)}
+					>
+						Déconnecter
+					</Button>
+				</div>
+			) : (
+				<div className="grid justify-items-start gap-2">
+					<p className="m-0 text-muted-foreground">
+						Les pull requests et les pushes des agents seront faits en ton nom
+						sur GitHub.
+					</p>
+					{authorize.isError ? (
+						<InlineAlert tone="danger">
+							{describeMyAuthorizeError(authorize.error)}
+						</InlineAlert>
+					) : null}
+					<Button onClick={connect} disabled={authorize.isPending}>
+						{authorize.isPending
+							? 'Redirection vers GitHub…'
+							: 'Connecter mon compte GitHub'}
+					</Button>
+				</div>
+			)}
+			{connection.data ? (
+				<PersonalTokenSection
+					token={connection.data.personal_token ?? null}
+					onNotice={onNotice}
+				/>
+			) : null}
+			<ConfirmDialog
+				open={confirming}
+				title="Déconnecter ton compte GitHub ?"
+				description="Les pull requests et les pushes des agents ne seront plus faits en ton nom : l'application GitHub de l'organisation les remplace."
+				confirmLabel="Déconnecter"
+				onOpenChange={setConfirming}
+				onConfirm={() => {
+					disconnect.mutate(undefined, {
+						onSuccess: () => onNotice('Compte GitHub déconnecté'),
+						onError: () => onNotice(describeMyDisconnectError()),
+					})
+					setConfirming(false)
+				}}
+			/>
+		</SectionCard>
+	)
+}
+
 export function GithubPage({ banner }: Props) {
+	const [notice, setNotice] = useNotice()
+	return (
+		<Page>
+			<PageHeader
+				title="GitHub"
+				description="Relie l'organisation à GitHub pour que les agents travaillent sur des dépôts."
+			/>
+			<Notice message={notice} className="mb-2.5" />
+			{banner ? (
+				<InlineAlert tone="success" className="mb-2.5">
+					{banner}
+				</InlineAlert>
+			) : null}
+			<MyAccount onNotice={setNotice} />
+			<OrganizationGithub onNotice={setNotice} />
+		</Page>
+	)
+}
+
+function OrganizationGithub({
+	onNotice: setNotice,
+}: {
+	onNotice: (message: string) => void
+}) {
 	const integration = useGithubIntegration()
 	const install = useGithubInstallUrl()
 	const disconnect = useDisconnectGithub()
 	const deleteApp = useDeleteGithubApp()
-	const [notice, setNotice] = useNotice()
 	const [confirm, setConfirm] = useState<'disconnect' | 'delete' | null>(null)
-
-	const header = (
-		<PageHeader
-			title="GitHub"
-			description="Relie l'organisation à GitHub pour que les agents travaillent sur des dépôts."
-		/>
-	)
 
 	if (integration.isPending) {
 		return (
-			<Page>
-				{header}
+			<>
 				<output className="grid gap-2.5">
 					<span className="sr-only">Chargement…</span>
 					<Skeleton className="h-28 rounded-lg" />
 					<Skeleton className="h-28 rounded-lg" />
 				</output>
-			</Page>
+			</>
 		)
 	}
 
 	if (integration.isError) {
 		return (
-			<Page>
-				{header}
+			<>
 				<div className="grid justify-items-start gap-2">
 					<InlineAlert tone="danger">
 						Impossible de lire l'état de l'intégration GitHub.
@@ -220,7 +327,7 @@ export function GithubPage({ banner }: Props) {
 						Réessayer
 					</Button>
 				</div>
-			</Page>
+			</>
 		)
 	}
 
@@ -252,15 +359,7 @@ export function GithubPage({ banner }: Props) {
 	}
 
 	return (
-		<Page>
-			{header}
-			<Notice message={notice} className="mb-2.5" />
-			{banner ? (
-				<InlineAlert tone="success" className="mb-2.5">
-					{banner}
-				</InlineAlert>
-			) : null}
-
+		<>
 			{installation && app ? (
 				<>
 					<SectionCard
@@ -365,6 +464,6 @@ export function GithubPage({ banner }: Props) {
 				}}
 				onConfirm={runConfirmed}
 			/>
-		</Page>
+		</>
 	)
 }

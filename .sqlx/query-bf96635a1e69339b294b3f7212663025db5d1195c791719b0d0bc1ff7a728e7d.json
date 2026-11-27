@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO github_user_connections (\n                organization_id, subject, github_user_id, github_login, access_nonce,\n                access_ciphertext, access_expires_at, refresh_nonce, refresh_ciphertext,\n                refresh_expires_at, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            ON CONFLICT (organization_id, subject) DO UPDATE\n            SET github_user_id = EXCLUDED.github_user_id,\n                github_login = EXCLUDED.github_login,\n                access_nonce = EXCLUDED.access_nonce,\n                access_ciphertext = EXCLUDED.access_ciphertext,\n                access_expires_at = EXCLUDED.access_expires_at,\n                refresh_nonce = EXCLUDED.refresh_nonce,\n                refresh_ciphertext = EXCLUDED.refresh_ciphertext,\n                refresh_expires_at = EXCLUDED.refresh_expires_at,\n                updated_at = EXCLUDED.updated_at\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text",
+        "Bytea",
+        "Bytea",
+        "Timestamptz",
+        "Bytea",
+        "Bytea",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bf96635a1e69339b294b3f7212663025db5d1195c791719b0d0bc1ff7a728e7d"
+}

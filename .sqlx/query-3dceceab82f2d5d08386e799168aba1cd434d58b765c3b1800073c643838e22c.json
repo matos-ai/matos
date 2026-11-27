@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO github_personal_tokens (\n                organization_id, subject, github_user_id, github_login, token_nonce,\n                token_ciphertext, token_preview, expires_at, active, created_at, updated_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n            ON CONFLICT (organization_id, subject) DO UPDATE\n            SET github_user_id = EXCLUDED.github_user_id,\n                github_login = EXCLUDED.github_login,\n                token_nonce = EXCLUDED.token_nonce,\n                token_ciphertext = EXCLUDED.token_ciphertext,\n                token_preview = EXCLUDED.token_preview,\n                expires_at = EXCLUDED.expires_at,\n                active = EXCLUDED.active,\n                updated_at = EXCLUDED.updated_at\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text",
+        "Bytea",
+        "Bytea",
+        "Text",
+        "Timestamptz",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3dceceab82f2d5d08386e799168aba1cd434d58b765c3b1800073c643838e22c"
+}

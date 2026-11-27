@@ -274,6 +274,7 @@ export namespace Schemas {
   export type ClientListResponse = { items: Array<ClientListItemResponse> };
   export type CommentCardRequest = { body: string };
   export type ConnectGithubRequest = { code: string; installation_id: number; state: string };
+  export type ConnectGithubUserRequest = { code: string; state: string };
   export type ConversationId = string;
   export type ConversationSummaryResponse = {
     archived: boolean;
@@ -436,6 +437,18 @@ export namespace Schemas {
     owner_login: string;
     owner_type: string;
     slug: string;
+  };
+  export type GithubPersonalTokenResponse = {
+    active: boolean;
+    expires_at?: (string | null) | undefined;
+    login: string;
+    preview: string;
+  };
+  export type GithubConnectionResponse = {
+    connected: boolean;
+    connected_at?: (string | null) | undefined;
+    login?: (string | null) | undefined;
+    personal_token?: (null | GithubPersonalTokenResponse) | undefined;
   };
   export type GithubInstallationResponse = {
     account_login: string;
@@ -722,6 +735,7 @@ export namespace Schemas {
     updated_at: string;
   };
   export type ProviderListResponse = { providers: Array<ProviderResponse> };
+  export type PutGithubPersonalTokenRequest = { token: string };
   export type PutProviderRequest = Partial<{ api_key: string; base_url: string | null }>;
   export type PutUserProviderRequest = {
     api_key?: (string | null) | undefined;
@@ -777,6 +791,7 @@ export namespace Schemas {
   };
   export type SaveBudgetsRequest = Partial<{ agents: Array<AgentLimitRequest>; organization: null | LimitRequest }>;
   export type SendMessageRequest = Partial<{ message: string | null }>;
+  export type SetGithubPersonalTokenActiveRequest = { active: boolean };
   export type SkillId = string;
   export type SkillResponse = {
     archived: boolean;
@@ -1873,6 +1888,77 @@ export namespace Endpoints {
     parameters: never;
     responses: { 200: Schemas.MeResponse; 401: Schemas.ApiErrorResponse };
   };
+  export type get_GetMyGithubConnection = {
+    method: "GET";
+    path: "/api/v1/me/github";
+    requestFormat: "json";
+    parameters: never;
+    responses: { 200: Schemas.GithubConnectionResponse; 401: Schemas.ApiErrorResponse };
+  };
+  export type delete_DisconnectMyGithub = {
+    method: "DELETE";
+    path: "/api/v1/me/github";
+    requestFormat: "json";
+    parameters: never;
+    responses: { 204: unknown; 401: Schemas.ApiErrorResponse };
+  };
+  export type get_GetMyGithubAuthorizeUrl = {
+    method: "GET";
+    path: "/api/v1/me/github/authorize";
+    requestFormat: "json";
+    parameters: never;
+    responses: {
+      200: Schemas.InstallUrlResponse;
+      401: Schemas.ApiErrorResponse;
+      409: Schemas.ApiErrorResponse;
+      503: Schemas.ApiErrorResponse;
+    };
+  };
+  export type post_ConnectMyGithub = {
+    method: "POST";
+    path: "/api/v1/me/github/callback";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.ConnectGithubUserRequest;
+    };
+    responses: {
+      200: Schemas.GithubConnectionResponse;
+      400: Schemas.ApiErrorResponse;
+      401: Schemas.ApiErrorResponse;
+      409: Schemas.ApiErrorResponse;
+      503: Schemas.ApiErrorResponse;
+    };
+  };
+  export type put_PutMyGithubToken = {
+    method: "PUT";
+    path: "/api/v1/me/github/token";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.PutGithubPersonalTokenRequest;
+    };
+    responses: {
+      200: Schemas.GithubConnectionResponse;
+      400: Schemas.ApiErrorResponse;
+      401: Schemas.ApiErrorResponse;
+      503: Schemas.ApiErrorResponse;
+    };
+  };
+  export type delete_DeleteMyGithubToken = {
+    method: "DELETE";
+    path: "/api/v1/me/github/token";
+    requestFormat: "json";
+    parameters: never;
+    responses: { 204: unknown; 401: Schemas.ApiErrorResponse };
+  };
+  export type patch_SetMyGithubTokenActive = {
+    method: "PATCH";
+    path: "/api/v1/me/github/token";
+    requestFormat: "json";
+    parameters: {
+      body: Schemas.SetGithubPersonalTokenActiveRequest;
+    };
+    responses: { 200: Schemas.GithubConnectionResponse; 401: Schemas.ApiErrorResponse; 404: Schemas.ApiErrorResponse };
+  };
   export type get_ListMyProviders = {
     method: "GET";
     path: "/api/v1/me/providers";
@@ -2707,6 +2793,8 @@ export type EndpointByMethod = {
     "/api/v1/mcp-connectors": Endpoints.get_ListMcpConnectors;
     "/api/v1/mcp-connectors/{connector_id}": Endpoints.get_GetMcpConnector;
     "/api/v1/me": Endpoints.get_GetMe;
+    "/api/v1/me/github": Endpoints.get_GetMyGithubConnection;
+    "/api/v1/me/github/authorize": Endpoints.get_GetMyGithubAuthorizeUrl;
     "/api/v1/me/providers": Endpoints.get_ListMyProviders;
     "/api/v1/members": Endpoints.get_ListMembers;
     "/api/v1/model-assignments": Endpoints.get_GetModelAssignments;
@@ -2758,6 +2846,7 @@ export type EndpointByMethod = {
     "/api/v1/mcp-connectors/oauth/callback": Endpoints.post_CompleteMcpOAuth;
     "/api/v1/mcp-connectors/{connector_id}/authorize": Endpoints.post_AuthorizeMcpConnector;
     "/api/v1/mcp-connectors/{connector_id}/test": Endpoints.post_TestMcpConnector;
+    "/api/v1/me/github/callback": Endpoints.post_ConnectMyGithub;
     "/api/v1/me/providers/{kind}/test": Endpoints.post_TestMyProvider;
     "/api/v1/projects": Endpoints.post_CreateProject;
     "/api/v1/projects/{project_id}/worksites": Endpoints.post_LaunchWorksites;
@@ -2782,6 +2871,7 @@ export type EndpointByMethod = {
   };
   put: {
     "/api/v1/budgets": Endpoints.put_SaveBudgets;
+    "/api/v1/me/github/token": Endpoints.put_PutMyGithubToken;
     "/api/v1/me/providers/{kind}": Endpoints.put_PutMyProvider;
     "/api/v1/model-assignments": Endpoints.put_PutModelAssignments;
     "/api/v1/providers/{kind}": Endpoints.put_PutProvider;
@@ -2792,6 +2882,7 @@ export type EndpointByMethod = {
     "/api/v1/conversations/{id}": Endpoints.patch_UpdateConversation;
     "/api/v1/integration-instances/{id}": Endpoints.patch_UpdateIntegrationInstance;
     "/api/v1/mcp-connectors/{connector_id}": Endpoints.patch_UpdateMcpConnector;
+    "/api/v1/me/github/token": Endpoints.patch_SetMyGithubTokenActive;
     "/api/v1/projects/{project_id}": Endpoints.patch_UpdateProject;
     "/api/v1/routines/{routine_id}": Endpoints.patch_UpdateRoutine;
     "/api/v1/routines/{routine_id}/triggers/{trigger_id}": Endpoints.patch_UpdateRoutineTrigger;
@@ -2804,6 +2895,8 @@ export type EndpointByMethod = {
     "/api/v1/integrations/github": Endpoints.delete_DisconnectGithub;
     "/api/v1/integrations/github/app": Endpoints.delete_DeleteGithubApp;
     "/api/v1/mcp-connectors/{connector_id}/connection": Endpoints.delete_DisconnectMcpConnector;
+    "/api/v1/me/github": Endpoints.delete_DisconnectMyGithub;
+    "/api/v1/me/github/token": Endpoints.delete_DeleteMyGithubToken;
     "/api/v1/me/providers/{kind}": Endpoints.delete_DeleteMyProvider;
     "/api/v1/providers/{kind}": Endpoints.delete_DeleteProvider;
     "/api/v1/routines/{routine_id}/triggers/{trigger_id}": Endpoints.delete_RemoveRoutineTrigger;

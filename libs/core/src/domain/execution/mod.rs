@@ -17,6 +17,7 @@ pub use self::{companion::Companion, guard::PushGuard};
 use crate::domain::{
     agent::SecretToken,
     card::{Card, Column},
+    github_user::GitIdentity,
 };
 
 /// FerrisKey client of the executor agent.
@@ -523,6 +524,7 @@ pub struct TaskGrant {
     /// Who started the run, whose own Anthropic key is used before the
     /// organization's; `None` on grants issued before it was recorded.
     pub initiated_by: Option<String>,
+    pub git_identity: GitIdentity,
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
 }
@@ -598,6 +600,7 @@ mod tests {
             mode: ExecutionMode::Change,
             companions: Vec::new(),
             initiated_by: None,
+            git_identity: GitIdentity::App,
             expires_at: now + chrono::Duration::minutes(5),
             revoked_at: None,
         };
