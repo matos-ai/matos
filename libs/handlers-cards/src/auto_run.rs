@@ -7,7 +7,7 @@ use matos_core::domain::{
     card::Column,
     crew::CrewAgent,
     execution::RepositoryRef,
-    run::RunSubject,
+    run::{RunStatus, RunSubject},
 };
 use matos_github::GithubApps;
 use matos_handlers::{ApiError, AppState, Caller};
@@ -34,7 +34,9 @@ pub struct AgentRunOutcome {
     /// Why it did not: a refusal code of the agent-runs route (`no_provider`,
     /// `not_connected`…), `agent_busy` (a run is going; a reply posted now
     /// starts the next one when it ends), `choose_repository` (the agent has
-    /// several repositories and none was named), or `failed`.
+    /// several repositories and none was named), `cancel_forbidden` or
+    /// `cancel_failed` (a reply asked to stop the run and it could not), or
+    /// `failed`.
     pub skipped: Option<String>,
     /// French, for the person.
     pub message: Option<String>,
@@ -54,6 +56,47 @@ impl AgentRunOutcome {
             run_id: None,
             skipped: Some(code.to_owned()),
             message: Some(message.into()),
+        }
+    }
+}
+
+pub async fn cancel_active_runs(
+    state: &AppState,
+    caller: &Caller,
+    card_id: CardId,
+) -> Result<(), AgentRunOutcome> {
+    let subject = caller.subject();
+    let detail = state
+        .usecase
+        .card_detail(subject.clone(), card_id)
+        .await
+        .map_err(|error| cancel_failure(card_id, &error))?;
+    for overview in detail
+        .runs
+        .iter()
+        .filter(|overview| matches!(overview.run.status, RunStatus::Queued | RunStatus::Running))
+    {
+        state
+            .usecase
+            .cancel_run(subject.clone(), overview.run.id)
+            .await
+            .map_err(|error| cancel_failure(card_id, &error))?;
+    }
+    Ok(())
+}
+
+fn cancel_failure(card_id: CardId, error: &CoreError) -> AgentRunOutcome {
+    match error {
+        CoreError::Forbidden { .. } => AgentRunOutcome::skipped(
+            "cancel_forbidden",
+            "Seul l'initiateur du run ou un administrateur peut l'arrêter : le message est publié, l'agent n'est pas relancé.",
+        ),
+        _ => {
+            tracing::warn!(%card_id, ?error, "the active run was not cancelled");
+            AgentRunOutcome::skipped(
+                "cancel_failed",
+                "Le run en cours n'a pas pu être arrêté : le message est publié, l'agent n'est pas relancé.",
+            )
         }
     }
 }

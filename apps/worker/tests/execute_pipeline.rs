@@ -14,12 +14,16 @@ use matos_core::{
         authorization::Subject,
         card::{
             Card, Column,
+            edit::EditCard,
             service::{CreateCard, MoveCard},
         },
+        client::links::Change,
+        crew::service::CreateAgent,
         delegation::DelegatedToken,
         execution::{
-            CommitAuthor, DraftPullRequest, ExecutionMode, ExecutorModel, GithubAppCredentials,
-            PullRequestUrl, TaskGrant, TaskLine, TaskMarker, TaskOutcome, TaskSpec,
+            CommitAuthor, DraftPullRequest, ExecutionMode, ExecutorModel, ExecutorStatus,
+            GithubAppCredentials, PullRequestUrl, TaskGrant, TaskLine, TaskMarker, TaskOutcome,
+            TaskSpec,
             harness::Harness,
             ports::{MockCodeHost, MockTaskRunner},
         },
@@ -28,12 +32,13 @@ use matos_core::{
             ports::{MockGithubUserOAuth, MockPersonalTokenValidator},
         },
         member::Member,
-        provider::ModelAssignments,
+        provider::{ModelAssignments, ProviderKind},
         run::{
             StepKind,
             step::{Pricing, Step, StepStatus},
             stream::{RUN_STREAM_CHANNEL, RunStreamNotice},
         },
+        user_provider::service::PutUserProvider,
     },
     infrastructure::{crypto::SecretCipher, postgres},
 };
@@ -3311,4 +3316,181 @@ async fn a_run_cancelled_after_the_agent_ended_pushes_nothing() {
     assert!(seen.pull_requests.lock().unwrap().is_empty());
     assert_stopped_once(&comments(&world.pool, world.card.id).await);
     assert_closed(&world).await;
+}
+
+async fn ready_for_relaunch(world: &World) {
+    for id in ["user-1", "user-2"] {
+        world
+            .usecase
+            .put_user_provider(PutUserProvider {
+                subject: Subject {
+                    id: id.into(),
+                    ..human(world.organization_id)
+                },
+                kind: ProviderKind::Anthropic,
+                secret: Some(SecretToken::new("sk-ant-api03-abcdefgh1234")),
+                base_url: None,
+                default_model: "claude-haiku-5-5".into(),
+                is_default: None,
+            })
+            .await
+            .unwrap();
+    }
+    world
+        .usecase
+        .record_executor_status(&ExecutorStatus {
+            enabled: true,
+            reason: None,
+        })
+        .await
+        .unwrap();
+    let agent = world
+        .usecase
+        .create_crew_agent(
+            human(world.organization_id),
+            CreateAgent {
+                slug: "relanceuse".into(),
+                name: "Relanceuse".into(),
+                role: String::new(),
+                description: String::new(),
+                model: "claude-opus-5".into(),
+                hue: 0,
+                reports_to: None,
+                instructions: "Tu réponds.".into(),
+                connector_grants: vec![],
+                repository_grants: vec!["acme/web".into()],
+            },
+        )
+        .await
+        .unwrap();
+    let mut edit = EditCard::new(world.card.version);
+    edit.assignee_agent = Change::Set(agent.id);
+    world
+        .usecase
+        .edit_card(human(world.organization_id), world.card.id, edit)
+        .await
+        .unwrap();
+}
+
+async fn reply_as_user_2(world: &World) {
+    world
+        .usecase
+        .comment_card(
+            Subject {
+                id: "user-2".into(),
+                ..human(world.organization_id)
+            },
+            world.card.id,
+            "Et le fichier de config ?".into(),
+            None,
+        )
+        .await
+        .unwrap();
+}
+
+type RelaunchRow = (Uuid, String, String, Option<String>, Option<bool>);
+
+async fn relaunched(world: &World) -> Vec<(RunId, String, String, Option<String>, bool)> {
+    let rows: Vec<RelaunchRow> = sqlx::query_as(
+        "SELECT r.id, r.initiated_by, r.base_branch, r.repository, t.allow_writes
+         FROM runs r LEFT JOIN agent_tasks t ON t.run_id = r.id
+         WHERE r.card_id = $1 AND r.id <> $2 ORDER BY r.id",
+    )
+    .bind(world.card.id.0)
+    .bind(world.run_id.0)
+    .fetch_all(&world.pool)
+    .await
+    .unwrap();
+    rows.into_iter()
+        .map(|(id, by, branch, repository, writes)| {
+            (RunId(id), by, branch, repository, writes.unwrap_or(true))
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn a_failed_run_with_a_reply_relaunches_read_only_as_the_replier() {
+    let Some(world) = world().await else { return };
+    ready_for_relaunch(&world).await;
+    reply_as_user_2(&world).await;
+    let seen = Seen::default();
+    let runner = deleting(runner_ending(
+        &seen,
+        Vec::new(),
+        TaskOutcome::Failed {
+            reason: "OOMKilled".into(),
+        },
+    ));
+    let pipeline = pipeline(&world, runner, without_config());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "failed");
+    let next = relaunched(&world).await;
+    assert_eq!(next.len(), 1);
+    assert_eq!(next[0].1, "user-2");
+    assert_eq!(next[0].2, "main");
+    assert_eq!(next[0].3.as_deref(), Some("acme/web"));
+    assert!(!next[0].4);
+}
+
+#[tokio::test]
+async fn a_refused_relaunch_leaves_the_finished_run_untouched() {
+    let Some(world) = world().await else { return };
+    reply_as_user_2(&world).await;
+    let seen = Seen::default();
+    let mut lines = lines_of(SAMPLE);
+    lines.pop();
+    lines.push(TaskLine::Matos(TaskMarker::NoChanges));
+    let runner = runner_ending(&seen, lines, TaskOutcome::Succeeded);
+    let pipeline = pipeline(&world, runner, without_config());
+
+    pipeline.execute(world.run_id, None).await.unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "succeeded");
+    assert!(relaunched(&world).await.is_empty());
+}
+
+#[tokio::test]
+async fn a_cancelled_run_is_not_relaunched_even_with_a_reply() {
+    let Some(world) = world().await else { return };
+    ready_for_relaunch(&world).await;
+    let seen = Seen::default();
+    let mut runner = MockTaskRunner::new();
+    runner
+        .expect_start()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    runner.expect_follow().returning(|_, sender| {
+        let lines = scripted_conversation();
+        Box::pin(async move {
+            for line in lines {
+                sender.send(line).await.unwrap();
+            }
+            std::future::pending().await
+        })
+    });
+    runner
+        .expect_delete()
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let pipeline = pipeline(
+        &world,
+        runner,
+        host(&seen, world.organization_id, world.installation_id),
+    );
+    let stopper = async {
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        reply_as_user_2(&world).await;
+        cancel_run_row(&world.pool, world.run_id).await;
+    };
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let run = pipeline.execute(world.run_id, None);
+        let (ended, ()) = tokio::join!(run, stopper);
+        ended.unwrap();
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(run_row(&world.pool, world.run_id).await.0, "cancelled");
+    assert!(relaunched(&world).await.is_empty());
 }

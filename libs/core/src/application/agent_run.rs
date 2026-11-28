@@ -10,8 +10,8 @@ use crate::{
         agent::SecretToken,
         agent_identity::{AgentClientId, IdentityStatus, ports::AgentIdentityRepository},
         agent_task::{
-            AgentRunError, AgentRunRefusal, AgentTask, RepositoryTarget, StartAgentRun, actor_of,
-            ports::AgentTaskRepository,
+            AgentRunError, AgentRunRefusal, AgentTask, ExtraRepositories, RepositoryTarget,
+            StartAgentRun, actor_of, ports::AgentTaskRepository,
         },
         approval::{
             Approval, ApprovalStatus, ApprovedCall, PlannedChange, SYSTEM_ACTOR, ToolGrant,
@@ -989,6 +989,48 @@ impl MatosUseCase {
             allow_writes: false,
         };
         match self.start_agent_run(subject, card_id, command).await {
+            Ok(started) => Ok(Some(started)),
+            Err(AgentRunError::Core(CoreError::Conflict(_))) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub async fn relaunch_repository_on_reply(
+        &self,
+        run: &Run,
+    ) -> Result<Option<StartedAgentRun>, AgentRunError> {
+        let RunSubject::Card {
+            card_id,
+            repository,
+            base_branch,
+            extra_repositories,
+        } = &run.subject
+        else {
+            return Ok(None);
+        };
+        let Some((subject, version)) = self.unread_reply(run, *card_id).await? else {
+            return Ok(None);
+        };
+        let target = RepositoryTarget {
+            repository: repository.clone(),
+            base_branch: Some(base_branch.clone()),
+            extra_repositories: ExtraRepositories::new(repository, extra_repositories.clone())?,
+        };
+        let command = StartAgentRun {
+            expected_version: version,
+            allow_writes: false,
+        };
+        let started = match self
+            .check_agent_repository_run(subject.clone(), *card_id, command, &target)
+            .await
+        {
+            Ok(()) => {
+                self.start_agent_repository_run(subject, *card_id, command, target)
+                    .await
+            }
+            Err(error) => Err(error),
+        };
+        match started {
             Ok(started) => Ok(Some(started)),
             Err(AgentRunError::Core(CoreError::Conflict(_))) => Ok(None),
             Err(error) => Err(error),
