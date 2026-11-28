@@ -1,5 +1,7 @@
+import { type QueryClient, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
+	ArrowDown,
 	ArrowUp,
 	ClipboardList,
 	Layers,
@@ -26,19 +28,30 @@ import { TaskPlanPanel } from '#/domain/approvals/feature/task-plan-panel'
 import { TaskArtifactsPanel } from '#/domain/artifacts/feature/task-artifacts-panel'
 import { useMe } from '#/domain/identity/hooks/use-me'
 import { RunAgentDialog } from '#/domain/tasks/feature/run-agent-dialog'
-import { RunStatusPanel } from '#/domain/tasks/feature/run-status-panel'
+import {
+	RunDetails,
+	RunStatusPanel,
+} from '#/domain/tasks/feature/run-status-panel'
 import { SubtasksPanel } from '#/domain/tasks/feature/subtasks-panel'
 import { useAgentOf } from '#/domain/tasks/feature/use-agent-of'
 import {
 	type AgentRunOutcome,
+	cancelNotice,
 	handoffNotice,
 	takeHandoff,
 } from '#/domain/tasks/handoff'
 import {
+	useCancelRun,
+	useIsCancelling,
+} from '#/domain/tasks/hooks/use-cancel-run'
+import {
+	discardFailedComment,
+	type PendingComment,
 	useCard,
 	useCards,
 	useCommentCard,
 	useMoveCard,
+	useRetryComment,
 	useUpdateCard,
 } from '#/domain/tasks/hooks/use-tasks'
 import {
@@ -51,8 +64,11 @@ import { canRunAgent, isActiveRun } from '#/domain/tasks/run-agent'
 import { taskPathId } from '#/domain/tasks/task-ids'
 import { STATUS_LABEL } from '#/domain/tasks/task-list'
 import { AgentAvatar } from '#/domain/tasks/ui/agent-chip'
+import { StopButton } from '#/domain/tasks/ui/agent-turn'
+import { isAgentComment, placeRuns } from '#/domain/tasks/ui/agent-turn-model'
 import { PropertiesPanel } from '#/domain/tasks/ui/properties-panel'
 import { StatusIcon } from '#/domain/tasks/ui/status-icon'
+import { useStickToBottom } from '#/domain/tasks/ui/stick-to-bottom'
 import {
 	type Speaker,
 	Thread,
@@ -152,7 +168,23 @@ export function TaskPage({ pathId }: Props) {
 	const [runId, setRunId] = useState<string | null>(null)
 	const [runActive, setRunActive] = useState(false)
 	const [dialogOpen, setDialogOpen] = useState(false)
+	const client = useQueryClient()
+	const cancel = useCancelRun()
+	const retry = useRetryComment()
+	const [stopFailure, setStopFailure] = useState<{
+		runId: string
+		message: string
+	} | null>(null)
 	const topbar = useTopbarTarget()
+	const loadedRun = detail.data?.runs.find((r) => isActiveRun(r.status))
+	const adoptedSettled =
+		detail.data?.runs.some((r) => r.id === runId && !isActiveRun(r.status)) ??
+		false
+	const shownRun = runId && !adoptedSettled ? runId : (loadedRun?.id ?? null)
+	const running = runActive || Boolean(loadedRun)
+	const stoppable = running && shownRun !== null
+	const cancelling = useIsCancelling(shownRun)
+	const follow = useStickToBottom(running)
 	const tasks = useMemo(
 		() => (cards.data?.items ?? []).map((card) => toTask(card)),
 		[cards.data],
@@ -173,6 +205,38 @@ export function TaskPage({ pathId }: Props) {
 	useEffect(() => {
 		adopt(takeHandoff(id))
 	}, [id, adopt])
+
+	useEffect(() => {
+		if (adoptedSettled) setRunActive(false)
+	}, [adoptedSettled])
+
+	const stop = useCallback(() => {
+		if (!shownRun || !running) return
+		const target = shownRun
+		setStopFailure(null)
+		cancel.mutate(
+			{ runId: target, cardId: id },
+			{
+				onError: (error) => {
+					const message = cancelNotice(error)
+					if (message) setStopFailure({ runId: target, message })
+					else void refreshRunAndCards(client)
+				},
+			},
+		)
+	}, [shownRun, running, cancel.mutate, id, client])
+
+	useEffect(() => {
+		if (!stoppable) return
+		const onKey = (event: KeyboardEvent) => {
+			if ((event.metaKey || event.ctrlKey) && event.key === '.') {
+				event.preventDefault()
+				if (!cancelling) stop()
+			}
+		}
+		window.addEventListener('keydown', onKey)
+		return () => window.removeEventListener('keydown', onKey)
+	}, [stoppable, cancelling, stop])
 
 	if (detail.isPending) {
 		return (
@@ -196,33 +260,35 @@ export function TaskPage({ pathId }: Props) {
 	}
 
 	const task = toTask(detail.data.card)
-	const comments = detail.data.comments
+	const comments: PendingComment[] = detail.data.comments
 	const agent = agentOf(task.agentId)
 	const parent = task.parentId
 		? tasks.find((t) => t.id === task.parentId)
 		: undefined
 	const kids = childrenOf(tasks, task.id)
-	const loadedRun = detail.data.runs.find((r) => isActiveRun(r.status))
-	const shownRun = runId ?? loadedRun?.id ?? null
-	const running = runActive || Boolean(loadedRun)
+	const activeRun = detail.data.runs.find(
+		(r) => r.id === shownRun && isActiveRun(r.status),
+	)
+	const activeStart = activeRun
+		? Date.parse(activeRun.started_at ?? activeRun.created_at)
+		: null
+	const thread = placeRuns(comments, detail.data.runs)
 	const runnable = canRunAgent(task.card.column, task.agentId !== null)
 	const assignee = team?.find((a) => a.id === task.agentId)
 	const repositoryGrants = assignee?.repository_grants ?? []
 
-	const send = (event: React.FormEvent) => {
-		event.preventDefault()
+	const send = (interrupt: boolean) => {
 		const body = draft.trim()
 		if (!body) return
-		comment.mutate(
-			{ path: { card_id: task.id }, body: { body } },
-			{
-				onSuccess: (posted) => {
-					setDraft('')
-					adopt(posted.agent_run)
-				},
-				onError: () => notify("Le commentaire n'a pas pu être envoyé"),
-			},
-		)
+		setDraft('')
+		comment
+			.mutateAsync({
+				path: { card_id: task.id },
+				body: interrupt ? { body, interrupt: true } : { body },
+			})
+			.then((posted) => adopt(posted.agent_run))
+			.catch(() => undefined)
+		follow.scrollToBottom()
 	}
 
 	const conflictOr = (fallback: string) => (error: unknown) =>
@@ -289,8 +355,11 @@ export function TaskPage({ pathId }: Props) {
 				)}
 			>
 				<section className="flex min-h-0 min-w-0 flex-col">
-					<div className="flex-1 overflow-auto">
-						<div className="mx-auto grid w-full max-w-[820px] gap-6 px-5 pt-8 pb-6 sm:px-8">
+					<div ref={follow.scrollRef} className="flex-1 overflow-auto">
+						<div
+							ref={follow.contentRef}
+							className="mx-auto grid w-full max-w-[820px] gap-6 px-5 pt-8 pb-6 sm:px-8"
+						>
 							<header className="grid gap-2">
 								<div className="flex items-start gap-3">
 									<StatusIcon
@@ -366,30 +435,77 @@ export function TaskPage({ pathId }: Props) {
 										plain
 									/>
 								) : null}
-								{comments.map((c) => (
-									<ThreadMessage
-										key={c.id}
-										speaker={speakerOf(c, team, me, agentOf)}
-										body={c.body}
-										at={c.created_at}
-									/>
-								))}
+								{thread.map((item) =>
+									item.type === 'run' ? (
+										<RunDetails
+											key={`run-${item.run.id}`}
+											run={item.run}
+											agent={agent}
+										/>
+									) : (
+										<ThreadMessage
+											key={item.comment.id}
+											speaker={speakerOf(item.comment, team, me, agentOf)}
+											body={item.comment.body}
+											at={item.comment.created_at}
+											delivery={
+												item.comment.failed
+													? 'failed'
+													: item.comment.pending
+														? 'pending'
+														: undefined
+											}
+											queued={
+												activeStart !== null &&
+												!item.comment.failed &&
+												!item.comment.interrupt &&
+												!isAgentComment(item.comment) &&
+												Date.parse(item.comment.created_at) > activeStart
+											}
+											onRetry={() =>
+												retry.mutate({
+													cardId: task.id,
+													tempId: item.comment.id,
+												})
+											}
+											onDiscard={() => {
+												discardFailedComment(client, task.id, item.comment.id)
+											}}
+										/>
+									),
+								)}
 							</Thread>
 							{shownRun ? (
 								<RunStatusPanel
 									key={shownRun}
 									runId={shownRun}
-									agentName={agent.name}
-									agentHue={agent.hue}
+									agent={agent}
 									onActiveChange={setRunActive}
+									onStop={stop}
+									stopNotice={
+										stopFailure?.runId === shownRun ? stopFailure.message : null
+									}
 								/>
 							) : null}
 							<TaskPlanPanel cardId={task.id} agentName={agent.name} />
 						</div>
 					</div>
-					<div className="mx-auto w-full max-w-[820px] px-5 pb-5 sm:px-8">
+					<div className="relative mx-auto w-full max-w-[820px] px-5 pb-5 sm:px-8">
+						{running && !follow.atBottom ? (
+							<button
+								type="button"
+								onClick={follow.scrollToBottom}
+								className="absolute -top-11 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-[13px] font-medium shadow-sm hover:bg-secondary"
+							>
+								<ArrowDown aria-hidden="true" className="size-3.5" />
+								Aller en bas
+							</button>
+						) : null}
 						<form
-							onSubmit={send}
+							onSubmit={(event) => {
+								event.preventDefault()
+								send(false)
+							}}
 							className="rounded-2xl border bg-card px-4 pt-3 pb-2.5 shadow-sm focus-within:border-[color-mix(in_srgb,var(--primary)_55%,var(--border))]"
 						>
 							<textarea
@@ -407,7 +523,8 @@ export function TaskPage({ pathId }: Props) {
 										event.key === 'Enter' &&
 										(event.metaKey || event.ctrlKey)
 									) {
-										send(event)
+										event.preventDefault()
+										send(event.shiftKey && stoppable)
 									}
 								}}
 								className="block max-h-60 min-h-12 w-full resize-none border-0 bg-transparent p-0 text-[14.5px] outline-none field-sizing-content placeholder:text-muted-foreground"
@@ -425,15 +542,32 @@ export function TaskPage({ pathId }: Props) {
 										<span>{agent.model}</span>
 									</>
 								) : null}
-								<button
-									type="submit"
-									aria-label="Envoyer"
-									title="Envoyer (⌘ Entrée)"
-									disabled={comment.isPending}
-									className="ml-auto grid size-8 place-items-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-40"
-								>
-									<ArrowUp aria-hidden="true" className="size-4" />
-								</button>
+								<span className="ml-auto flex items-center gap-2">
+									{stoppable ? (
+										<StopButton cancelling={cancelling} onStop={stop} />
+									) : null}
+									{stoppable && draft.trim() ? (
+										<button
+											type="button"
+											aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
+											title="Arrêter et envoyer (⌘ ⇧ Entrée)"
+											disabled={cancelling}
+											onClick={() => send(true)}
+											className="h-8 rounded-full border px-3 text-[13px] font-medium text-foreground hover:bg-secondary disabled:opacity-60"
+										>
+											Arrêter et envoyer
+										</button>
+									) : null}
+									<button
+										type="submit"
+										aria-label="Envoyer"
+										aria-keyshortcuts="Control+Enter Meta+Enter"
+										title="Envoyer (⌘ Entrée)"
+										className="grid size-8 place-items-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-40"
+									>
+										<ArrowUp aria-hidden="true" className="size-4" />
+									</button>
+								</span>
 							</div>
 						</form>
 					</div>
@@ -476,6 +610,16 @@ export function TaskPage({ pathId }: Props) {
 			<Toast message={message} />
 		</>
 	)
+}
+
+function refreshRunAndCards(client: QueryClient) {
+	return client.invalidateQueries({
+		predicate: (query) => {
+			const [key] = query.queryKey as [{ _id?: string }?]
+			const id = key?._id ?? ''
+			return id.startsWith('/api/v1/runs') || id.startsWith('/api/v1/cards')
+		},
+	})
 }
 
 function speakerOf(

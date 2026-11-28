@@ -48,11 +48,100 @@ interface EventMessage {
 	card_id?: string
 }
 
+export interface RunSubscriptionHandlers {
+	onSubscribed(): void
+	onRefused(): void
+	onDelta(after: number, text: string): void
+	onEvents(last: number): void
+	onResync(): void
+}
+
+type RunMessage =
+	| { op: 'subscribed'; run_id: string }
+	| { op: 'refused'; run_id: string }
+	| { op: 'delta'; run_id: string; after: number; text: string }
+	| { op: 'run_events'; run_id: string; last: number }
+
 type ServerMessage =
 	| { op: 'ready' }
 	| { op: 'degraded' }
 	| { op: 'resync' }
 	| EventMessage
+	| RunMessage
+
+const runSubscriptions = new Map<string, Set<RunSubscriptionHandlers>>()
+let sendFrame: ((frame: string) => void) | null = null
+
+function runFrame(op: 'subscribe' | 'unsubscribe', runId: string): string {
+	return JSON.stringify({ op, run_id: runId })
+}
+
+export function subscribeRun(
+	runId: string,
+	handlers: RunSubscriptionHandlers,
+): () => void {
+	let handlerSet = runSubscriptions.get(runId)
+	if (!handlerSet) {
+		handlerSet = new Set()
+		runSubscriptions.set(runId, handlerSet)
+		sendFrame?.(runFrame('subscribe', runId))
+	}
+	handlerSet.add(handlers)
+	let active = true
+	return () => {
+		if (!active) return
+		active = false
+		const current = runSubscriptions.get(runId)
+		if (!current) return
+		current.delete(handlers)
+		if (current.size === 0) {
+			runSubscriptions.delete(runId)
+			sendFrame?.(runFrame('unsubscribe', runId))
+		}
+	}
+}
+
+function dispatchRunMessage(message: RunMessage): void {
+	const handlerSet = runSubscriptions.get(message.run_id)
+	if (!handlerSet) return
+	for (const handlers of [...handlerSet]) {
+		switch (message.op) {
+			case 'subscribed':
+				handlers.onSubscribed()
+				break
+			case 'refused':
+				handlers.onRefused()
+				break
+			case 'delta':
+				handlers.onDelta(message.after, message.text)
+				break
+			case 'run_events':
+				handlers.onEvents(message.last)
+				break
+		}
+	}
+}
+
+function isRunMessage(value: object, op: unknown): value is RunMessage {
+	const { run_id: runId } = value as { run_id?: unknown }
+	if (typeof runId !== 'string') return false
+	const { after, text, last } = value as {
+		after?: unknown
+		text?: unknown
+		last?: unknown
+	}
+	switch (op) {
+		case 'subscribed':
+		case 'refused':
+			return true
+		case 'delta':
+			return typeof after === 'number' && typeof text === 'string'
+		case 'run_events':
+			return typeof last === 'number'
+		default:
+			return false
+	}
+}
 
 export function realtimeUrl(base: string): string {
 	const url = new URL(REALTIME_PATH, base)
@@ -80,6 +169,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | undefined {
 		if (op === 'event' && typeof (value as EventMessage).kind === 'string') {
 			return value as EventMessage
 		}
+		if (isRunMessage(value, op)) return value
 	} catch {
 		return undefined
 	}
@@ -201,6 +291,10 @@ export function startRealtime(options: RealtimeOptions): () => void {
 			switch (message.op) {
 				case 'ready':
 					backoff = BACKOFF_MIN_MS
+					sendFrame = (frame) => current.send(frame)
+					for (const runId of runSubscriptions.keys()) {
+						current.send(runFrame('subscribe', runId))
+					}
 					setRealtimeState('connected')
 					break
 				case 'degraded':
@@ -208,9 +302,15 @@ export function startRealtime(options: RealtimeOptions): () => void {
 					break
 				case 'resync':
 					void queryClient.invalidateQueries()
+					for (const handlerSet of runSubscriptions.values()) {
+						for (const handlers of [...handlerSet]) handlers.onResync()
+					}
 					break
 				case 'event':
 					invalidateForEvent(queryClient, message)
+					break
+				default:
+					dispatchRunMessage(message)
 					break
 			}
 		}
@@ -218,6 +318,7 @@ export function startRealtime(options: RealtimeOptions): () => void {
 			if (socket !== current) return
 			socket = null
 			identifiedToken = null
+			sendFrame = null
 			setRealtimeState('offline')
 			schedule()
 		}
@@ -250,6 +351,7 @@ export function startRealtime(options: RealtimeOptions): () => void {
 		clearTimer()
 		const closing = socket
 		socket = null
+		sendFrame = null
 		closing?.close()
 		setRealtimeState('offline')
 	}

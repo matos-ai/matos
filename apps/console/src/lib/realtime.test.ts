@@ -9,6 +9,7 @@ import {
 	realtimeUrl,
 	type SocketLike,
 	startRealtime,
+	subscribeRun,
 } from '#/lib/realtime'
 import { clearAuth, setAuth } from '#/store/auth.store'
 
@@ -336,5 +337,143 @@ describe('startRealtime', () => {
 		expect(MockSocket.instances).toHaveLength(1)
 		setAuth({ accessToken: 'tok-3', isAuthenticated: true })
 		expect(MockSocket.instances).toHaveLength(2)
+	})
+})
+
+describe('subscribeRun', () => {
+	let client: QueryClient
+	let stop: () => void
+	const leaves: Array<() => void> = []
+
+	function handlersFor() {
+		return {
+			onSubscribed: vi.fn(),
+			onRefused: vi.fn(),
+			onDelta: vi.fn(),
+			onEvents: vi.fn(),
+			onResync: vi.fn(),
+		}
+	}
+
+	function latest() {
+		return MockSocket.instances[MockSocket.instances.length - 1]
+	}
+
+	function frames(socket: MockSocket) {
+		return socket.sent.slice(1).map((frame) => JSON.parse(frame))
+	}
+
+	function join(runId: string, handlers: ReturnType<typeof handlersFor>) {
+		const leave = subscribeRun(runId, handlers)
+		leaves.push(leave)
+		return leave
+	}
+
+	function ready() {
+		const socket = latest()
+		socket.open()
+		socket.receive({ op: 'ready' })
+		return socket
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers()
+		MockSocket.instances = []
+		client = new QueryClient()
+		vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
+		setAuth({ accessToken: 'tok-1', isAuthenticated: true })
+		realtimeStore.setState(() => ({ state: 'offline' }))
+		stop = startRealtime({
+			url: URL,
+			queryClient: client,
+			createSocket: (url) => new MockSocket(url),
+		})
+	})
+
+	afterEach(() => {
+		for (const leave of leaves.splice(0)) leave()
+		stop()
+		clearAuth()
+		vi.useRealTimers()
+	})
+
+	it('sends one subscribe frame for two subscribers of the same run', () => {
+		const socket = ready()
+		join('r1', handlersFor())
+		join('r1', handlersFor())
+		expect(frames(socket)).toEqual([{ op: 'subscribe', run_id: 'r1' }])
+	})
+
+	it('unsubscribes only when the last subscriber leaves', () => {
+		const socket = ready()
+		const first = join('r1', handlersFor())
+		const second = join('r1', handlersFor())
+		first()
+		first()
+		expect(frames(socket)).toHaveLength(1)
+		second()
+		expect(frames(socket)).toEqual([
+			{ op: 'subscribe', run_id: 'r1' },
+			{ op: 'unsubscribe', run_id: 'r1' },
+		])
+	})
+
+	it('remembers a subscription made before ready and sends it on ready', () => {
+		join('r1', handlersFor())
+		const socket = latest()
+		socket.open()
+		expect(frames(socket)).toEqual([])
+		socket.receive({ op: 'ready' })
+		expect(frames(socket)).toEqual([{ op: 'subscribe', run_id: 'r1' }])
+	})
+
+	it('subscribes again after a reconnect once ready arrives', () => {
+		join('r1', handlersFor())
+		ready().drop()
+		vi.advanceTimersByTime(BACKOFF_MIN_MS)
+		const socket = latest()
+		socket.open()
+		expect(frames(socket)).toEqual([])
+		socket.receive({ op: 'ready' })
+		expect(frames(socket)).toEqual([{ op: 'subscribe', run_id: 'r1' }])
+	})
+
+	it('routes messages to the handlers of their run only', () => {
+		const socket = ready()
+		const mine = handlersFor()
+		const other = handlersFor()
+		join('r1', mine)
+		join('r2', other)
+		socket.receive({ op: 'subscribed', run_id: 'r1' })
+		socket.receive({ op: 'delta', run_id: 'r1', after: 3, text: 'hi' })
+		socket.receive({ op: 'run_events', run_id: 'r1', last: 4 })
+		socket.receive({ op: 'refused', run_id: 'r1' })
+		expect(mine.onSubscribed).toHaveBeenCalledTimes(1)
+		expect(mine.onDelta).toHaveBeenCalledWith(3, 'hi')
+		expect(mine.onEvents).toHaveBeenCalledWith(4)
+		expect(mine.onRefused).toHaveBeenCalledTimes(1)
+		expect(other.onSubscribed).not.toHaveBeenCalled()
+		expect(other.onDelta).not.toHaveBeenCalled()
+		expect(other.onEvents).not.toHaveBeenCalled()
+		expect(other.onRefused).not.toHaveBeenCalled()
+	})
+
+	it('tells every subscriber to reload on resync', () => {
+		const socket = ready()
+		const one = handlersFor()
+		const two = handlersFor()
+		join('r1', one)
+		join('r2', two)
+		socket.receive({ op: 'resync' })
+		expect(one.onResync).toHaveBeenCalledTimes(1)
+		expect(two.onResync).toHaveBeenCalledTimes(1)
+	})
+
+	it('ignores malformed run messages', () => {
+		expect(parseServerMessage('{"op":"delta","run_id":"r1"}')).toBeUndefined()
+		expect(parseServerMessage('{"op":"subscribed"}')).toBeUndefined()
+		expect(
+			parseServerMessage('{"op":"run_events","run_id":"r1","last":2}'),
+		).toEqual({ op: 'run_events', run_id: 'r1', last: 2 })
 	})
 })

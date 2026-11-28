@@ -1,7 +1,8 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderAtPath } from '#/components/layout/test-router'
 import { TaskPage } from '#/domain/tasks/feature/task-page'
+import { cancellingStore } from '#/domain/tasks/hooks/use-cancel-run'
 import {
 	AGENT_LEAD,
 	AGENT_SUB,
@@ -9,8 +10,23 @@ import {
 	card,
 	jsonBody,
 } from '#/domain/tasks/test-fixtures'
+import { type RunSubscriptionHandlers, realtimeStore } from '#/lib/realtime'
 import { clearAuth } from '#/store/auth.store'
 import { mockApi, withQueryClient } from '#/test-utils/api-mock'
+
+const realtime = vi.hoisted(() => ({
+	handlers: null as RunSubscriptionHandlers | null,
+}))
+
+vi.mock('#/lib/realtime', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#/lib/realtime')>()),
+	subscribeRun: (_runId: string, handlers: RunSubscriptionHandlers) => {
+		realtime.handlers = handlers
+		return () => {
+			realtime.handlers = null
+		}
+	},
+}))
 
 const EXTRA = ['/tasks', '/tasks/$taskId', '/agents/$agentId/{-$tab}']
 
@@ -56,6 +72,8 @@ const BASE = {
 }
 
 afterEach(() => {
+	realtimeStore.setState(() => ({ state: 'offline' }))
+	cancellingStore.setState(() => ({ runIds: [] }))
 	vi.unstubAllGlobals()
 	clearAuth()
 	document.getElementById('topbar-actions')?.remove()
@@ -352,23 +370,16 @@ describe('TaskPage', () => {
 				initiated_by: 'user-1',
 				pipeline: [],
 			},
-			[`GET /api/v1/runs/${RUN}/timeline`]: {
-				run: { id: RUN, status: 'running' },
-				decisions: [],
-				totals: { cost_micros: 0, input_tokens: 0, output_tokens: 0 },
-				steps: [
+			[`GET /api/v1/runs/${RUN}/events`]: {
+				events: [
 					{
-						seq: 0,
-						tool_calls: [
-							{
-								tool: 'mestier__list_projects',
-								summary: 'ok',
-								succeeded: true,
-								latency_ms: 1,
-							},
-						],
+						seq: 1,
+						kind: 'tool_use',
+						payload: { id: 't1', tool: 'mestier__list_projects', input: {} },
+						created_at: new Date().toISOString(),
 					},
 				],
+				next_after: null,
 			},
 		})
 		await open(ROOT)
@@ -380,6 +391,7 @@ describe('TaskPage', () => {
 			name: "Exécution de l'agent",
 		})
 		expect(await within(panel).findByText('En cours')).toBeTruthy()
+		expect(within(panel).getByText('écrit…')).toBeTruthy()
 		expect(
 			await within(panel).findByText(/mestier__list_projects/),
 		).toBeTruthy()
@@ -408,7 +420,9 @@ describe('TaskPage', () => {
 		})
 		fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
 		expect(
-			await screen.findByText("L'agent travaille déjà sur cette tâche."),
+			await screen.findByText(
+				"Message en file : l'agent le lira à la fin de son tour.",
+			),
 		).toBeTruthy()
 	})
 
@@ -526,5 +540,422 @@ describe('TaskPage', () => {
 			.map(([input]) => new URL(String(input)))
 			.find((url) => url.pathname === '/api/v1/artifacts')
 		expect(request?.searchParams.get('card_id')).toBe(ROOT)
+	})
+})
+
+const LIVE_RUN = '77777777-eeee-4000-8000-000000000007'
+const STARTED = '2026-11-01T10:00:00.000Z'
+const BEFORE = '2026-11-01T09:00:00.000Z'
+const AFTER = '2026-11-01T10:05:00.000Z'
+
+const runRow = (status: string, extra: Record<string, unknown> = {}) => ({
+	id: LIVE_RUN,
+	status,
+	created_at: STARTED,
+	started_at: STARTED,
+	initiated_by: 'user-1',
+	pipeline: [],
+	...extra,
+})
+
+const humanComment = (id: string, body: string, at: string) => ({
+	id,
+	author_subject: 'user-1',
+	author_actor: 'Nathaël',
+	body,
+	created_at: at,
+})
+
+const eventRow = (
+	seq: number,
+	kind: string,
+	payload: Record<string, unknown>,
+) => ({ seq, kind, payload, created_at: STARTED })
+
+const working = (
+	comments: unknown[] = [],
+	extra: Record<string, unknown> = {},
+) => ({
+	...BASE,
+	[`GET /api/v1/cards/${ROOT}`]: {
+		card: root,
+		comments,
+		runs: [runRow('running')],
+	},
+	[`GET /api/v1/runs/${LIVE_RUN}`]: runRow('running'),
+	[`GET /api/v1/runs/${LIVE_RUN}/events`]: {
+		events: [
+			eventRow(1, 'assistant_text', { text: 'Je commence', truncated: false }),
+			eventRow(2, 'tool_use', { id: 't1', tool: 'lire', input: { p: 'a' } }),
+			eventRow(3, 'tool_result', { id: 't1', succeeded: true, output: 'ok' }),
+		],
+		next_after: null,
+	},
+	[`POST /api/v1/runs/${LIVE_RUN}/cancel`]: {
+		already_cancelled: false,
+		status: 'cancelled',
+	},
+	...extra,
+})
+
+const posted = (id: string, body: string, agentRun?: unknown) => ({
+	status: 201,
+	body: {
+		id,
+		author_subject: 'user-1',
+		body,
+		created_at: new Date().toISOString(),
+		...(agentRun ? { agent_run: agentRun } : {}),
+	},
+})
+
+const callsTo = (
+	fetchMock: ReturnType<typeof mockApi>,
+	method: string,
+	path: string,
+) =>
+	fetchMock.mock.calls.filter(
+		([input, init]) =>
+			new URL(String(input)).pathname === path &&
+			(init?.method ?? 'GET') === method,
+	)
+
+describe('TaskPage live thread', () => {
+	it('shows the stream of a working run, its live text and no polling when realtime is up', async () => {
+		realtimeStore.setState(() => ({ state: 'connected' }))
+		mockApi(working())
+		await open(ROOT)
+		const turn = await screen.findByRole('region', {
+			name: "Exécution de l'agent",
+		})
+		expect(await within(turn).findByText('Je commence')).toBeTruthy()
+		expect(within(turn).getByRole('button', { name: /lire/ })).toBeTruthy()
+		await waitFor(() => expect(realtime.handlers).not.toBeNull())
+		act(() => {
+			realtime.handlers?.onSubscribed()
+			realtime.handlers?.onDelta(3, 'texte en train de venir')
+		})
+		expect(
+			await within(turn).findByText('texte en train de venir'),
+		).toBeTruthy()
+		expect(turn.getAttribute('aria-busy')).toBe('true')
+	})
+
+	it('offers to go back down when the reader scrolled up during a run', async () => {
+		mockApi(working())
+		await open(ROOT)
+		const turn = await screen.findByRole('region', {
+			name: "Exécution de l'agent",
+		})
+		const scroller = turn.closest('.overflow-auto') as HTMLElement
+		expect(screen.queryByRole('button', { name: 'Aller en bas' })).toBeNull()
+		for (const [key, value] of Object.entries({
+			scrollHeight: 2000,
+			clientHeight: 500,
+			scrollTop: 100,
+		})) {
+			Object.defineProperty(scroller, key, {
+				configurable: true,
+				writable: true,
+				value,
+			})
+		}
+		act(() => {
+			fireEvent.scroll(scroller)
+		})
+		fireEvent.click(await screen.findByRole('button', { name: 'Aller en bas' }))
+		await waitFor(() => expect(scroller.scrollTop).toBe(2000))
+	})
+
+	it('stops the run from the turn or the composer', async () => {
+		const fetchMock = mockApi(working())
+		await open(ROOT)
+		await screen.findByRole('region', { name: "Exécution de l'agent" })
+		const stops = await screen.findAllByRole('button', { name: 'Arrêter' })
+		expect(stops).toHaveLength(2)
+		fireEvent.click(stops[1])
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'POST', `/api/v1/runs/${LIVE_RUN}/cancel`),
+			).toHaveLength(1),
+		)
+		fireEvent.click(screen.getAllByRole('button', { name: 'Arrêter' })[0])
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'POST', `/api/v1/runs/${LIVE_RUN}/cancel`),
+			).toHaveLength(2),
+		)
+	})
+
+	it('stops with the keyboard shortcut', async () => {
+		const fetchMock = mockApi(working())
+		await open(ROOT)
+		await screen.findAllByRole('button', { name: 'Arrêter' })
+		fireEvent.keyDown(window, { key: '.', metaKey: true })
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'POST', `/api/v1/runs/${LIVE_RUN}/cancel`),
+			).toHaveLength(1),
+		)
+	})
+
+	it('shows the cancelling state', async () => {
+		mockApi(working())
+		cancellingStore.setState(() => ({ runIds: [LIVE_RUN] }))
+		await open(ROOT)
+		const buttons = await screen.findAllByRole('button', {
+			name: 'Arrêt en cours…',
+		})
+		expect(buttons).toHaveLength(2)
+		for (const button of buttons) {
+			expect((button as HTMLButtonElement).disabled).toBe(true)
+		}
+		expect(screen.getAllByText('Arrêt en cours…').length).toBeGreaterThan(0)
+	})
+
+	it('keeps a refusal to stop on screen', async () => {
+		mockApi(
+			working([], {
+				[`POST /api/v1/runs/${LIVE_RUN}/cancel`]: {
+					status: 403,
+					body: { code: 'cancel_forbidden', message: 'non', status: 403 },
+				},
+			}),
+		)
+		await open(ROOT)
+		fireEvent.click(
+			(await screen.findAllByRole('button', { name: 'Arrêter' }))[0],
+		)
+		const alert = await screen.findByRole('alert')
+		expect(alert.textContent).toContain(
+			"Seule la personne qui a lancé le run ou un admin peut l'arrêter.",
+		)
+	})
+
+	it('refreshes without a message when the run already finished', async () => {
+		const fetchMock = mockApi(
+			working([], {
+				[`POST /api/v1/runs/${LIVE_RUN}/cancel`]: {
+					status: 409,
+					body: { code: 'run_already_finished', message: 'fini', status: 409 },
+				},
+			}),
+		)
+		await open(ROOT)
+		await screen.findByRole('region', { name: "Exécution de l'agent" })
+		const before = callsTo(fetchMock, 'GET', `/api/v1/runs/${LIVE_RUN}`).length
+		fireEvent.click(
+			(await screen.findAllByRole('button', { name: 'Arrêter' }))[0],
+		)
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'GET', `/api/v1/runs/${LIVE_RUN}`).length,
+			).toBeGreaterThan(before),
+		)
+		expect(screen.queryByRole('alert')).toBeNull()
+	})
+
+	it('queues a message while the run works and sends with interrupt on demand', async () => {
+		const fetchMock = mockApi(
+			working([], {
+				[`POST /api/v1/cards/${ROOT}/comments`]: posted('cm9', 'Suite', {
+					skipped: 'agent_busy',
+				}),
+			}),
+		)
+		await open(ROOT)
+		const field = await screen.findByRole('textbox', { name: 'Message' })
+		await screen.findAllByRole('button', { name: 'Arrêter' })
+		expect(
+			screen.queryByRole('button', { name: 'Arrêter et envoyer' }),
+		).toBeNull()
+		fireEvent.change(field, { target: { value: 'Suite' } })
+		const both = screen.getByRole('button', { name: 'Arrêter et envoyer' })
+		expect(both.getAttribute('aria-keyshortcuts')).toBe(
+			'Control+Shift+Enter Meta+Shift+Enter',
+		)
+		fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
+		await waitFor(() =>
+			expect(
+				jsonBody(fetchMock, 'POST', `/api/v1/cards/${ROOT}/comments`),
+			).toEqual({ body: 'Suite' }),
+		)
+		expect(
+			await screen.findByText(
+				"Message en file : l'agent le lira à la fin de son tour.",
+			),
+		).toBeTruthy()
+	})
+
+	it('sends with interrupt from the button and adopts the new run', async () => {
+		const NEXT = '88888888-eeee-4000-8000-000000000008'
+		const fetchMock = mockApi(
+			working([], {
+				[`POST /api/v1/cards/${ROOT}/comments`]: posted('cm9', 'Change', {
+					run_id: NEXT,
+				}),
+				[`GET /api/v1/runs/${NEXT}`]: runRow('running', { id: NEXT }),
+			}),
+		)
+		await open(ROOT)
+		const field = await screen.findByRole('textbox', { name: 'Message' })
+		fireEvent.change(field, { target: { value: 'Change' } })
+		fireEvent.click(
+			await screen.findByRole('button', { name: 'Arrêter et envoyer' }),
+		)
+		await waitFor(() =>
+			expect(
+				jsonBody(fetchMock, 'POST', `/api/v1/cards/${ROOT}/comments`),
+			).toEqual({ body: 'Change', interrupt: true }),
+		)
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'GET', `/api/v1/runs/${NEXT}`).length,
+			).toBeGreaterThan(0),
+		)
+	})
+
+	it('wires the send shortcuts', async () => {
+		const fetchMock = mockApi(
+			working([], {
+				[`POST /api/v1/cards/${ROOT}/comments`]: posted('cm9', 'x'),
+			}),
+		)
+		await open(ROOT)
+		const field = await screen.findByRole('textbox', { name: 'Message' })
+		await screen.findAllByRole('button', { name: 'Arrêter' })
+		fireEvent.change(field, { target: { value: 'un' } })
+		fireEvent.keyDown(field, { key: 'Enter', metaKey: true })
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'POST', `/api/v1/cards/${ROOT}/comments`),
+			).toHaveLength(1),
+		)
+		fireEvent.change(field, { target: { value: 'deux' } })
+		fireEvent.keyDown(field, { key: 'Enter', metaKey: true, shiftKey: true })
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'POST', `/api/v1/cards/${ROOT}/comments`),
+			).toHaveLength(2),
+		)
+		const bodies = callsTo(
+			fetchMock,
+			'POST',
+			`/api/v1/cards/${ROOT}/comments`,
+		).map(([, init]) => JSON.parse(String(init?.body)))
+		expect(bodies).toEqual([{ body: 'un' }, { body: 'deux', interrupt: true }])
+	})
+
+	it('does nothing special on Escape in an empty composer', async () => {
+		const fetchMock = mockApi(working())
+		await open(ROOT)
+		const field = await screen.findByRole('textbox', { name: 'Message' })
+		fireEvent.keyDown(field, { key: 'Escape' })
+		expect(
+			callsTo(fetchMock, 'POST', `/api/v1/runs/${LIVE_RUN}/cancel`),
+		).toHaveLength(0)
+	})
+
+	const failingSend = async () => {
+		const fetchMock = mockApi({
+			...BASE,
+			[`POST /api/v1/cards/${ROOT}/comments`]: {
+				status: 500,
+				body: { code: 'boom', message: 'boom', status: 500 },
+			},
+		})
+		await open(ROOT)
+		const field = await screen.findByRole('textbox', { name: 'Message' })
+		fireEvent.change(field, { target: { value: 'Perdu' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Envoyer' }))
+		expect(await screen.findByText('Non envoyé')).toBeTruthy()
+		expect(screen.getByText('Perdu')).toBeTruthy()
+		return fetchMock
+	}
+
+	it('marks a failed message and lets one retry it', async () => {
+		const fetchMock = await failingSend()
+		fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+		await waitFor(() =>
+			expect(
+				callsTo(fetchMock, 'POST', `/api/v1/cards/${ROOT}/comments`),
+			).toHaveLength(2),
+		)
+	})
+
+	it('lets one discard a failed message', async () => {
+		await failingSend()
+		fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+		await waitFor(() => expect(screen.queryByText('Perdu')).toBeNull())
+		expect(screen.queryByText('Non envoyé')).toBeNull()
+	})
+
+	it('marks only the messages written after the run started as queued', async () => {
+		mockApi(
+			working([
+				humanComment('old', 'Avant le run', BEFORE),
+				humanComment('new', 'Pendant le run', AFTER),
+			]),
+		)
+		await open(ROOT)
+		await screen.findByText('Pendant le run')
+		expect(
+			screen.getAllByText("En file : l'agent le lira à la fin de son tour"),
+		).toHaveLength(1)
+	})
+
+	it('shows run details under the final comment, loaded only when opened', async () => {
+		const done = runRow('succeeded', {
+			finished_at: '2026-11-01T10:01:00.000Z',
+		})
+		const fetchMock = mockApi({
+			...BASE,
+			[`GET /api/v1/cards/${ROOT}`]: {
+				card: root,
+				comments: [
+					{
+						id: 'final',
+						author_subject: 'agent',
+						author_actor: 'agent:veille-légale-(lead)',
+						body: 'Voici le résultat final',
+						created_at: '2026-11-01T10:00:50.000Z',
+					},
+					humanComment('after', 'Merci', AFTER),
+				],
+				runs: [done],
+			},
+			[`GET /api/v1/runs/${LIVE_RUN}/events`]: {
+				events: [
+					eventRow(1, 'tool_use', { id: 't', tool: 'chercher', input: {} }),
+					eventRow(2, 'tool_result', {
+						id: 't',
+						succeeded: true,
+						output: 'ok',
+					}),
+				],
+				next_after: null,
+			},
+		})
+		await open(ROOT)
+		const toggle = await screen.findByRole('button', { name: /Détails du run/ })
+		const items = screen
+			.getAllByRole('listitem')
+			.map((item) => item.textContent ?? '')
+		const finalAt = items.findIndex((t) =>
+			t.includes('Voici le résultat final'),
+		)
+		const detailsAt = items.findIndex((t) => t.includes('Détails du run'))
+		const mercisAt = items.findIndex((t) => t.includes('Merci'))
+		expect(detailsAt).toBeGreaterThan(finalAt)
+		expect(detailsAt).toBeLessThan(mercisAt)
+		expect(
+			callsTo(fetchMock, 'GET', `/api/v1/runs/${LIVE_RUN}/events`),
+		).toHaveLength(0)
+		fireEvent.click(toggle)
+		expect(await screen.findByRole('button', { name: /chercher/ })).toBeTruthy()
+		expect(
+			callsTo(fetchMock, 'GET', `/api/v1/runs/${LIVE_RUN}/events`),
+		).toHaveLength(1)
+		expect(screen.getAllByText('Voici le résultat final')).toHaveLength(1)
 	})
 })

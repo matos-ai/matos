@@ -11,7 +11,7 @@ export function useRunCardAgent() {
 	)
 }
 
-export function useRunPolling(runId: string | null) {
+export function useRunPolling(runId: string | null, poll = true) {
 	const accessToken = useAccessToken()
 	return useQuery({
 		...tanstackApi.get('/api/v1/runs/{run_id}', {
@@ -20,6 +20,7 @@ export function useRunPolling(runId: string | null) {
 		enabled: Boolean(accessToken) && runId !== null,
 		refetchInterval: (query) => {
 			const status = query.state.data?.status
+			if (!poll) return false
 			return status && !isActiveRun(status) ? false : RUN_POLL_MS
 		},
 	})
@@ -30,6 +31,7 @@ export function useRunTimeline(
 	runId: string | null,
 	enabled: boolean,
 	live = false,
+	poll = true,
 ) {
 	const accessToken = useAccessToken()
 	return useQuery({
@@ -37,7 +39,7 @@ export function useRunTimeline(
 			path: { run_id: runId ?? '' },
 		}).queryOptions,
 		enabled: Boolean(accessToken) && runId !== null && enabled,
-		refetchInterval: live ? RUN_POLL_MS : false,
+		refetchInterval: live && poll ? RUN_POLL_MS : false,
 	})
 }
 
