@@ -137,6 +137,46 @@ interface MessageProps {
 	at: string
 	/** Le texte brut de la description, sans Markdown. */
 	plain?: boolean
+	delivery?: 'pending' | 'failed'
+	queued?: boolean
+	onRetry?: () => void
+	onDiscard?: () => void
+}
+
+export const QUEUED_LABEL = "En file : l'agent le lira à la fin de son tour"
+
+function DeliveryState({
+	delivery,
+	queued,
+	onRetry,
+	onDiscard,
+}: Pick<MessageProps, 'delivery' | 'queued' | 'onRetry' | 'onDiscard'>) {
+	if (!delivery && !queued) return null
+	return (
+		<p className="m-0 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground">
+			{delivery === 'pending' ? <span>Envoi…</span> : null}
+			{delivery === 'failed' ? (
+				<>
+					<span className="font-medium text-signal-danger">Non envoyé</span>
+					<button
+						type="button"
+						onClick={onRetry}
+						className="rounded-md px-1.5 py-0.5 font-medium text-foreground hover:bg-secondary"
+					>
+						Réessayer
+					</button>
+					<button
+						type="button"
+						onClick={onDiscard}
+						className="rounded-md px-1.5 py-0.5 font-medium text-foreground hover:bg-secondary"
+					>
+						Supprimer
+					</button>
+				</>
+			) : null}
+			{queued && delivery !== 'failed' ? <span>{QUEUED_LABEL}</span> : null}
+		</p>
+	)
 }
 
 /**
@@ -148,10 +188,19 @@ export function ThreadMessage({
 	body,
 	at,
 	plain = false,
+	delivery,
+	queued = false,
+	onRetry,
+	onDiscard,
 }: MessageProps) {
 	const agent = speaker.kind === 'agent'
 	return (
-		<li className="group grid grid-cols-[28px_minmax(0,1fr)] gap-x-3">
+		<li
+			className={cn(
+				'group grid grid-cols-[28px_minmax(0,1fr)] gap-x-3',
+				delivery === 'pending' && 'opacity-60',
+			)}
+		>
 			<SpeakerAvatar speaker={speaker} />
 			<div className="min-w-0">
 				<p className="m-0 flex h-7 items-center gap-2">
@@ -179,6 +228,12 @@ export function ThreadMessage({
 					</Foldable>
 					<PullRequestChips body={body} />
 				</div>
+				<DeliveryState
+					delivery={delivery}
+					queued={queued}
+					onRetry={onRetry}
+					onDiscard={onDiscard}
+				/>
 				<div className="mt-0.5 flex h-7 items-center">
 					<CopyButton text={body} />
 				</div>

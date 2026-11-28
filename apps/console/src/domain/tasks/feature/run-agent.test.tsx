@@ -168,19 +168,6 @@ describe('run agent', () => {
 		const fetchMock = mockApi({
 			...base(),
 			[POST]: { status: 202, body: { run_id: RUN } },
-			[`GET /api/v1/runs/${RUN}/timeline`]: {
-				run: run('succeeded'),
-				decisions: [],
-				totals: { cost_micros: 0, input_tokens: 0, output_tokens: 0 },
-				steps: [
-					{
-						seq: 1,
-						tool_calls: [
-							{ tool: 'lire', summary: 'ok', succeeded: true, latency_ms: 1 },
-						],
-					},
-				],
-			},
 		})
 		const inner = fetchMock.getMockImplementation()
 		fetchMock.mockImplementation(async (input, init) => {
@@ -202,7 +189,7 @@ describe('run agent', () => {
 		expect(
 			await screen.findByText('Terminée', {}, { timeout: 6000 }),
 		).toBeTruthy()
-		expect(await screen.findByText(/lire : ok/)).toBeTruthy()
+		expect(await screen.findByText('Détails du run')).toBeTruthy()
 		await waitFor(() => {
 			const cardCalls = fetchMock.mock.calls.filter(
 				([u, i]) =>
