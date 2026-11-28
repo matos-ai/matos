@@ -273,7 +273,7 @@ export namespace Schemas {
   };
   export type ClientListItemResponse = { client: ClientResponse; open_cards: number; project_count: number };
   export type ClientListResponse = { items: Array<ClientListItemResponse> };
-  export type CommentCardRequest = { body: string };
+  export type CommentCardRequest = { body: string; interrupt?: boolean | undefined };
   export type ConnectGithubRequest = { code: string; installation_id: number; state: string };
   export type ConnectGithubUserRequest = { code: string; state: string };
   export type ConversationId = string;

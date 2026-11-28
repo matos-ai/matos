@@ -615,11 +615,24 @@ impl<T: TaskRunner, H: CodeHost> ExecutePipeline<T, H> {
         self.usecase
             .finish_run(context.run.clone(), ended.result.clone())
             .await?;
+        self.relaunch(&context.run).await;
         match ended.result {
             Ok(()) => tracing::info!(%run_id, "execution succeeded"),
             Err(error) => tracing::warn!(%run_id, %error, "execution failed"),
         }
         Ok(())
+    }
+
+    async fn relaunch(&self, run: &Run) {
+        match self.usecase.relaunch_repository_on_reply(run).await {
+            Ok(Some(started)) => {
+                tracing::info!(run_id = %run.id, next = %started.run_id, "relaunched on a reply");
+            }
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(run_id = %run.id, %error, "a reply did not relaunch the agent");
+            }
+        }
     }
 
     async fn revoke_grants(&self, run_id: RunId) {

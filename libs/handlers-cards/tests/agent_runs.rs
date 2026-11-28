@@ -876,6 +876,160 @@ async fn a_reply_starts_the_agent_again_and_a_reply_during_a_run_queues_nothing_
     assert_eq!(fixture.runs(card.id).await, 1);
 }
 
+impl Fixture {
+    async fn working_card(&self, slug: &str) -> (Card, Uuid) {
+        self.connector(slug, true).await;
+        let agent = self.agent(slug, &[slug]).await;
+        let card = self.card(Some(&agent)).await;
+        let card = self
+            .usecase
+            .move_card(
+                self.subject(),
+                card.id,
+                MoveCard {
+                    to: Column::Todo,
+                    expected_version: card.version,
+                    run_id: None,
+                },
+            )
+            .await
+            .unwrap();
+        let path = format!("/api/v1/cards/{}/comments", card.id);
+        let (status, first) = self.post(&path, json!({"body": "Vas-y"})).await;
+        assert_eq!(status, 201);
+        let run_id = first["agent_run"]["run_id"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        (card, run_id)
+    }
+
+    async fn run_status(&self, run_id: Uuid) -> String {
+        sqlx::query_scalar("SELECT status::text FROM runs WHERE id = $1")
+            .bind(run_id)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap()
+    }
+
+    async fn active_runs(&self, card_id: CardId) -> i64 {
+        sqlx::query_scalar(
+            "SELECT count(*) FROM runs WHERE card_id = $1 AND status::text IN ('queued', 'running')",
+        )
+        .bind(card_id.0)
+        .fetch_one(&self.pool)
+        .await
+        .unwrap()
+    }
+
+    async fn comments(&self, card_id: CardId) -> i64 {
+        sqlx::query_scalar("SELECT count(*) FROM card_comments WHERE card_id = $1")
+            .bind(card_id.0)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap()
+    }
+}
+
+#[tokio::test]
+async fn stop_and_send_cancels_the_active_run_and_starts_a_new_one() {
+    let Some(fixture) = fixture().await else {
+        return;
+    };
+    let (card, old) = fixture.working_card("interrupt-a").await;
+    let path = format!("/api/v1/cards/{}/comments", card.id);
+
+    let (status, posted) = fixture
+        .post(&path, json!({"body": "Stop", "interrupt": true}))
+        .await;
+
+    assert_eq!(status, 201);
+    assert_eq!(posted["body"], "Stop");
+    let new = posted["agent_run"]["run_id"].as_str().unwrap();
+    assert_ne!(new, old.to_string());
+    assert_eq!(fixture.run_status(old).await, "cancelled");
+    assert_eq!(fixture.active_runs(card.id).await, 1);
+    assert_eq!(fixture.comments(card.id).await, 2);
+}
+
+#[tokio::test]
+async fn a_reply_without_interrupt_cancels_nothing() {
+    let Some(fixture) = fixture().await else {
+        return;
+    };
+    let (card, old) = fixture.working_card("interrupt-b").await;
+    let path = format!("/api/v1/cards/{}/comments", card.id);
+
+    let (status, posted) = fixture
+        .post(&path, json!({"body": "Attends", "interrupt": false}))
+        .await;
+
+    assert_eq!(status, 201);
+    assert_eq!(posted["agent_run"]["skipped"], "agent_busy");
+    assert_ne!(fixture.run_status(old).await, "cancelled");
+    assert_eq!(fixture.active_runs(card.id).await, 1);
+}
+
+#[tokio::test]
+async fn stop_and_send_without_an_active_run_is_a_normal_comment() {
+    let Some(fixture) = fixture().await else {
+        return;
+    };
+    fixture.connector("interrupt-c", true).await;
+    let agent = fixture.agent("interrupt-c", &["interrupt-c"]).await;
+    let card = fixture.card(Some(&agent)).await;
+    let card = fixture
+        .usecase
+        .move_card(
+            fixture.subject(),
+            card.id,
+            MoveCard {
+                to: Column::Todo,
+                expected_version: card.version,
+                run_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let (status, posted) = fixture
+        .post(
+            &format!("/api/v1/cards/{}/comments", card.id),
+            json!({"body": "Vas-y", "interrupt": true}),
+        )
+        .await;
+
+    assert_eq!(status, 201);
+    assert!(posted["agent_run"]["run_id"].is_string());
+    assert_eq!(fixture.runs(card.id).await, 1);
+}
+
+#[tokio::test]
+async fn stop_and_send_by_someone_else_keeps_the_run_and_says_so() {
+    let Some(fixture) = fixture().await else {
+        return;
+    };
+    let (card, old) = fixture.working_card("interrupt-d").await;
+    sqlx::query("UPDATE runs SET initiated_by = 'someone-else' WHERE id = $1")
+        .bind(old)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    let path = format!("/api/v1/cards/{}/comments", card.id);
+
+    let (status, posted) = fixture
+        .post(&path, json!({"body": "Stop", "interrupt": true}))
+        .await;
+
+    assert_eq!(status, 201);
+    assert_eq!(posted["body"], "Stop");
+    assert_eq!(posted["agent_run"]["skipped"], "cancel_forbidden");
+    assert_ne!(fixture.run_status(old).await, "cancelled");
+    assert_eq!(fixture.runs(card.id).await, 1);
+    assert_eq!(fixture.comments(card.id).await, 2);
+}
+
 #[tokio::test]
 async fn a_reply_on_a_card_without_an_agent_only_comments() {
     let Some(fixture) = fixture().await else {

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    auto_run::{AgentRunOutcome, Handoff, hand_off},
+    auto_run::{AgentRunOutcome, Handoff, cancel_active_runs, hand_off},
     execute_card::CodeHostHandle,
     response::CommentResponse,
 };
@@ -21,6 +21,11 @@ pub struct CommentCardPath {
 pub struct CommentCardRequest {
     /// Not empty once trimmed, 10 000 characters at most.
     pub body: String,
+    /// Stops the card's active run before the agent reads the thread again.
+    /// `agent_run.skipped` is `cancel_forbidden` or `cancel_failed` when it
+    /// could not; the comment is posted either way.
+    #[serde(default)]
+    pub interrupt: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -64,7 +69,14 @@ pub async fn handler(
         .usecase
         .comment_card(subject.clone(), card_id, request.body, None)
         .await?;
-    let agent_run = hand_off(&state, &github, &caller, card_id, Handoff::Replied).await;
+    let agent_run = if request.interrupt {
+        match cancel_active_runs(&state, &caller, card_id).await {
+            Ok(()) => hand_off(&state, &github, &caller, card_id, Handoff::Replied).await,
+            Err(outcome) => Some(outcome),
+        }
+    } else {
+        hand_off(&state, &github, &caller, card_id, Handoff::Replied).await
+    };
     Ok((
         StatusCode::CREATED,
         Json(PostedCommentResponse {
